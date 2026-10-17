@@ -13,7 +13,6 @@ import {
 import { InteractiveButton } from './InteractiveButton';
 import { OfficialPeruLogo } from './OfficialPeruLogo';
 import { useServer } from '../context/ServerContext';
-import sunsetPierImg from '../assets/images/roblox_sunset_pier_1792185364963.jpg';
 
 export const Hero: React.FC = () => {
   const { config, setIsWhitelistInfoOpen } = useServer();
@@ -129,7 +128,7 @@ export const Hero: React.FC = () => {
             <div className="relative rounded-3xl overflow-hidden border border-red-500/30 p-2 bg-[#0c0e18]/80 backdrop-blur-xl shadow-2xl shadow-red-950/40 group">
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
                 <img
-                  src={sunsetPierImg}
+                  src="/src/assets/images/roblox_sunset_pier_1792185364963.jpg"
                   alt="Roblox ERLC Atardecer en el Muelle PE:RP"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"

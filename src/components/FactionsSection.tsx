@@ -3,7 +3,6 @@ import { Shield, Car, Siren, CheckCircle2 } from 'lucide-react';
 import { FACTIONS } from '../data/mockData';
 import { InteractiveButton } from './InteractiveButton';
 import { useServer } from '../context/ServerContext';
-import defaultPatrolTruckImg from '../assets/images/peru_police_patrol_night_1792084208478.jpg';
 
 export const FactionsSection: React.FC = () => {
   const { config, setIsWhitelistInfoOpen } = useServer();
@@ -131,7 +130,7 @@ export const FactionsSection: React.FC = () => {
             <div className="lg:col-span-5 relative">
               <div className="relative rounded-2xl overflow-hidden border border-white/15 aspect-[16/10] shadow-2xl bg-[#090b14]">
                 <img
-                  src={config?.customPatrolTruckUrl || defaultPatrolTruckImg}
+                  src={config?.customPatrolTruckUrl || "/src/assets/images/peru_police_patrol_night_1792084208478.jpg"}
                   alt="Patrulla de la Policía Nacional del Perú"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-500"
