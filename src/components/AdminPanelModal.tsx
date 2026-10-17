@@ -81,6 +81,18 @@ export const AdminPanelModal: React.FC = () => {
     if (!isAdminOpen) return;
     setFormData({ ...config });
 
+    // Determine redirect URI: for static hosts, use site root URL
+    const isStatic = typeof window !== 'undefined' && (window.location.hostname.includes('github.io') || (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('run.app')));
+    if (isStatic) {
+      setRedirectUri(window.location.origin + window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '') + '/');
+    }
+
+    const savedClientId = localStorage.getItem('perp_discord_client_id');
+    if (savedClientId) {
+      setClientId(savedClientId);
+      setIsConfigured(true);
+    }
+
     // Load album photos
     try {
       const saved = localStorage.getItem('perp_album_photos_v2');
@@ -90,13 +102,17 @@ export const AdminPanelModal: React.FC = () => {
       setAlbumPhotos([]);
     }
 
-    // Load Discord OAuth config
+    // Load Discord OAuth config safely
     fetch('/api/auth/discord/config')
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        const ct = res.headers.get('content-type') || '';
+        if (res.ok && ct.includes('application/json')) return res.json();
+        return null;
+      })
       .then((data) => {
         if (data) {
-          setIsConfigured(data.configured);
-          setRedirectUri(data.redirectUri);
+          setIsConfigured(Boolean(data.configured || savedClientId));
+          if (data.redirectUri && !isStatic) setRedirectUri(data.redirectUri);
           if (data.clientId) setClientId(data.clientId);
         }
       })
@@ -224,17 +240,21 @@ export const AdminPanelModal: React.FC = () => {
     e.preventDefault();
     updateConfig(formData);
 
-    // Save Discord credentials if provided
-    if (clientId || clientSecret) {
+    // Save Discord credentials
+    if (clientId.trim()) {
+      try {
+        localStorage.setItem('perp_discord_client_id', clientId.trim());
+        setIsConfigured(true);
+      } catch {}
+
       try {
         await fetch('/api/auth/discord/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId, clientSecret }),
+          body: JSON.stringify({ clientId: clientId.trim(), clientSecret }),
         });
-        setIsConfigured(true);
-      } catch (err) {
-        console.error(err);
+      } catch {
+        // ignore if on static host
       }
     }
 

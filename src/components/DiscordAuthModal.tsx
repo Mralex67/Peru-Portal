@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ExternalLink, Key, Check, Copy, AlertCircle, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
+import { X, ExternalLink, Key, Check, Copy, AlertCircle, ShieldCheck, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { OfficialPeruLogo } from './OfficialPeruLogo';
 import { playSuccessSound } from '../utils/audio';
@@ -15,36 +15,65 @@ export const DiscordAuthModal: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [showConfigInputs, setShowConfigInputs] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isStaticHost, setIsStaticHost] = useState(false);
 
-  // Fetch status on open and listen for popup messages
+  // Compute clean redirect URI based on environment
   useEffect(() => {
     if (!isDiscordAuthOpen) return;
     setErrorMessage('');
 
-    // Determine current browser redirect URI
-    const currentRedirect = `${window.location.origin}/api/auth/callback/discord`;
+    const hostname = window.location.hostname;
+    const isStatic = hostname.includes('github.io') || (!hostname.includes('localhost') && !hostname.includes('run.app'));
+    setIsStaticHost(isStatic);
+
+    // For static hosts (GitHub Pages), redirect back to the app itself!
+    // For full-stack dev/backend, redirect to /api/auth/callback/discord
+    let currentRedirect = '';
+    if (isStatic) {
+      currentRedirect = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '') + '/';
+    } else {
+      currentRedirect = `${window.location.origin}/api/auth/callback/discord`;
+    }
     setRedirectUri(currentRedirect);
 
+    // Pre-fill from localStorage if available
+    const savedClientId = localStorage.getItem('perp_discord_client_id');
+    if (savedClientId) {
+      setClientId(savedClientId);
+      setIsConfigured(true);
+    }
+
+    // Attempt to query backend config if available (without failing on HTML)
     fetch('/api/auth/discord/config')
-      .then((res) => res.json())
+      .then(async (res) => {
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          return res.json();
+        }
+        return null;
+      })
       .then((data) => {
-        setIsConfigured(data.configured);
-        if (data.redirectUri) setRedirectUri(data.redirectUri);
-        if (data.clientId) setClientId(data.clientId);
-        if (!data.configured) {
+        if (data) {
+          setIsConfigured(Boolean(data.configured || savedClientId));
+          if (data.redirectUri && !isStatic) setRedirectUri(data.redirectUri);
+          if (data.clientId) setClientId(data.clientId);
+          if (!data.configured && !savedClientId) {
+            setShowConfigInputs(true);
+          }
+        } else if (!savedClientId) {
           setShowConfigInputs(true);
-        } else {
-          setShowConfigInputs(false);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!savedClientId) setShowConfigInputs(true);
+      });
 
     const handleAuthMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'DISCORD_OAUTH_ERROR') {
         setErrorMessage(
           typeof e.data.error === 'string'
             ? `Discord rechazó la autenticación: ${e.data.error}`
-            : 'Error en la autorización de Discord. Verifica el Client Secret y la Redirect URI.'
+            : 'Error en la autorización de Discord. Verifica el Client ID y la Redirect URI en Discord.'
         );
         setLoading(false);
       }
@@ -66,39 +95,58 @@ export const DiscordAuthModal: React.FC = () => {
     setLoading(true);
     setErrorMessage('');
 
+    const cleanClientId = clientId.trim();
+    if (!cleanClientId) {
+      setErrorMessage('Por favor ingresa el CLIENT ID de tu aplicación en Discord Developer Portal.');
+      setLoading(false);
+      return;
+    }
+
+    // Save client ID to localStorage so it persists on GitHub Pages / static
     try {
-      // If credentials need to be saved first
-      if (showConfigInputs && (clientId || clientSecret)) {
-        if (!clientId.trim() || !clientSecret.trim()) {
-          setErrorMessage('Por favor ingresa tanto el Client ID como el Client Secret de Discord.');
-          setLoading(false);
-          return;
+      localStorage.setItem('perp_discord_client_id', cleanClientId);
+      setIsConfigured(true);
+    } catch {}
+
+    try {
+      let finalAuthUrl = '';
+
+      // If we are on static host (GitHub Pages) or no client secret, use direct client-side Implicit Grant!
+      if (isStaticHost || !clientSecret.trim()) {
+        finalAuthUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(
+          cleanClientId
+        )}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=identify`;
+      } else {
+        // Attempt backend flow if available
+        try {
+          const saveRes = await fetch('/api/auth/discord/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId: cleanClientId, clientSecret: clientSecret.trim() }),
+          });
+          const contentType = saveRes.headers.get('content-type') || '';
+          if (saveRes.ok && contentType.includes('application/json')) {
+            const res = await fetch(`/api/auth/discord/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
+            if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+              const urlData = await res.json();
+              finalAuthUrl = urlData.url;
+            }
+          }
+        } catch {
+          // fallback to client-side
         }
 
-        const saveRes = await fetch('/api/auth/discord/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: clientId.trim(), clientSecret: clientSecret.trim() }),
-        });
-        const saveData = await saveRes.json();
-        if (saveData.configured) {
-          setIsConfigured(true);
+        // Fallback to direct client-side URL if backend wasn't reachable
+        if (!finalAuthUrl) {
+          finalAuthUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(
+            cleanClientId
+          )}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=identify`;
         }
       }
-
-      // Fetch official Discord OAuth URL with current origin's redirectUri
-      const queryParam = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : '';
-      const res = await fetch(`/api/auth/discord/url${queryParam}`);
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'No se pudo obtener la URL de autorización');
-      }
-
-      const { url } = await res.json();
 
       // Open official Discord authorization popup
       const popup = window.open(
-        url,
+        finalAuthUrl,
         'discord_oauth_popup',
         'width=580,height=820,menubar=no,toolbar=no,location=no,status=no'
       );
@@ -171,7 +219,7 @@ export const DiscordAuthModal: React.FC = () => {
                 <div>
                   <div className="text-xs font-bold text-white">OAuth2 Configurado y Listo</div>
                   <div className="text-[11px] text-slate-400">
-                    Se abrirá la ventana oficial de Discord para confirmar tu acceso
+                    Client ID guardado: <span className="font-mono text-emerald-400">{clientId}</span>
                   </div>
                 </div>
               </div>
@@ -206,12 +254,12 @@ export const DiscordAuthModal: React.FC = () => {
                   onClick={() => setShowConfigInputs(true)}
                   className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer"
                 >
-                  Cambiar credenciales de Discord Developer Portal
+                  Cambiar o editar Client ID
                 </button>
               </div>
             </div>
           ) : (
-            /* Case 2: Enter Client ID & Secret from Discord Developer Portal */
+            /* Case 2: Enter Client ID from Discord Developer Portal */
             <div className="space-y-4">
               <div className="p-3.5 rounded-2xl bg-[#2b2d31] border border-[#3f4147] space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -225,7 +273,7 @@ export const DiscordAuthModal: React.FC = () => {
                     rel="noreferrer"
                     className="text-[11px] text-indigo-300 hover:text-white flex items-center gap-1 underline"
                   >
-                    Abrir Portal <ExternalLink className="w-3 h-3" />
+                    Abrir Portal Discord <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
 
@@ -245,6 +293,9 @@ export const DiscordAuthModal: React.FC = () => {
                     {copied ? 'Copiado' : 'Copiar'}
                   </button>
                 </div>
+                <p className="text-[10px] text-[#949ba4] leading-relaxed">
+                  Pega esta URL en tu aplicación de Discord: <strong>OAuth2 &gt; Redirects</strong>.
+                </p>
               </div>
 
               <div className="space-y-3">
@@ -256,23 +307,30 @@ export const DiscordAuthModal: React.FC = () => {
                     type="text"
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
-                    placeholder="ej. 1433560156909863084"
+                    placeholder="ej. 1560384206612336793"
                     className="w-full px-3 py-2 rounded-xl bg-[#1e1f22] border border-[#4e5058] text-white text-xs font-mono font-bold focus:outline-none focus:border-[#5865F2]"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-[#dbdee1] mb-1">
-                    Paso 3: CLIENT SECRET de tu Aplicación
-                  </label>
-                  <input
-                    type="password"
-                    value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                    placeholder="Pega el Client Secret generado en OAuth2"
-                    className="w-full px-3 py-2 rounded-xl bg-[#1e1f22] border border-[#4e5058] text-white text-xs font-mono focus:outline-none focus:border-[#5865F2]"
-                  />
-                </div>
+                {!isStaticHost && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#dbdee1] mb-1">
+                      Paso 3: CLIENT SECRET (Opcional)
+                    </label>
+                    <input
+                      type="password"
+                      value={clientSecret}
+                      onChange={(e) => setClientSecret(e.target.value)}
+                      placeholder="Client Secret (Opcional)"
+                      className="w-full px-3 py-2 rounded-xl bg-[#1e1f22] border border-[#4e5058] text-white text-xs font-mono focus:outline-none focus:border-[#5865F2]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#1e1f22]/70 border border-white/5 text-[11px] text-slate-300 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>En GitHub Pages la autenticación es directa y segura con tu <strong>Client ID</strong>.</span>
               </div>
 
               <button
@@ -289,7 +347,7 @@ export const DiscordAuthModal: React.FC = () => {
                 ) : (
                   <>
                     <ShieldCheck className="w-4 h-4" />
-                    <span>Guardar y Abrir Ventana Oficial de Discord</span>
+                    <span>Conectar y Abrir Ventana Oficial de Discord</span>
                   </>
                 )}
               </button>

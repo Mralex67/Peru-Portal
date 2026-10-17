@@ -149,17 +149,70 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [citizenReviews]);
 
-  // Listen to postMessage from OAuth popup or URL query parameters
+  // Listen to postMessage from OAuth popup, URL query parameters, or URL hash (Implicit Grant)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'DISCORD_OAUTH_SUCCESS' && event.data.user) {
         setDiscordUser(event.data.user);
         setIsDiscordAuthOpen(false);
+        try {
+          localStorage.setItem('perp_discord_user', JSON.stringify(event.data.user));
+        } catch {}
       }
     };
     window.addEventListener('message', handleMessage);
 
-    // Also check query param if redirected in the main window
+    // 1. Check if redirected with hash (#access_token=...&token_type=Bearer) - Direct client-side OAuth
+    if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('access_token=')) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      if (accessToken) {
+        fetch('https://discord.com/api/users/@me', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((discordData) => {
+            if (discordData && discordData.id) {
+              const avatarUrl = discordData.avatar
+                ? `https://cdn.discordapp.com/avatars/${discordData.id}/${discordData.avatar}.png`
+                : 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+              const userPayload: DiscordUser = {
+                id: discordData.id,
+                username: discordData.username,
+                displayName: discordData.global_name || discordData.username,
+                avatar: avatarUrl,
+                role: 'Ciudadano',
+                discriminator: discordData.discriminator || '0',
+                isStaff: false,
+              };
+
+              try {
+                localStorage.setItem('perp_discord_user', JSON.stringify(userPayload));
+              } catch {}
+
+              // If opened in popup window, notify opener and close
+              if (window.opener && window.opener !== window) {
+                try {
+                  window.opener.postMessage({ type: 'DISCORD_OAUTH_SUCCESS', user: userPayload }, '*');
+                  window.close();
+                  return;
+                } catch {}
+              }
+
+              // Otherwise update state in current window
+              setDiscordUser(userPayload);
+              setIsDiscordAuthOpen(false);
+            }
+          })
+          .catch((err) => console.error('Error fetching Discord user profile:', err));
+
+        // Clean URL hash
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      }
+    }
+
+    // 2. Also check query param if redirected via backend
     if (typeof window !== 'undefined' && window.location.search) {
       const params = new URLSearchParams(window.location.search);
       const authUserJson = params.get('discord_user');
@@ -169,10 +222,9 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (parsedUser && parsedUser.displayName) {
             setDiscordUser(parsedUser);
             setIsDiscordAuthOpen(false);
+            localStorage.setItem('perp_discord_user', JSON.stringify(parsedUser));
           }
-        } catch {
-          // ignore
-        }
+        } catch {}
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
       }
