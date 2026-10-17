@@ -1,0 +1,7 @@
+{
+  "name": "PE:RP STREETS - Perú Roleplay ERLC Hub",
+  "description": "La comunidad líder de roleplay en Roblox ERLC Perú. Servidores con PNP, Serenazgo, economía en Soles, Whitelist interactiva y generador de DNI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
