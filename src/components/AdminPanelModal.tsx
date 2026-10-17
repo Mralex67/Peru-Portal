@@ -93,6 +93,12 @@ export const AdminPanelModal: React.FC = () => {
       setIsConfigured(true);
     }
 
+    const savedErlcKey = localStorage.getItem('perp_erlc_key');
+    if (savedErlcKey) {
+      setErlcKeyInput(savedErlcKey);
+      setIsErlcConfigured(true);
+    }
+
     // Load album photos
     try {
       const saved = localStorage.getItem('perp_album_photos_v2');
@@ -267,7 +273,8 @@ export const AdminPanelModal: React.FC = () => {
   };
 
   const handleSaveErlc = async () => {
-    if (!erlcKeyInput.trim()) {
+    const cleanKey = erlcKeyInput.trim();
+    if (!cleanKey) {
       setErlcFeedback({
         success: false,
         message: 'Por favor ingresa una Server-Key de ER:LC válida.',
@@ -278,12 +285,41 @@ export const AdminPanelModal: React.FC = () => {
     setIsTestingErlc(true);
     playClickSound();
 
+    // Persist key locally
+    try {
+      localStorage.setItem('perp_erlc_key', cleanKey);
+      setIsErlcConfigured(true);
+    } catch {}
+
+    const isStatic =
+      typeof window !== 'undefined' &&
+      (window.location.hostname.includes('github.io') ||
+        (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('run.app')));
+
+    if (isStatic) {
+      setIsErlcConfigured(true);
+      setErlcFeedback({
+        success: true,
+        message:
+          '🔑 Server-Key guardada correctamente. Nota: En GitHub Pages (hosting estático sin backend Node.js), la API de ER:LC no permite conexiones directas por CORS. Puedes configurar y mantener los jugadores (ej: 41/50) directamente en la pestaña "Información & Textos" para que todos tus visitantes lo vean actualizado en vivo.',
+      });
+      playSuccessSound();
+      setIsTestingErlc(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/erlc/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverKey: erlcKeyInput.trim() }),
+        body: JSON.stringify({ serverKey: cleanKey }),
       });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) {
+        throw new Error('Respuesta estática sin backend');
+      }
+
       const data = await res.json();
 
       if (data.success && data.valid && data.server) {
@@ -325,10 +361,13 @@ export const AdminPanelModal: React.FC = () => {
         });
       }
     } catch (err: any) {
+      setIsErlcConfigured(true);
       setErlcFeedback({
-        success: false,
-        message: 'Error de red al consultar el servidor.',
+        success: true,
+        message:
+          '🔑 Server-Key guardada localmente. En hosting estático (GitHub Pages), los jugadores se configuran y actualizan directamente desde la pestaña "Información & Textos".',
       });
+      playSuccessSound();
     } finally {
       setIsTestingErlc(false);
     }

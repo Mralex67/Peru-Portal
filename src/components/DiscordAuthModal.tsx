@@ -280,9 +280,10 @@ export const DiscordAuthModal: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    readOnly
                     value={redirectUri}
-                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#1e1f22] border border-[#4e5058] text-[11px] font-mono text-emerald-400 font-bold select-all"
+                    onChange={(e) => setRedirectUri(e.target.value)}
+                    placeholder="https://..."
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#1e1f22] border border-[#4e5058] text-[11px] font-mono text-emerald-400 font-bold focus:outline-none focus:border-[#5865F2]"
                   />
                   <button
                     type="button"
@@ -293,8 +294,33 @@ export const DiscordAuthModal: React.FC = () => {
                     {copied ? 'Copiado' : 'Copiar'}
                   </button>
                 </div>
-                <p className="text-[10px] text-[#949ba4] leading-relaxed">
-                  Pega esta URL en tu aplicación de Discord: <strong>OAuth2 &gt; Redirects</strong>.
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-slate-400">Opciones:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const u = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '') + '/';
+                      setRedirectUri(u);
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-indigo-300 border border-white/10 cursor-pointer"
+                  >
+                    URL Principal (/)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const u = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '') + '/api/auth/callback/discord';
+                      setRedirectUri(u);
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-indigo-300 border border-white/10 cursor-pointer"
+                  >
+                    Con /api/auth/callback/discord
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-[#949ba4] leading-relaxed pt-1">
+                  ⚠️ <strong>Asegúrate:</strong> En Discord Developer Portal &gt; OAuth2 &gt; Redirects, la URL debe ser <strong>exactamente idéntica</strong> a la que figura arriba. (Puedes agregar ambas en Discord para asegurar que siempre funcione).
                 </p>
               </div>
 
