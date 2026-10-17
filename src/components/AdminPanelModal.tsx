@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
+import defaultPatrolTruckImg from '../assets/images/peru_police_patrol_night_1792084208478.jpg';
 
 interface AlbumItem {
   id: string;
@@ -858,7 +859,7 @@ export const AdminPanelModal: React.FC = () => {
                   {/* Truck Preview */}
                   <div className="relative w-40 h-24 sm:w-44 sm:h-28 shrink-0 rounded-2xl bg-black/60 border border-white/15 overflow-hidden shadow-lg group">
                     <img
-                      src={formData.customPatrolTruckUrl || "/src/assets/images/peru_police_patrol_night_1792084208478.jpg"}
+                      src={formData.customPatrolTruckUrl || defaultPatrolTruckImg}
                       alt="Vista previa Camioneta"
                       className="w-full h-full object-cover"
                     />
