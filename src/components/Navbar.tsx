@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Menu, X, Settings, LogOut, Camera } from 'lucide-react';
+import { Volume2, VolumeX, Menu, X, Settings, LogOut, Camera, CreditCard } from 'lucide-react';
 import { OfficialPeruLogo } from './OfficialPeruLogo';
 import { InteractiveButton } from './InteractiveButton';
 import { useServer } from '../context/ServerContext';
@@ -54,29 +54,11 @@ export const Navbar: React.FC = () => {
             Inicio
           </a>
           <a
-            href="#admision"
-            className="hover:text-white transition-colors hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] whitespace-nowrap shrink-0"
+            href="#dni"
+            className="hover:text-sky-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 text-sky-400 font-bold"
           >
-            Admisión
-          </a>
-          <button
-            onClick={() => setIsWhitelistInfoOpen(true)}
-            className="hover:text-red-400 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-          >
-            Whitelist
-          </button>
-          <a
-            href="#facciones"
-            className="hover:text-white transition-colors hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] whitespace-nowrap shrink-0"
-          >
-            Facciones
-          </a>
-          <a
-            href="#estadisticas"
-            className="hover:text-white transition-colors hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] whitespace-nowrap shrink-0 flex items-center gap-1.5"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Estadística Servidor</span>
+            <CreditCard className="w-3.5 h-3.5 text-sky-400" />
+            <span>DNI Peruano</span>
           </a>
           <a
             href="#album"
@@ -164,6 +146,15 @@ export const Navbar: React.FC = () => {
                     <span className="text-[10px] text-emerald-400 font-medium">● Verificado por Discord</span>
                   </div>
 
+                  <a
+                    href="#dni"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="w-full text-left px-3 py-2 text-xs text-sky-300 hover:text-white hover:bg-sky-950/30 rounded-lg flex items-center gap-2 cursor-pointer transition-colors font-semibold"
+                  >
+                    <CreditCard className="w-3.5 h-3.5 text-sky-400" />
+                    Mi DNI Peruano (RENIEC)
+                  </a>
+
                   <button
                     onClick={() => {
                       setUserDropdownOpen(false);
@@ -213,35 +204,12 @@ export const Navbar: React.FC = () => {
             Inicio
           </a>
           <a
-            href="#admision"
+            href="#dni"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-300 hover:text-white py-1"
+            className="block text-sky-400 hover:text-sky-300 font-semibold py-1 flex items-center gap-2"
           >
-            Admisión
-          </a>
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              setIsWhitelistInfoOpen(true);
-            }}
-            className="block w-full text-left text-red-400 font-semibold py-1"
-          >
-            Whitelist Oficial
-          </button>
-          <a
-            href="#facciones"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-300 hover:text-white py-1"
-          >
-            Facciones Oficiales
-          </a>
-          <a
-            href="#estadisticas"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-300 hover:text-white py-1 flex items-center gap-2"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Estadística Servidor</span>
+            <CreditCard className="w-4 h-4 text-sky-400" />
+            <span>DNI Peruano RENIEC</span>
           </a>
           <a
             href="#album"

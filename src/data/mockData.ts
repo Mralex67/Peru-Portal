@@ -10,7 +10,7 @@ export interface FactionItem {
 }
 
 export const SERVER_STATS = {
-  currentPlayers: 48,
+  currentPlayers: 4,
   maxPlayers: 50,
   discordMembers: '18.450',
   serverName: 'PE:RP STREETS | PERÚ RP V3',

@@ -21,10 +21,14 @@ import {
   Sparkles,
   Link as LinkIcon,
   AlertCircle,
-  Zap
+  Zap,
+  Database,
+  FileCode
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
+import { getSupabaseConfig, saveSupabaseConfig, SUPABASE_SQL_INIT, getAllRegisteredDnis } from '../lib/supabase';
+import { PeruDni } from '../types/dni';
 
 interface AlbumItem {
   id: string;
@@ -36,9 +40,16 @@ export const AdminPanelModal: React.FC = () => {
   const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin } = useServer();
 
   const [formData, setFormData] = useState({ ...config });
-  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase'>('general');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
+
+  // Supabase state
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseKey, setSupabaseKey] = useState('');
+  const [supabaseSaved, setSupabaseSaved] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [registeredDnis, setRegisteredDnis] = useState<PeruDni[]>([]);
 
   // File upload refs
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -123,6 +134,12 @@ export const AdminPanelModal: React.FC = () => {
         }
       })
       .catch(() => {});
+
+    // Load Supabase configuration & registered DNIs
+    const sConf = getSupabaseConfig();
+    setSupabaseUrl(sConf.url);
+    setSupabaseKey(sConf.anonKey);
+    getAllRegisteredDnis().then(setRegisteredDnis).catch(() => {});
 
     // Check ER:LC API status
     fetch('/api/erlc/server')
@@ -479,6 +496,21 @@ export const AdminPanelModal: React.FC = () => {
             Credenciales Discord
             {isConfigured && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('supabase')}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'supabase' ? 'border-sky-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-sky-400" />
+            Supabase & DNIs
+            {registeredDnis.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-500/40 text-[10px] font-mono">
+                {registeredDnis.length}
+              </span>
             )}
           </button>
         </div>
@@ -1182,6 +1214,150 @@ export const AdminPanelModal: React.FC = () => {
                     className="w-full px-3 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-[#5865F2]"
                   />
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: SUPABASE & PERU DNIS */}
+          {activeTab === 'supabase' && (
+            <div className="space-y-5">
+              <div className="p-4 rounded-2xl bg-[#091522] border border-sky-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-5 h-5 text-sky-400" />
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-sky-300">
+                        Base de Datos Supabase (DNI Peruano & Ciudadanos)
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Los DNIs generados por los usuarios se almacenan en Supabase con regla estricta de 1 DNI por Discord.
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href="https://supabase.com/dashboard"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-sky-300 hover:text-white flex items-center gap-1 underline shrink-0"
+                  >
+                    Abrir Supabase <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Supabase inputs */}
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                    PROJECT URL DE SUPABASE
+                  </label>
+                  <input
+                    type="text"
+                    value={supabaseUrl}
+                    onChange={(e) => setSupabaseUrl(e.target.value)}
+                    placeholder="https://xyzabcdefghijklm.supabase.co"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                    ANON / PUBLIC API KEY
+                  </label>
+                  <input
+                    type="password"
+                    value={supabaseKey}
+                    onChange={(e) => setSupabaseKey(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveSupabaseConfig(supabaseUrl, supabaseKey);
+                      setSupabaseSaved(true);
+                      playSuccessSound();
+                      setTimeout(() => setSupabaseSaved(false), 2500);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    {supabaseSaved ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>{supabaseSaved ? '¡Credenciales Guardadas!' : 'Guardar Credenciales Supabase'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(SUPABASE_SQL_INIT);
+                      setCopiedSql(true);
+                      playSuccessSound();
+                      setTimeout(() => setCopiedSql(false), 2500);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-white/10"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{copiedSql ? '¡Script SQL Copiado!' : 'Copiar SQL para Crear Tabla'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Registered DNIs list */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    DNIs Emitidos en PE:RP ({registeredDnis.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      getAllRegisteredDnis().then(setRegisteredDnis).catch(() => {});
+                      playClickSound();
+                    }}
+                    className="text-[11px] text-sky-400 hover:text-white underline cursor-pointer"
+                  >
+                    Actualizar Lista
+                  </button>
+                </div>
+
+                {registeredDnis.length > 0 ? (
+                  <div className="max-h-56 overflow-y-auto space-y-2 p-1">
+                    {registeredDnis.map((dni) => (
+                      <div
+                        key={dni.id}
+                        className="p-3 rounded-xl bg-[#141726] border border-white/5 flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={dni.photoUrl}
+                            alt="Foto Roblox"
+                            className="w-10 h-10 rounded-lg bg-black object-cover border border-white/10"
+                          />
+                          <div>
+                            <div className="font-bold text-white flex items-center gap-2">
+                              <span>{dni.fullName}</span>
+                              <span className="font-mono text-sky-400 font-bold">DNI {dni.dniNumber}-{dni.verifyDigit}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Roblox: <strong className="text-white">@{dni.robloxUsername}</strong> • Discord: {dni.discordUsername}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30">
+                          ACTIVO
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-black/40 border border-white/5 text-center text-xs text-slate-400">
+                    Aún no se han emitido DNIs. Los ciudadanos registrados aparecerán aquí automáticamente.
+                  </div>
+                )}
               </div>
             </div>
           )}

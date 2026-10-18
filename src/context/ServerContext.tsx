@@ -9,7 +9,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   heroDescription:
     'La comunidad líder y oficial de simulación urbana en Roblox Emergency Response: Liberty County. Patrulla las calles peruanas con la Policía Nacional del Perú (PNP), Serenazgo y SAMU con economía en Soles y rol serio.',
   discordMembers: '18.450',
-  currentPlayers: 48,
+  currentPlayers: 4,
   maxPlayers: 50,
   serverStatus: 'online',
   announcementText: '🚨 Servidor oficial de PE:RP Streets activo en Roblox ERLC.',
@@ -63,6 +63,9 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         if (parsed.serverName && parsed.serverName.includes('CALLAO')) {
           parsed.serverName = DEFAULT_SERVER_CONFIG.serverName;
+        }
+        if (parsed.currentPlayers === 48) {
+          parsed.currentPlayers = 4;
         }
         return { ...DEFAULT_SERVER_CONFIG, ...parsed };
       }

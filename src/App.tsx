@@ -2,6 +2,7 @@ import React from 'react';
 import { ServerProvider } from './context/ServerContext';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
+import { PeruDniSection } from './components/PeruDniSection';
 import { ServerLiveMonitor } from './components/ServerLiveMonitor';
 import { AdmissionSection } from './components/AdmissionSection';
 import { FactionsSection } from './components/FactionsSection';
@@ -23,6 +24,9 @@ function MainApp() {
       <main className="flex-1">
         {/* 1. Hero Section with grand PE:RP branding & direct Discord/Whitelist CTAs */}
         <Hero />
+
+        {/* 2. DNI Peruano RENIEC (Generación de identidad con Roblox & Supabase) */}
+        <PeruDniSection />
 
         {/* 2. Admission Section (Original Peruvian RP admission pathway) */}
         <AdmissionSection />
