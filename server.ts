@@ -43,6 +43,44 @@ app.post('/api/upload-photo', (req, res) => {
   }
 });
 
+// Endpoint to proxy Roblox avatar lookup
+app.get('/api/roblox/avatar/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usernames: [username], excludeBannedUsers: false }),
+    });
+    if (!userRes.ok) {
+      return res.status(404).json({ error: 'Usuario no encontrado en Roblox' });
+    }
+    const userData = await userRes.json();
+    if (!userData.data || userData.data.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    const user = userData.data[0];
+    const uId = user.id;
+    const thumbRes = await fetch(
+      `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
+    );
+    let avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${uId}&width=420&height=420&format=png`;
+    if (thumbRes.ok) {
+      const thumbData = await thumbRes.json();
+      if (thumbData.data && thumbData.data[0]?.imageUrl) {
+        avatarUrl = thumbData.data[0].imageUrl;
+      }
+    }
+    res.json({
+      userId: uId.toString(),
+      displayName: user.displayName || user.name,
+      avatarUrl,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error consultando Roblox' });
+  }
+});
+
 const AUTH_FILE = path.resolve(__dirname, '.discord-auth.json');
 
 // In-memory or env configuration for Discord OAuth

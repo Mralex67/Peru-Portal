@@ -14,10 +14,12 @@ import {
   ExternalLink,
   CreditCard,
   Database,
+  Upload,
+  RefreshCw,
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { PeruDni } from '../types/dni';
-import { getUserDni, saveUserDni } from '../lib/supabase';
+import { getUserDni, saveUserDni, deleteUserDni } from '../lib/supabase';
 import { generateRandomPeruDniNumber, fetchRobloxAvatarUrl } from '../utils/roblox';
 import { playClickSound, playSuccessSound } from '../utils/audio';
 
@@ -46,6 +48,7 @@ export const PeruDniSection: React.FC = () => {
   const [birthDay, setBirthDay] = useState('14');
 
   const cardRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check if current discord user has a DNI registered
   useEffect(() => {
@@ -69,16 +72,27 @@ export const PeruDniSection: React.FC = () => {
       setSecondSurname('MAMANI');
     }
 
-    // Default roblox username matching discord
+    // Default roblox username matching discord username
     setRobloxUsername(discordUser.username || '');
-    setAvatarPreview(discordUser.avatar || '');
 
     getUserDni(discordUser.id)
       .then((dni) => {
         if (dni) {
           setExistingDni(dni);
+          setAvatarPreview(dni.photoUrl);
         } else {
           setExistingDni(null);
+          // Auto fetch Roblox avatar for initial username
+          if (discordUser.username) {
+            fetchRobloxAvatarUrl(discordUser.username)
+              .then((res) => {
+                if (res.avatarUrl) {
+                  setAvatarPreview(res.avatarUrl);
+                  if (res.userId) setRobloxUserId(res.userId);
+                }
+              })
+              .catch(() => {});
+          }
         }
       })
       .catch((err) => {
@@ -89,20 +103,67 @@ export const PeruDniSection: React.FC = () => {
       });
   }, [discordUser]);
 
-  // Fetch Roblox avatar preview on button or blur
+  // Debounced auto-fetch Roblox avatar when username changes
+  useEffect(() => {
+    if (!robloxUsername.trim() || existingDni) return;
+    const timeout = setTimeout(() => {
+      fetchRobloxAvatarUrl(robloxUsername.trim())
+        .then((res) => {
+          if (res.avatarUrl) {
+            setAvatarPreview(res.avatarUrl);
+            if (res.userId) setRobloxUserId(res.userId);
+          }
+        })
+        .catch(() => {});
+    }, 800);
+    return () => clearTimeout(timeout);
+  }, [robloxUsername, existingDni]);
+
+  // Manual fetch Roblox avatar button
   const handleFetchRobloxAvatar = async () => {
     if (!robloxUsername.trim()) return;
     setIsLoadingAvatar(true);
+    setErrorMessage('');
     playClickSound();
 
     try {
       const res = await fetchRobloxAvatarUrl(robloxUsername.trim());
-      setAvatarPreview(res.avatarUrl);
-      if (res.userId) setRobloxUserId(res.userId);
+      if (res.avatarUrl) {
+        setAvatarPreview(res.avatarUrl);
+        if (res.userId) setRobloxUserId(res.userId);
+        playSuccessSound();
+      }
     } catch {
-      // ignore
+      setErrorMessage('No se pudo contactar a Roblox. Puedes ingresar tu ID numérico o subir tu foto.');
     } finally {
       setIsLoadingAvatar(false);
+    }
+  };
+
+  // Upload custom photo from disk
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setAvatarPreview(reader.result);
+          playSuccessSound();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Reset user's DNI to allow re-creating
+  const handleResetMyDni = async () => {
+    if (!discordUser) return;
+    if (window.confirm('¿Seguro que deseas reiniciar tu DNI para volver a crearlo con tu avatar de Roblox?')) {
+      playClickSound();
+      await deleteUserDni(discordUser.id);
+      setExistingDni(null);
+      setSuccessMessage('DNI reiniciado exitosamente. Ahora puedes tramitarlo de nuevo con tu foto de Roblox.');
+      playSuccessSound();
     }
   };
 
@@ -116,7 +177,7 @@ export const PeruDniSection: React.FC = () => {
     }
 
     if (!robloxUsername.trim()) {
-      setErrorMessage('Por favor ingresa tu usuario de Roblox.');
+      setErrorMessage('Por favor ingresa tu usuario o ID de Roblox.');
       return;
     }
     if (!firstSurname.trim() || !givenNames.trim()) {
@@ -142,6 +203,10 @@ export const PeruDniSection: React.FC = () => {
     const issueDateStr = `${currentDay} ${currentMonth} ${currentYear}`;
     const expiryDateStr = `${currentDay} ${currentMonth} ${currentYear + 8}`;
 
+    const photoToUse =
+      avatarPreview ||
+      `https://www.roblox.com/headshot-thumbnail/image?userId=1&width=420&height=420&format=png`;
+
     const newDniPayload: PeruDni = {
       id: `dni-${Date.now()}`,
       discordId: discordUser.id,
@@ -161,7 +226,7 @@ export const PeruDniSection: React.FC = () => {
       gender,
       civilStatus: 'S',
       ubigeo: '150101',
-      photoUrl: avatarPreview || discordUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
+      photoUrl: photoToUse,
       signatureText: `${cleanGivenNames.charAt(0)}.${cleanFirstSurname}`,
       createdAt: new Date().toISOString(),
     };
@@ -170,7 +235,7 @@ export const PeruDniSection: React.FC = () => {
       const result = await saveUserDni(newDniPayload);
       if (result.success && result.dni) {
         setExistingDni(result.dni);
-        setSuccessMessage('¡DNI emitido exitosamente y registrado en la base de datos de Supabase!');
+        setSuccessMessage('¡DNI emitido exitosamente con tu avatar de Roblox y registrado en Supabase!');
         playSuccessSound();
       } else {
         setErrorMessage(result.error || 'No se pudo registrar el DNI en Supabase.');
@@ -202,7 +267,7 @@ export const PeruDniSection: React.FC = () => {
     gender,
     civilStatus: 'S',
     ubigeo: '150101',
-    photoUrl: avatarPreview || discordUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
+    photoUrl: avatarPreview || `https://www.roblox.com/headshot-thumbnail/image?userId=1&width=420&height=420&format=png`,
     signatureText: `${givenNames.charAt(0) || 'A'}.${firstSurname || 'Quispe'}`,
     createdAt: new Date().toISOString(),
   };
@@ -226,7 +291,7 @@ export const PeruDniSection: React.FC = () => {
           </h2>
 
           <p className="mt-4 text-sm sm:text-base text-slate-300">
-            Genera tu Documento Nacional de Identidad con tu usuario y foto de Roblox.
+            Genera tu Documento Nacional de Identidad con tu avatar oficial de Roblox.
             Cada documento es único, verificado y almacenado en la base de datos de <strong className="text-sky-300">Supabase</strong> para que la PNP y autoridades lo reconozcan en el servidor.
           </p>
         </div>
@@ -338,7 +403,7 @@ export const PeruDniSection: React.FC = () => {
                         <div className="relative w-24 h-28 sm:w-28 sm:h-32 rounded-lg bg-white border-2 border-slate-400 overflow-hidden shadow-md">
                           <img
                             src={currentDni.photoUrl}
-                            alt="Foto Roblox DNI"
+                            alt="Avatar Roblox DNI"
                             className="w-full h-full object-cover object-center bg-slate-100"
                             crossOrigin="anonymous"
                           />
@@ -471,7 +536,7 @@ export const PeruDniSection: React.FC = () => {
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                   <div>
                     <strong className="block text-white font-bold">DNI Oficial Registrado en Supabase</strong>
-                    <span>Tu identidad ya está asentada en el Registro Nacional PE:RP. No se permiten DNIs duplicados.</span>
+                    <span>Tu identidad ya está asentada en el Registro Nacional PE:RP. Vinculado a tu avatar de Roblox.</span>
                   </div>
                 </div>
               )}
@@ -521,12 +586,19 @@ export const PeruDniSection: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Lock notice */}
-                  <div className="p-3.5 rounded-2xl bg-sky-950/40 border border-sky-500/30 text-sky-200 text-xs flex items-start gap-2.5">
-                    <Lock className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-                    <p className="leading-relaxed">
-                      <strong>Límite de 1 DNI alcanzado:</strong> Para garantizar el realismo en el servidor PE:RP, cada cuenta de Discord solo puede poseer un único documento. Puedes presentar este número a la Policía Nacional durante los controles de tránsito en ER:LC.
-                    </p>
+                  {/* Reset button to allow creating anew */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleResetMyDni}
+                      className="w-full py-2.5 px-4 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <RotateCcw className="w-4 h-4 text-rose-400" />
+                      <span>Reiniciar mi DNI y Crear de Nuevo</span>
+                    </button>
+                    <span className="text-[10px] text-slate-400 block text-center mt-1.5">
+                      Usa esta opción si deseas cambiar tu avatar de Roblox o corregir tu nombre.
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -576,15 +648,63 @@ export const PeruDniSection: React.FC = () => {
                         type="button"
                         onClick={handleFetchRobloxAvatar}
                         disabled={isLoadingAvatar}
-                        className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shrink-0 disabled:opacity-60"
+                        className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 disabled:opacity-60 shadow-md"
                       >
-                        <Search className="w-3.5 h-3.5" />
-                        <span>{isLoadingAvatar ? 'Buscando...' : 'Obtener Foto'}</span>
+                        {isLoadingAvatar ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Search className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isLoadingAvatar ? 'Cargando...' : 'Obtener Foto'}</span>
                       </button>
                     </div>
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      Se importará tu foto oficial de avatar de Roblox para el DNI biométrico.
-                    </span>
+                  </div>
+
+                  {/* Photo Preview & Custom Upload Option */}
+                  <div className="p-3 rounded-2xl bg-[#070912] border border-white/10 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-12 h-14 rounded-lg bg-slate-800 border-2 border-sky-400 overflow-hidden shrink-0 shadow-md">
+                        {avatarPreview ? (
+                          <img
+                            src={avatarPreview}
+                            alt="Avatar Roblox"
+                            className="w-full h-full object-cover"
+                            crossOrigin="anonymous"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-500 text-[10px]">
+                            Sin foto
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Foto del Avatar Roblox</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400">
+                          {avatarPreview.includes('rbxcdn') || avatarPreview.includes('roblox.com')
+                            ? 'Avatar oficial de Roblox sincronizado'
+                            : 'Avatar listo para el DNI'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] text-sky-300 hover:text-white font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir Imagen</span>
+                    </button>
                   </div>
 
                   {/* Fields: First & Second Surname */}

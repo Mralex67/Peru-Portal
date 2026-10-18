@@ -3,7 +3,7 @@ import { PeruDni, SupabaseConfig } from '../types/dni';
 
 const STORAGE_URL_KEY = 'perp_supabase_url';
 const STORAGE_KEY_KEY = 'perp_supabase_anon_key';
-const LOCAL_DNIS_KEY = 'perp_local_dnis_v1';
+const LOCAL_DNIS_KEY = 'perp_local_dnis_v2';
 
 // SQL table initialization script for Supabase
 export const SUPABASE_SQL_INIT = `-- Script SQL Oficial para crear la tabla de DNIs en Supabase
@@ -284,4 +284,52 @@ export async function getAllRegisteredDnis(): Promise<PeruDni[]> {
   }
 
   return getLocalDnis();
+}
+
+/**
+ * Reinicia todos los DNIs registrados (tanto en Supabase como en localStorage)
+ */
+export async function resetAllDnis(): Promise<boolean> {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(LOCAL_DNIS_KEY);
+      localStorage.removeItem('perp_local_dnis_v1');
+    } catch {}
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('peru_dnis').delete().neq('dni_number', '00000000');
+    } catch (e) {
+      console.warn('Error limpiando DNIs en Supabase:', e);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Elimina el DNI específico de un usuario (para permitir volver a tramitarlo)
+ */
+export async function deleteUserDni(discordId: string): Promise<boolean> {
+  if (!discordId) return false;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const current = getLocalDnis().filter((d) => d.discordId !== discordId);
+      localStorage.setItem(LOCAL_DNIS_KEY, JSON.stringify(current));
+    } catch {}
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('peru_dnis').delete().eq('discord_id', discordId);
+    } catch (e) {
+      console.warn('Error eliminando DNI en Supabase:', e);
+    }
+  }
+
+  return true;
 }

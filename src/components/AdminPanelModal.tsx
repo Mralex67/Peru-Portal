@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
-import { getSupabaseConfig, saveSupabaseConfig, SUPABASE_SQL_INIT, getAllRegisteredDnis } from '../lib/supabase';
+import { getSupabaseConfig, saveSupabaseConfig, SUPABASE_SQL_INIT, getAllRegisteredDnis, resetAllDnis } from '../lib/supabase';
 import { PeruDni } from '../types/dni';
 
 interface AlbumItem {
@@ -1311,16 +1311,33 @@ export const AdminPanelModal: React.FC = () => {
                   <span className="text-xs font-bold text-white uppercase tracking-wider">
                     DNIs Emitidos en PE:RP ({registeredDnis.length})
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      getAllRegisteredDnis().then(setRegisteredDnis).catch(() => {});
-                      playClickSound();
-                    }}
-                    className="text-[11px] text-sky-400 hover:text-white underline cursor-pointer"
-                  >
-                    Actualizar Lista
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (window.confirm('¿Seguro que deseas reiniciar y borrar TODOS los DNIs emitidos para que los usuarios puedan crearlos de nuevo?')) {
+                          await resetAllDnis();
+                          setRegisteredDnis([]);
+                          playSuccessSound();
+                          alert('Todos los DNIs han sido reiniciados.');
+                        }
+                      }}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Reiniciar Todos los DNIs</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        getAllRegisteredDnis().then(setRegisteredDnis).catch(() => {});
+                        playClickSound();
+                      }}
+                      className="text-[11px] text-sky-400 hover:text-white underline cursor-pointer"
+                    >
+                      Actualizar Lista
+                    </button>
+                  </div>
                 </div>
 
                 {registeredDnis.length > 0 ? (
