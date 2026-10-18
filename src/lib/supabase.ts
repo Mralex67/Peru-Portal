@@ -6,7 +6,7 @@ const STORAGE_KEY_KEY = 'perp_supabase_anon_key';
 const LOCAL_DNIS_KEY = 'perp_local_dnis_v2';
 
 // SQL table initialization script for Supabase
-export const SUPABASE_SQL_INIT = `-- Script SQL Oficial para crear la tabla de DNIs en Supabase
+export const SUPABASE_SQL_INIT = `-- Script SQL Oficial para crear la tabla de DNIs en Supabase (RENIEC PE:RP)
 CREATE TABLE IF NOT EXISTS peru_dnis (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   discord_id TEXT UNIQUE NOT NULL,
@@ -28,10 +28,16 @@ CREATE TABLE IF NOT EXISTS peru_dnis (
   ubigeo TEXT DEFAULT '150101',
   photo_url TEXT,
   signature_text TEXT,
+  status TEXT DEFAULT 'active',
+  suspension_reason TEXT,
+  bank_status TEXT DEFAULT 'active',
+  bank_freeze_reason TEXT,
+  wanted_status BOOLEAN DEFAULT false,
+  wanted_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Habilitar lectura y escritura pública para ciudadanos PE:RP
+-- Habilitar Row Level Security y políticas
 ALTER TABLE peru_dnis ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Permitir lectura de DNIs"
@@ -41,6 +47,14 @@ CREATE POLICY "Permitir lectura de DNIs"
 CREATE POLICY "Permitir crear DNI único por Discord"
   ON peru_dnis FOR INSERT
   WITH CHECK (true);
+
+CREATE POLICY "Permitir actualizar DNIs"
+  ON peru_dnis FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Permitir eliminar DNIs"
+  ON peru_dnis FOR DELETE
+  USING (true);
 `;
 
 export function getSupabaseConfig(): SupabaseConfig {
@@ -113,13 +127,44 @@ function saveLocalDni(dni: PeruDni): void {
   }
 }
 
+function mapSupabaseRow(data: any): PeruDni {
+  return {
+    id: data.id,
+    discordId: data.discord_id,
+    discordUsername: data.discord_username || '',
+    discordDisplayName: data.discord_display_name || '',
+    robloxUsername: data.roblox_username,
+    robloxUserId: data.roblox_user_id || '',
+    dniNumber: data.dni_number,
+    verifyDigit: data.verify_digit || '1',
+    fullName: data.full_name,
+    firstSurname: data.first_surname || '',
+    secondSurname: data.second_surname || '',
+    givenNames: data.given_names || '',
+    birthDate: data.birth_date || '01 ENE 2002',
+    issueDate: data.issue_date || '18 OCT 2026',
+    expiryDate: data.expiry_date || '18 OCT 2034',
+    gender: (data.gender as 'M' | 'F') || 'M',
+    civilStatus: (data.civil_status as 'S' | 'C' | 'V' | 'D') || 'S',
+    ubigeo: data.ubigeo || '150101',
+    photoUrl: data.photo_url || '',
+    signatureText: data.signature_text || data.full_name,
+    status: (data.status as 'active' | 'suspended' | 'revoked') || 'active',
+    suspensionReason: data.suspension_reason || '',
+    bankStatus: (data.bank_status as 'active' | 'frozen') || 'active',
+    bankFreezeReason: data.bank_freeze_reason || '',
+    wantedStatus: Boolean(data.wanted_status),
+    wantedReason: data.wanted_reason || '',
+    createdAt: data.created_at || new Date().toISOString(),
+  };
+}
+
 /**
  * Consulta si un usuario de Discord ya tramitó su DNI (en Supabase o en local)
  */
 export async function getUserDni(discordId: string): Promise<PeruDni | null> {
   if (!discordId) return null;
 
-  // 1. Try Supabase first if configured
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -130,30 +175,7 @@ export async function getUserDni(discordId: string): Promise<PeruDni | null> {
         .maybeSingle();
 
       if (!error && data) {
-        const mapped: PeruDni = {
-          id: data.id,
-          discordId: data.discord_id,
-          discordUsername: data.discord_username || '',
-          discordDisplayName: data.discord_display_name || '',
-          robloxUsername: data.roblox_username,
-          robloxUserId: data.roblox_user_id || '',
-          dniNumber: data.dni_number,
-          verifyDigit: data.verify_digit || '1',
-          fullName: data.full_name,
-          firstSurname: data.first_surname || '',
-          secondSurname: data.second_surname || '',
-          givenNames: data.given_names || '',
-          birthDate: data.birth_date || '01 ENE 2002',
-          issueDate: data.issue_date || '18 OCT 2026',
-          expiryDate: data.expiry_date || '18 OCT 2034',
-          gender: (data.gender as 'M' | 'F') || 'M',
-          civilStatus: (data.civil_status as 'S' | 'C' | 'V' | 'D') || 'S',
-          ubigeo: data.ubigeo || '150101',
-          photoUrl: data.photo_url || '',
-          signatureText: data.signature_text || data.full_name,
-          createdAt: data.created_at || new Date().toISOString(),
-        };
-        // Keep local cache synced
+        const mapped = mapSupabaseRow(data);
         saveLocalDni(mapped);
         return mapped;
       }
@@ -162,7 +184,6 @@ export async function getUserDni(discordId: string): Promise<PeruDni | null> {
     }
   }
 
-  // 2. Fallback to local storage
   const locals = getLocalDnis();
   return locals.find((d) => d.discordId === discordId) || null;
 }
@@ -176,7 +197,6 @@ export async function saveUserDni(dni: PeruDni): Promise<{
   error?: string;
   dni?: PeruDni;
 }> {
-  // Check if DNI already exists for this discordId
   const existing = await getUserDni(dni.discordId);
   if (existing) {
     return {
@@ -186,10 +206,10 @@ export async function saveUserDni(dni: PeruDni): Promise<{
     };
   }
 
-  // Save to local storage first for resilience
+  dni.status = dni.status || 'active';
+  dni.bankStatus = dni.bankStatus || 'active';
   saveLocalDni(dni);
 
-  // If Supabase is configured, insert into peru_dnis table
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -213,6 +233,12 @@ export async function saveUserDni(dni: PeruDni): Promise<{
         ubigeo: dni.ubigeo,
         photo_url: dni.photoUrl,
         signature_text: dni.signatureText,
+        status: dni.status || 'active',
+        suspension_reason: dni.suspensionReason || null,
+        bank_status: dni.bankStatus || 'active',
+        bank_freeze_reason: dni.bankFreezeReason || null,
+        wanted_status: Boolean(dni.wantedStatus),
+        wanted_reason: dni.wantedReason || null,
       };
 
       const { data, error } = await supabase
@@ -222,14 +248,13 @@ export async function saveUserDni(dni: PeruDni): Promise<{
         .single();
 
       if (error) {
-        // If unique constraint error
         if (error.code === '23505') {
           return {
             success: false,
-            error: 'Ya existe un DNI registrado para esta cuenta en la base de datos de Supabase.',
+            error: 'Ya existe un DNI registrado para esta cuenta en Supabase.',
           };
         }
-        console.warn('Error al insertar en Supabase (DNI guardado localmente):', error.message);
+        console.warn('Error al insertar en Supabase (guardado en local):', error.message);
       } else if (data) {
         dni.id = data.id;
       }
@@ -242,7 +267,98 @@ export async function saveUserDni(dni: PeruDni): Promise<{
 }
 
 /**
- * Obtener todos los DNIs registrados (para uso de administración o policía)
+ * Actualiza el estado administrativo de un DNI (Suspender, Congelar Cuenta, Requisitoria)
+ */
+export async function updateDniAdministrativeStatus(
+  identifier: string,
+  updates: Partial<PeruDni>
+): Promise<boolean> {
+  if (!identifier) return false;
+
+  // Actualizar en localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const list = getLocalDnis();
+      const updated = list.map((item) => {
+        if (
+          item.discordId === identifier ||
+          item.dniNumber === identifier ||
+          item.robloxUsername.toLowerCase() === identifier.toLowerCase()
+        ) {
+          return { ...item, ...updates };
+        }
+        return item;
+      });
+      localStorage.setItem(LOCAL_DNIS_KEY, JSON.stringify(updated));
+    } catch {}
+  }
+
+  // Actualizar en Supabase
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const payload: any = {};
+      if (updates.status !== undefined) payload.status = updates.status;
+      if (updates.suspensionReason !== undefined) payload.suspension_reason = updates.suspensionReason;
+      if (updates.bankStatus !== undefined) payload.bank_status = updates.bankStatus;
+      if (updates.bankFreezeReason !== undefined) payload.bank_freeze_reason = updates.bankFreezeReason;
+      if (updates.wantedStatus !== undefined) payload.wanted_status = updates.wantedStatus;
+      if (updates.wantedReason !== undefined) payload.wanted_reason = updates.wantedReason;
+
+      await supabase
+        .from('peru_dnis')
+        .update(payload)
+        .or(`discord_id.eq.${identifier},dni_number.eq.${identifier},roblox_username.ilike.${identifier}`);
+    } catch (e) {
+      console.warn('Error actualizando en Supabase:', e);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Elimina o reinicia un DNI específico por usuario de Roblox, DNI o Discord ID (Solo Administradores)
+ */
+export async function deleteDniByAdmin(identifier: string): Promise<boolean> {
+  if (!identifier) return false;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const list = getLocalDnis().filter(
+        (item) =>
+          item.discordId !== identifier &&
+          item.dniNumber !== identifier &&
+          item.robloxUsername.toLowerCase() !== identifier.toLowerCase()
+      );
+      localStorage.setItem(LOCAL_DNIS_KEY, JSON.stringify(list));
+    } catch {}
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase
+        .from('peru_dnis')
+        .delete()
+        .or(`discord_id.eq.${identifier},dni_number.eq.${identifier},roblox_username.ilike.${identifier}`);
+    } catch (e) {
+      console.warn('Error eliminando DNI en Supabase:', e);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Elimina el DNI del usuario autenticado (para permitir rehacerlo)
+ */
+export async function deleteUserDni(discordId: string): Promise<boolean> {
+  return deleteDniByAdmin(discordId);
+}
+
+/**
+ * Obtener todos los DNIs registrados (para uso del Panel de Administración)
  */
 export async function getAllRegisteredDnis(): Promise<PeruDni[]> {
   const supabase = getSupabaseClient();
@@ -254,29 +370,7 @@ export async function getAllRegisteredDnis(): Promise<PeruDni[]> {
         .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(data)) {
-        return data.map((d) => ({
-          id: d.id,
-          discordId: d.discord_id,
-          discordUsername: d.discord_username || '',
-          discordDisplayName: d.discord_display_name || '',
-          robloxUsername: d.roblox_username,
-          robloxUserId: d.roblox_user_id || '',
-          dniNumber: d.dni_number,
-          verifyDigit: d.verify_digit || '1',
-          fullName: d.full_name,
-          firstSurname: d.first_surname || '',
-          secondSurname: d.second_surname || '',
-          givenNames: d.given_names || '',
-          birthDate: d.birth_date || '01 ENE 2002',
-          issueDate: d.issue_date || '18 OCT 2026',
-          expiryDate: d.expiry_date || '18 OCT 2034',
-          gender: (d.gender as 'M' | 'F') || 'M',
-          civilStatus: (d.civil_status as 'S' | 'C' | 'V' | 'D') || 'S',
-          ubigeo: d.ubigeo || '150101',
-          photoUrl: d.photo_url || '',
-          signatureText: d.signature_text || d.full_name,
-          createdAt: d.created_at || '',
-        }));
+        return data.map(mapSupabaseRow);
       }
     } catch (e) {
       console.error(e);
@@ -303,31 +397,6 @@ export async function resetAllDnis(): Promise<boolean> {
       await supabase.from('peru_dnis').delete().neq('dni_number', '00000000');
     } catch (e) {
       console.warn('Error limpiando DNIs en Supabase:', e);
-    }
-  }
-
-  return true;
-}
-
-/**
- * Elimina el DNI específico de un usuario (para permitir volver a tramitarlo)
- */
-export async function deleteUserDni(discordId: string): Promise<boolean> {
-  if (!discordId) return false;
-
-  if (typeof window !== 'undefined') {
-    try {
-      const current = getLocalDnis().filter((d) => d.discordId !== discordId);
-      localStorage.setItem(LOCAL_DNIS_KEY, JSON.stringify(current));
-    } catch {}
-  }
-
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      await supabase.from('peru_dnis').delete().eq('discord_id', discordId);
-    } catch (e) {
-      console.warn('Error eliminando DNI en Supabase:', e);
     }
   }
 

@@ -20,6 +20,14 @@ export interface PeruDni {
   photoUrl: string;
   signatureText: string;
   createdAt: string;
+
+  // Administrative Control & Judicial statuses
+  status?: 'active' | 'suspended' | 'revoked';
+  suspensionReason?: string;
+  bankStatus?: 'active' | 'frozen';
+  bankFreezeReason?: string;
+  wantedStatus?: boolean;
+  wantedReason?: string;
 }
 
 export interface SupabaseConfig {

@@ -21,13 +21,25 @@ import {
   Sparkles,
   Link as LinkIcon,
   AlertCircle,
-  Zap,
   Database,
-  FileCode
+  FileCode,
+  Search,
+  Ban,
+  Snowflake,
+  AlertTriangle,
+  Zap
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
-import { getSupabaseConfig, saveSupabaseConfig, SUPABASE_SQL_INIT, getAllRegisteredDnis, resetAllDnis } from '../lib/supabase';
+import {
+  getSupabaseConfig,
+  saveSupabaseConfig,
+  SUPABASE_SQL_INIT,
+  getAllRegisteredDnis,
+  resetAllDnis,
+  updateDniAdministrativeStatus,
+  deleteDniByAdmin
+} from '../lib/supabase';
 import { PeruDni } from '../types/dni';
 
 interface AlbumItem {
@@ -50,6 +62,12 @@ export const AdminPanelModal: React.FC = () => {
   const [supabaseSaved, setSupabaseSaved] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [registeredDnis, setRegisteredDnis] = useState<PeruDni[]>([]);
+
+  // Roblox Citizen Administration (Suspension, Bank Freeze, Reset)
+  const [dniSearchQuery, setDniSearchQuery] = useState('');
+  const [selectedCitizen, setSelectedCitizen] = useState<PeruDni | null>(null);
+  const [actionReason, setActionReason] = useState('');
+  const [adminFeedback, setAdminFeedback] = useState('');
 
   // File upload refs
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -1305,12 +1323,253 @@ export const AdminPanelModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Registered DNIs list */}
-              <div className="space-y-2 pt-2">
+              {/* Control Policial & Judicial por Usuario de Roblox */}
+              <div className="p-4 rounded-2xl bg-[#0e1424] border border-sky-500/30 space-y-3.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    DNIs Emitidos en PE:RP ({registeredDnis.length})
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-sky-400" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                      Gestión Policial y Judicial por Usuario de Roblox
+                    </h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Suspender • Congelar Banco • Reiniciar</span>
+                </div>
+
+                {/* Search input by Roblox username or DNI */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={dniSearchQuery}
+                    onChange={(e) => setDniSearchQuery(e.target.value)}
+                    placeholder="Escribe el usuario de Roblox o DNI del ciudadano..."
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#070a14] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const q = dniSearchQuery.trim().toLowerCase().replace(/^@/, '');
+                      if (!q) return;
+                      const found = registeredDnis.find(
+                        (d) =>
+                          d.robloxUsername.toLowerCase() === q ||
+                          d.robloxUsername.toLowerCase().includes(q) ||
+                          d.dniNumber.includes(q) ||
+                          d.discordUsername.toLowerCase().includes(q)
+                      );
+                      if (found) {
+                        setSelectedCitizen(found);
+                        setAdminFeedback(`Ciudadano localizado: @${found.robloxUsername} (DNI ${found.dniNumber})`);
+                        playSuccessSound();
+                      } else {
+                        setAdminFeedback(`No se encontró ningún ciudadano con el usuario o DNI "@${q}".`);
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Buscar</span>
+                  </button>
+                </div>
+
+                {adminFeedback && (
+                  <div className="text-[11px] font-bold text-sky-300 bg-sky-950/40 p-2 rounded-lg border border-sky-500/20">
+                    {adminFeedback}
+                  </div>
+                )}
+
+                {/* Selected Citizen Management Card */}
+                {selectedCitizen && (
+                  <div className="p-4 rounded-xl bg-[#070914] border border-sky-400/40 space-y-3.5 shadow-xl">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={selectedCitizen.photoUrl}
+                          alt="Avatar"
+                          className="w-12 h-12 rounded-xl bg-black object-cover border-2 border-sky-400/50 shrink-0"
+                        />
+                        <div>
+                          <div className="font-bold text-white text-sm flex items-center gap-2">
+                            <span>{selectedCitizen.fullName}</span>
+                            <span className="font-mono text-xs text-sky-400 font-bold">DNI {selectedCitizen.dniNumber}-{selectedCitizen.verifyDigit}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-300">
+                            Usuario Roblox: <strong className="text-white font-mono">@{selectedCitizen.robloxUsername}</strong> • Discord: {selectedCitizen.discordUsername}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCitizen(null)}
+                        className="text-slate-400 hover:text-white text-xs cursor-pointer px-2 py-1 rounded hover:bg-white/5"
+                      >
+                        ✕ Cerrar
+                      </button>
+                    </div>
+
+                    {/* Status Badges */}
+                    <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+                      <span className={`px-2 py-0.5 rounded-md border ${
+                        selectedCitizen.status === 'suspended'
+                          ? 'bg-rose-950 text-rose-300 border-rose-500/50'
+                          : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                      }`}>
+                        DNI: {selectedCitizen.status === 'suspended' ? '🚫 Suspendido' : '✅ Vigente'}
+                      </span>
+
+                      <span className={`px-2 py-0.5 rounded-md border ${
+                        selectedCitizen.bankStatus === 'frozen'
+                          ? 'bg-sky-950 text-sky-300 border-sky-500/50'
+                          : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                      }`}>
+                        Banco: {selectedCitizen.bankStatus === 'frozen' ? '❄️ Cuenta Congelada' : '💳 Cuenta Activa (S/.)'}
+                      </span>
+
+                      <span className={`px-2 py-0.5 rounded-md border ${
+                        selectedCitizen.wantedStatus
+                          ? 'bg-red-950 text-red-200 border-red-500/50 animate-pulse'
+                          : 'bg-slate-900 text-slate-400 border-white/10'
+                      }`}>
+                        PNP: {selectedCitizen.wantedStatus ? '🚨 ORDEN DE CAPTURA VIGENTE' : 'Sin Requisitoria'}
+                      </span>
+                    </div>
+
+                    {/* Reason input for actions */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        Motivo / Justificación Policial o Judicial (Opcional):
+                      </label>
+                      <input
+                        type="text"
+                        value={actionReason}
+                        onChange={(e) => setActionReason(e.target.value)}
+                        placeholder="ej. Sospecha de asalto a banco en ER:LC / Orden de Fiscalía / Error de datos..."
+                        className="w-full px-3 py-1.5 rounded-lg bg-[#05070e] border border-white/10 text-white text-xs focus:outline-none focus:border-sky-400"
+                      />
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      {/* Action 1: Suspender / Reactivar DNI */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextStatus = selectedCitizen.status === 'suspended' ? 'active' : 'suspended';
+                          await updateDniAdministrativeStatus(selectedCitizen.discordId, {
+                            status: nextStatus,
+                            suspensionReason: nextStatus === 'suspended' ? (actionReason || 'Orden policial administrativa.') : '',
+                          });
+                          const updated: PeruDni = {
+                            ...selectedCitizen,
+                            status: nextStatus,
+                            suspensionReason: nextStatus === 'suspended' ? actionReason : '',
+                          };
+                          setSelectedCitizen(updated);
+                          setRegisteredDnis((prev) => prev.map((d) => d.id === updated.id ? updated : d));
+                          playSuccessSound();
+                          setAdminFeedback(nextStatus === 'suspended' ? '🚫 DNI suspendido correctamente.' : '✅ Suspensión del DNI levantada.');
+                        }}
+                        className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                          selectedCitizen.status === 'suspended'
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            : 'bg-rose-900 hover:bg-rose-800 text-rose-100 border border-rose-500/40'
+                        }`}
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        <span>{selectedCitizen.status === 'suspended' ? 'Reactivar DNI' : 'Suspender DNI'}</span>
+                      </button>
+
+                      {/* Action 2: Congelar / Descongelar Cuenta Bancaria */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextBank = selectedCitizen.bankStatus === 'frozen' ? 'active' : 'frozen';
+                          await updateDniAdministrativeStatus(selectedCitizen.discordId, {
+                            bankStatus: nextBank,
+                            bankFreezeReason: nextBank === 'frozen' ? (actionReason || 'Embargo judicial de fondos.') : '',
+                          });
+                          const updated: PeruDni = {
+                            ...selectedCitizen,
+                            bankStatus: nextBank,
+                            bankFreezeReason: nextBank === 'frozen' ? actionReason : '',
+                          };
+                          setSelectedCitizen(updated);
+                          setRegisteredDnis((prev) => prev.map((d) => d.id === updated.id ? updated : d));
+                          playSuccessSound();
+                          setAdminFeedback(nextBank === 'frozen' ? '❄️ Cuenta bancaria congelada.' : '🔓 Cuenta bancaria descongelada.');
+                        }}
+                        className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                          selectedCitizen.bankStatus === 'frozen'
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            : 'bg-sky-900 hover:bg-sky-800 text-sky-100 border border-sky-500/40'
+                        }`}
+                      >
+                        <Snowflake className="w-3.5 h-3.5" />
+                        <span>{selectedCitizen.bankStatus === 'frozen' ? 'Descongelar Banco' : 'Congelar Banco'}</span>
+                      </button>
+
+                      {/* Action 3: Requisitoria PNP */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextWanted = !selectedCitizen.wantedStatus;
+                          await updateDniAdministrativeStatus(selectedCitizen.discordId, {
+                            wantedStatus: nextWanted,
+                            wantedReason: nextWanted ? (actionReason || 'Requisitoria policial activa.') : '',
+                          });
+                          const updated: PeruDni = {
+                            ...selectedCitizen,
+                            wantedStatus: nextWanted,
+                            wantedReason: nextWanted ? actionReason : '',
+                          };
+                          setSelectedCitizen(updated);
+                          setRegisteredDnis((prev) => prev.map((d) => d.id === updated.id ? updated : d));
+                          playSuccessSound();
+                          setAdminFeedback(nextWanted ? '🚨 Orden de captura emitida.' : '✅ Requisitoria retirada.');
+                        }}
+                        className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                          selectedCitizen.wantedStatus
+                            ? 'bg-slate-700 hover:bg-slate-600 text-white'
+                            : 'bg-red-950 hover:bg-red-900 text-red-200 border border-red-500/50'
+                        }`}
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>{selectedCitizen.wantedStatus ? 'Retirar Captura' : 'Dictar Captura'}</span>
+                      </button>
+
+                      {/* Action 4: Reiniciar DNI (Permitir volver a crearlo) */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (window.confirm(`¿Seguro que deseas reiniciar el DNI de @${selectedCitizen.robloxUsername}? Podrá tramitar un nuevo DNI desde cero con su avatar de Roblox.`)) {
+                            await deleteDniByAdmin(selectedCitizen.discordId);
+                            setRegisteredDnis((prev) => prev.filter((d) => d.id !== selectedCitizen.id));
+                            setSelectedCitizen(null);
+                            playSuccessSound();
+                            setAdminFeedback(`DNI de @${selectedCitizen.robloxUsername} reiniciado exitosamente. Ahora puede volver a crearlo.`);
+                          }
+                        }}
+                        className="px-2.5 py-2 rounded-xl bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Reiniciar DNI</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Registered DNIs list */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider block">
+                      Padrón Ciudadano de DNIs ({registeredDnis.length})
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Haz clic en cualquier ciudadano para gestionarlo o suspenderlo.
+                    </span>
+                  </div>
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -1318,6 +1577,7 @@ export const AdminPanelModal: React.FC = () => {
                         if (window.confirm('¿Seguro que deseas reiniciar y borrar TODOS los DNIs emitidos para que los usuarios puedan crearlos de nuevo?')) {
                           await resetAllDnis();
                           setRegisteredDnis([]);
+                          setSelectedCitizen(null);
                           playSuccessSound();
                           alert('Todos los DNIs han sido reiniciados.');
                         }
@@ -1345,13 +1605,22 @@ export const AdminPanelModal: React.FC = () => {
                     {registeredDnis.map((dni) => (
                       <div
                         key={dni.id}
-                        className="p-3 rounded-xl bg-[#141726] border border-white/5 flex items-center justify-between text-xs"
+                        onClick={() => {
+                          setSelectedCitizen(dni);
+                          setAdminFeedback(`Ciudadano seleccionado: @${dni.robloxUsername}`);
+                          playClickSound();
+                        }}
+                        className={`p-3 rounded-xl border flex items-center justify-between text-xs cursor-pointer transition-all ${
+                          selectedCitizen?.id === dni.id
+                            ? 'bg-sky-950/60 border-sky-400'
+                            : 'bg-[#141726] hover:bg-[#191d30] border-white/5'
+                        }`}
                       >
                         <div className="flex items-center gap-3">
                           <img
                             src={dni.photoUrl}
                             alt="Foto Roblox"
-                            className="w-10 h-10 rounded-lg bg-black object-cover border border-white/10"
+                            className="w-10 h-10 rounded-lg bg-black object-cover border border-white/10 shrink-0"
                           />
                           <div>
                             <div className="font-bold text-white flex items-center gap-2">
@@ -1359,14 +1628,31 @@ export const AdminPanelModal: React.FC = () => {
                               <span className="font-mono text-sky-400 font-bold">DNI {dni.dniNumber}-{dni.verifyDigit}</span>
                             </div>
                             <div className="text-[10px] text-slate-400">
-                              Roblox: <strong className="text-white">@{dni.robloxUsername}</strong> • Discord: {dni.discordUsername}
+                              Roblox: <strong className="text-white font-mono">@{dni.robloxUsername}</strong> • Discord: {dni.discordUsername}
                             </div>
                           </div>
                         </div>
 
-                        <span className="text-[10px] font-mono text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30">
-                          ACTIVO
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {dni.status === 'suspended' && (
+                            <span className="text-[9px] font-mono text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/40">
+                              SUSPENDIDO
+                            </span>
+                          )}
+                          {dni.bankStatus === 'frozen' && (
+                            <span className="text-[9px] font-mono text-sky-400 font-bold px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-500/40">
+                              BANCO ❄️
+                            </span>
+                          )}
+                          {dni.wantedStatus && (
+                            <span className="text-[9px] font-mono text-red-400 font-bold px-1.5 py-0.5 rounded bg-red-950/80 border border-red-500/40">
+                              CAPTURAR
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30">
+                            {dni.status === 'suspended' ? 'BLOQUEADO' : 'ACTIVO'}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>

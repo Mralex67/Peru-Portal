@@ -363,6 +363,19 @@ export const PeruDniSection: React.FC = () => {
                   RENIEC PERÚ
                 </div>
 
+                {/* Suspension overlay watermark */}
+                {currentDni.status === 'suspended' && (
+                  <div className="absolute inset-0 z-40 bg-red-950/85 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center border-4 border-red-600 rounded-2xl animate-in fade-in duration-200">
+                    <div className="px-4 py-2 rounded-xl bg-red-600 text-white font-black text-xs sm:text-sm uppercase tracking-widest shadow-2xl rotate-[-8deg] border-2 border-white flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <span>🚫 DNI SUSPENDIDO (POLICÍA / RENIEC)</span>
+                    </div>
+                    <p className="text-white text-[11px] font-bold mt-3 bg-black/70 px-4 py-1.5 rounded-xl border border-red-500/50 max-w-sm">
+                      {currentDni.suspensionReason || 'Documento suspendido por orden administrativa o judicial en PE:RP.'}
+                    </p>
+                  </div>
+                )}
+
                 {!isFlipped ? (
                   /* FRONT SIDE (ANVERSO DNIe PERUANO) */
                   <>
@@ -579,6 +592,27 @@ export const PeruDniSection: React.FC = () => {
                     </div>
 
                     <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Estado del DNI:</span>
+                      <span className={`font-bold ${existingDni.status === 'suspended' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        {existingDni.status === 'suspended' ? '🚫 Suspendido' : '✅ Vigente Oficial'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Cuenta Bancaria:</span>
+                      <span className={`font-bold ${existingDni.bankStatus === 'frozen' ? 'text-sky-300' : 'text-emerald-400'}`}>
+                        {existingDni.bankStatus === 'frozen' ? '❄️ Congelada (Embargo)' : '💳 Activa (S/.)'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Requisitoria PNP:</span>
+                      <span className={`font-bold ${existingDni.wantedStatus ? 'text-red-400 animate-pulse' : 'text-slate-300'}`}>
+                        {existingDni.wantedStatus ? '🚨 ORDEN DE CAPTURA VIGENTE' : 'Sin antecedentes'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
                       <span className="text-slate-400">Base de Datos:</span>
                       <span className="inline-flex items-center gap-1 font-bold text-emerald-400">
                         <Database className="w-3.5 h-3.5" /> Supabase Activo
@@ -586,19 +620,23 @@ export const PeruDniSection: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Reset button to allow creating anew */}
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleResetMyDni}
-                      className="w-full py-2.5 px-4 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                    >
-                      <RotateCcw className="w-4 h-4 text-rose-400" />
-                      <span>Reiniciar mi DNI y Crear de Nuevo</span>
-                    </button>
-                    <span className="text-[10px] text-slate-400 block text-center mt-1.5">
-                      Usa esta opción si deseas cambiar tu avatar de Roblox o corregir tu nombre.
-                    </span>
+                  {existingDni.status === 'suspended' && (
+                    <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-500/50 text-rose-200 text-xs">
+                      <strong>⚠️ DNI Suspendido:</strong> {existingDni.suspensionReason || 'Tu documento ha sido suspendido temporalmente por orden de la autoridad policial o judicial de PE:RP.'}
+                    </div>
+                  )}
+
+                  {existingDni.bankStatus === 'frozen' && (
+                    <div className="p-3.5 rounded-2xl bg-sky-950/60 border border-sky-500/50 text-sky-200 text-xs">
+                      <strong>❄️ Cuenta Bancaria Congelada:</strong> {existingDni.bankFreezeReason || 'Tus fondos bancarios se encuentran congelados por orden judicial o administrativa.'}
+                    </div>
+                  )}
+
+                  <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 text-[11px] text-slate-400 flex items-start gap-2.5">
+                    <Lock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      <strong>Control Administrativo Centralizado:</strong> La suspensión o reactivación de DNIs, reinicio de documentos y congelamiento de cuentas bancarias se gestiona exclusivamente por los administradores en el panel central de PE:RP.
+                    </p>
                   </div>
                 </div>
               ) : (
