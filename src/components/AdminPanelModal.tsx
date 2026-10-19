@@ -29,7 +29,8 @@ import {
   AlertTriangle,
   Zap,
   Coins,
-  Bot
+  Bot,
+  Download
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
@@ -2324,20 +2325,31 @@ export const AdminPanelModal: React.FC = () => {
                       Guía Paso a Paso: ¿Qué se debe hacer para configurar el Bot?
                     </h5>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const envText = `DISCORD_TOKEN=${yapoBankConfig.discordBotToken || 'tu_token_aqui'}\nCLIENT_ID=${clientId || 'tu_client_id_aqui'}\nGUILD_ID=id_de_tu_servidor\nAPI_BASE_URL=http://localhost:3000`;
-                      navigator.clipboard.writeText(envText);
-                      setCopiedBotEnv(true);
-                      playSuccessSound();
-                      setTimeout(() => setCopiedBotEnv(false), 2500);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>{copiedBotEnv ? '¡.env Copiado!' : 'Copiar Plantilla .env'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="/api/bot/download-zip"
+                      download="perp-discord-bot-24-7.zip"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      title="Descargar paquete completo en .ZIP para subir a Discloud, Bot-Hosting o VPS"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Descargar Bot (.ZIP 24/7)</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const envText = `DISCORD_TOKEN=${yapoBankConfig.discordBotToken || 'tu_token_aqui'}\nCLIENT_ID=${clientId || 'tu_client_id_aqui'}\nGUILD_ID=id_de_tu_servidor\nAPI_BASE_URL=http://localhost:3000`;
+                        navigator.clipboard.writeText(envText);
+                        setCopiedBotEnv(true);
+                        playSuccessSound();
+                        setTimeout(() => setCopiedBotEnv(false), 2500);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>{copiedBotEnv ? '¡.env Copiado!' : 'Copiar Plantilla .env'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3 text-xs text-slate-300">
@@ -2386,6 +2398,24 @@ export const AdminPanelModal: React.FC = () => {
                       <p className="text-[10px] text-slate-400 font-sans">
                         Los archivos ya están creados en la carpeta <code>discord-bot/</code> (<code>index.js</code>, <code>deploy-commands.js</code>, <code>package.json</code> y <code>README.md</code>).
                       </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-amber-500/20 space-y-1.5">
+                    <div className="font-bold text-amber-300 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-950 border border-amber-500/40 flex items-center justify-center text-[10px] text-white">5</span>
+                      Subir a Hosting 24/7 (Sin necesidad de tener tu PC encendida)
+                    </div>
+                    <div className="pl-7 text-[11px] text-slate-300 space-y-2 leading-relaxed">
+                      <p>
+                        Haz clic en el botón superior <strong className="text-emerald-400">"Descargar Bot (.ZIP 24/7)"</strong> para obtener todos los archivos empaquetados listos para subir:
+                      </p>
+                      <ul className="list-disc list-inside text-slate-400 space-y-1 text-[10.5px]">
+                        <li><strong className="text-white">Discloud (Recomendado & Gratis):</strong> Inicia sesión en <a href="https://discloud.com" target="_blank" rel="noreferrer" className="text-amber-400 underline font-semibold">discloud.com</a> y sube el archivo <code>.zip</code> (ya viene con <code>discloud.config</code> configurado con RAM optimizada y auto-reinicio).</li>
+                        <li><strong className="text-white">Bot-Hosting.net (Pterodactyl Gratis):</strong> Crea un servidor Node.js y sube los archivos al File Manager. Comando: <code>node index.js</code>.</li>
+                        <li><strong className="text-white">Render / Railway:</strong> Conecta tu repo y arranca como Background Worker (ya incluye <code>Procfile</code> y <code>Dockerfile</code>).</li>
+                        <li><strong className="text-white">VPS Propio (Linux/Ubuntu):</strong> Ejecuta <code>pm2 start ecosystem.config.cjs</code> para que permanezca activo sin interrupciones.</li>
+                      </ul>
                     </div>
                   </div>
                 </div>

@@ -71,4 +71,53 @@ npm start
 Verás en consola:
 `🤖 Bot oficial PE:RP conectado exitosamente como Banco YA P#0000`
 
-¡Listo! Los usuarios ya pueden usar `/crear-dni`, `/dni-ver`, `/saldo`, `/transferir`, etc.
+---
+
+## 🌐 CÓMO SUBIR EL BOT A UN HOSTING 24/7 (SIN APAGAR TU PC)
+
+El bot incluye todos los archivos de configuración listos para los hostings más populares:
+
+### Opción 1: Discloud (¡La más recomendada y fácil!)
+Discloud tiene plan gratuito y está especializado en bots de Discord en Latinoamérica.
+1. Entra a [discloud.com](https://discloud.com) e inicia sesión con Discord.
+2. Comprime todos los archivos dentro de la carpeta `discord-bot` en un archivo `.zip` (o descarga el zip directo desde el Panel Web de PE:RP).
+   *Asegúrate de que dentro del zip estén `index.js`, `package.json`, `discloud.config` y tu archivo `.env` configurado.*
+3. En el dashboard de Discloud, haz clic en **"Add App"** o sube el `.zip`.
+4. ¡Listo! Discloud lo iniciará automáticamente y estará online 24/7.
+
+### Opción 2: Bot-Hosting.net (Panel Pterodactyl Gratis)
+1. Entra a [bot-hosting.net](https://bot-hosting.net) e inicia sesión con Discord.
+2. Crea un servidor gratuito seleccionando **Node.js**.
+3. Ve al gestor de archivos (File Manager) y sube todos los archivos de la carpeta `discord-bot`.
+4. En **Startup**, verifica que el comando de inicio sea `node index.js`.
+5. Ve a la consola y pulsa **Start** (Iniciar).
+
+### Opción 3: Railway.app o Render.com
+1. Sube tu código a un repositorio de GitHub (puedes crear uno privado).
+2. En Railway o Render, crea un nuevo servicio conectado a tu repositorio.
+3. Elige **Background Worker** o servicio Docker (ya incluimos `Procfile` y `Dockerfile`).
+4. En la sección **Variables de Entorno (Environment Variables)**, agrega:
+   - `DISCORD_TOKEN`
+   - `CLIENT_ID`
+   - `GUILD_ID`
+   - `API_BASE_URL` (la URL pública de tu web)
+5. Despliega y listo, se mantendrá activo 24/7.
+
+### Opción 4: Servidor VPS propio (Ubuntu/Debian con PM2)
+Si tienes un VPS (ej. Hostinger, DigitalOcean, Oracle Cloud Free Tier):
+```bash
+# 1. Clonar o subir la carpeta discord-bot
+cd discord-bot
+npm install
+npm install -g pm2
+
+# 2. Registrar los comandos
+node deploy-commands.js
+
+# 3. Encender 24/7 con reinicio automático
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 startup
+```
+El bot se mantendrá encendido 24/7 y se reiniciará automáticamente si el VPS se reinicia.
+

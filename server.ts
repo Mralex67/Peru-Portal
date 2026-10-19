@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const archiver = require('archiver');
 
 dotenv.config();
 
@@ -1039,6 +1043,58 @@ app.get('/api/bot/bank/history/:identifier', (req, res) => {
     success: true,
     transactions: userTxs.slice(0, 15),
   });
+});
+
+// 8. Download complete bot package as ZIP ready for 24/7 hosting
+app.get('/api/bot/download-zip', (req, res) => {
+  const botDir = path.resolve(__dirname, 'discord-bot');
+  if (!fs.existsSync(botDir)) {
+    return res.status(404).json({ success: false, error: 'Directorio discord-bot no encontrado' });
+  }
+
+  res.attachment('perp-discord-bot-24-7.zip');
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  archive.on('error', (err: any) => {
+    console.error('Error zipping discord bot:', err);
+    if (!res.headersSent) {
+      res.status(500).send({ error: err?.message || 'Error creating zip' });
+    }
+  });
+
+  archive.pipe(res);
+  archive.directory(botDir, false);
+  archive.finalize();
+});
+
+// 9. Get all bot files for in-browser review & copy
+app.get('/api/bot/package-files', (req, res) => {
+  try {
+    const botDir = path.resolve(__dirname, 'discord-bot');
+    const filesToRead = [
+      'index.js',
+      'deploy-commands.js',
+      'package.json',
+      '.env.example',
+      'discloud.config',
+      'Procfile',
+      'Dockerfile',
+      'ecosystem.config.cjs',
+      'README.md',
+    ];
+
+    const fileContents: Record<string, string> = {};
+    for (const f of filesToRead) {
+      const p = path.join(botDir, f);
+      if (fs.existsSync(p)) {
+        fileContents[f] = fs.readFileSync(p, 'utf-8');
+      }
+    }
+
+    res.json({ success: true, files: fileContents });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 async function startServer() {
