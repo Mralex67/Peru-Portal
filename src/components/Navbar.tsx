@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Volume2, VolumeX, Menu, X, Settings, LogOut, Camera, CreditCard } from 'lucide-react';
 import { OfficialPeruLogo } from './OfficialPeruLogo';
+import { YapoLogo } from './YapoLogo';
 import { InteractiveButton } from './InteractiveButton';
 import { useServer } from '../context/ServerContext';
 import { toggleSound, isSoundEnabled } from '../utils/audio';
@@ -59,6 +60,13 @@ export const Navbar: React.FC = () => {
           >
             <CreditCard className="w-3.5 h-3.5 text-sky-400" />
             <span>DNI Peruano</span>
+          </a>
+          <a
+            href="#banco"
+            className="hover:text-purple-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 text-purple-400 font-bold"
+          >
+            <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
+            <span>Banco Yapo</span>
           </a>
           <a
             href="#album"
@@ -155,6 +163,15 @@ export const Navbar: React.FC = () => {
                     Mi DNI Peruano (RENIEC)
                   </a>
 
+                  <a
+                    href="#banco"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="w-full text-left px-3 py-2 text-xs text-purple-300 hover:text-white hover:bg-purple-950/30 rounded-lg flex items-center gap-2 cursor-pointer transition-colors font-semibold"
+                  >
+                    <YapoLogo size="sm" withContainer={false} className="w-3.5 h-3.5" />
+                    Mi Cuenta Yapo (S/.)
+                  </a>
+
                   <button
                     onClick={() => {
                       setUserDropdownOpen(false);
@@ -210,6 +227,14 @@ export const Navbar: React.FC = () => {
           >
             <CreditCard className="w-4 h-4 text-sky-400" />
             <span>DNI Peruano RENIEC</span>
+          </a>
+          <a
+            href="#banco"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-purple-400 hover:text-purple-300 font-semibold py-1 flex items-center gap-2"
+          >
+            <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
+            <span>Banco Yapo (S/.)</span>
           </a>
           <a
             href="#album"

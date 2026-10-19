@@ -3,6 +3,7 @@ import { ServerProvider } from './context/ServerContext';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { PeruDniSection } from './components/PeruDniSection';
+import { BankYapoSection } from './components/BankYapoSection';
 import { ServerLiveMonitor } from './components/ServerLiveMonitor';
 import { AdmissionSection } from './components/AdmissionSection';
 import { FactionsSection } from './components/FactionsSection';
@@ -27,6 +28,9 @@ function MainApp() {
 
         {/* 2. DNI Peruano RENIEC (Generación de identidad con Roblox & Supabase) */}
         <PeruDniSection />
+
+        {/* 3. Banco & Billetera Móvil Yapo PE:RP */}
+        <BankYapoSection />
 
         {/* 2. Admission Section (Original Peruvian RP admission pathway) */}
         <AdmissionSection />

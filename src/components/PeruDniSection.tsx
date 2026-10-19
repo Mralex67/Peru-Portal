@@ -20,7 +20,7 @@ import {
 import { useServer } from '../context/ServerContext';
 import { PeruDni } from '../types/dni';
 import { getUserDni, saveUserDni, deleteUserDni } from '../lib/supabase';
-import { generateRandomPeruDniNumber, fetchRobloxAvatarUrl } from '../utils/roblox';
+import { generateRandomPeruDniNumber, fetchRobloxAvatarUrl, DEFAULT_ROBLOX_AVATAR } from '../utils/roblox';
 import { playClickSound, playSuccessSound } from '../utils/audio';
 
 export const PeruDniSection: React.FC = () => {
@@ -203,9 +203,7 @@ export const PeruDniSection: React.FC = () => {
     const issueDateStr = `${currentDay} ${currentMonth} ${currentYear}`;
     const expiryDateStr = `${currentDay} ${currentMonth} ${currentYear + 8}`;
 
-    const photoToUse =
-      avatarPreview ||
-      `https://www.roblox.com/headshot-thumbnail/image?userId=1&width=420&height=420&format=png`;
+    const photoToUse = avatarPreview || DEFAULT_ROBLOX_AVATAR;
 
     const newDniPayload: PeruDni = {
       id: `dni-${Date.now()}`,
@@ -418,7 +416,9 @@ export const PeruDniSection: React.FC = () => {
                             src={currentDni.photoUrl}
                             alt="Avatar Roblox DNI"
                             className="w-full h-full object-cover object-center bg-slate-100"
-                            crossOrigin="anonymous"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = DEFAULT_ROBLOX_AVATAR;
+                            }}
                           />
                           {/* Holographic watermark on photo */}
                           <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-sky-300/20 to-white/30 pointer-events-none" />
@@ -707,7 +707,9 @@ export const PeruDniSection: React.FC = () => {
                             src={avatarPreview}
                             alt="Avatar Roblox"
                             className="w-full h-full object-cover"
-                            crossOrigin="anonymous"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = DEFAULT_ROBLOX_AVATAR;
+                            }}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-slate-500 text-[10px]">

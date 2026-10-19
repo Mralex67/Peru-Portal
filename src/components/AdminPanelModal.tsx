@@ -27,7 +27,9 @@ import {
   Ban,
   Snowflake,
   AlertTriangle,
-  Zap
+  Zap,
+  Coins,
+  Bot
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
@@ -41,6 +43,19 @@ import {
   deleteDniByAdmin
 } from '../lib/supabase';
 import { PeruDni } from '../types/dni';
+import { YapoLogo } from './YapoLogo';
+import { YapoAccount, YapoTransaction, YapoBankConfig } from '../types/yapo';
+import {
+  getLocalYapoAccounts,
+  getLocalYapoTransactions,
+  getYapoConfig,
+  saveYapoConfig,
+  adminUpdateBalances,
+  adminToggleFreezeAccount,
+  resetYapoAccount,
+  resetAllYapo,
+  YAPO_SUPABASE_SQL,
+} from '../lib/yapoStorage';
 
 interface AlbumItem {
   id: string;
@@ -52,7 +67,7 @@ export const AdminPanelModal: React.FC = () => {
   const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin } = useServer();
 
   const [formData, setFormData] = useState({ ...config });
-  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank'>('general');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
 
@@ -68,6 +83,18 @@ export const AdminPanelModal: React.FC = () => {
   const [selectedCitizen, setSelectedCitizen] = useState<PeruDni | null>(null);
   const [actionReason, setActionReason] = useState('');
   const [adminFeedback, setAdminFeedback] = useState('');
+
+  // Yapo & Bank states
+  const [yapoAccounts, setYapoAccounts] = useState<YapoAccount[]>([]);
+  const [yapoTransactions, setYapoTransactions] = useState<YapoTransaction[]>([]);
+  const [yapoBankConfig, setYapoBankConfig] = useState<YapoBankConfig>(getYapoConfig());
+  const [yapoSearchQuery, setYapoSearchQuery] = useState('');
+  const [selectedYapoAccount, setSelectedYapoAccount] = useState<YapoAccount | null>(null);
+  const [editBankAmount, setEditBankAmount] = useState('');
+  const [editCashAmount, setEditCashAmount] = useState('');
+  const [yapoFeedback, setYapoFeedback] = useState('');
+  const [copiedYapoSql, setCopiedYapoSql] = useState(false);
+  const [yapoConfigSaved, setYapoConfigSaved] = useState(false);
 
   // File upload refs
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -158,6 +185,11 @@ export const AdminPanelModal: React.FC = () => {
     setSupabaseUrl(sConf.url);
     setSupabaseKey(sConf.anonKey);
     getAllRegisteredDnis().then(setRegisteredDnis).catch(() => {});
+
+    // Load Yapo banking accounts, transactions and config
+    setYapoAccounts(getLocalYapoAccounts());
+    setYapoTransactions(getLocalYapoTransactions());
+    setYapoBankConfig(getYapoConfig());
 
     // Check ER:LC API status
     fetch('/api/erlc/server')
@@ -528,6 +560,21 @@ export const AdminPanelModal: React.FC = () => {
             {registeredDnis.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-500/40 text-[10px] font-mono">
                 {registeredDnis.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('bank')}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'bank' ? 'border-purple-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+            }`}
+          >
+            <YapoLogo size="sm" withContainer={false} className="w-3.5 h-3.5" />
+            Banco & Yapo
+            {yapoAccounts.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40 text-[10px] font-mono">
+                {yapoAccounts.length}
               </span>
             )}
           </button>
@@ -1662,6 +1709,422 @@ export const AdminPanelModal: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* TAB 6: BANCO CENTRAL & YAPO */}
+          {activeTab === 'bank' && (
+            <div className="space-y-5">
+              
+              {/* Header Box */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/70 via-indigo-950/50 to-[#0e101f] border border-purple-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <YapoLogo size="sm" />
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">
+                        Administración Central: Banco & Yapo (PE:RP)
+                      </h4>
+                      <p className="text-[11px] text-slate-300">
+                        Gestiona los fondos de los ciudadanos por usuario de Roblox, congela cuentas bancarias, edita saldos en mano/banco y sincroniza con el bot de Discord.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-200 border border-purple-500/40 text-[10px] font-mono">
+                    {yapoAccounts.length} Cuentas Activas
+                  </span>
+                </div>
+              </div>
+
+              {/* SEARCH & MANAGE CITIZEN BY ROBLOX USERNAME */}
+              <div className="p-4 rounded-2xl bg-[#0b0e1c] border border-purple-500/30 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-purple-400" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                      Gestor de Fondos por Usuario de Roblox o DNI
+                    </h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Editar Saldo • Congelar Fondos • Reiniciar</span>
+                </div>
+
+                {/* Search input */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={yapoSearchQuery}
+                    onChange={(e) => setYapoSearchQuery(e.target.value)}
+                    placeholder="Escribe el usuario de Roblox o DNI del ciudadano..."
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#060812] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const q = yapoSearchQuery.trim().toLowerCase().replace(/^@/, '');
+                      if (!q) return;
+                      const found = yapoAccounts.find(
+                        (a) =>
+                          a.robloxUsername.toLowerCase() === q ||
+                          a.robloxUsername.toLowerCase().includes(q) ||
+                          a.dniNumber.includes(q) ||
+                          (a.discordUsername && a.discordUsername.toLowerCase().includes(q))
+                      );
+                      if (found) {
+                        setSelectedYapoAccount(found);
+                        setEditBankAmount(found.bankBalance.toString());
+                        setEditCashAmount(found.cashBalance.toString());
+                        setYapoFeedback(`Cuenta localizada: @${found.robloxUsername} (DNI ${found.dniNumber})`);
+                        playSuccessSound();
+                      } else {
+                        setSelectedYapoAccount(null);
+                        setYapoFeedback(`No se encontró ninguna cuenta de Yapo con el usuario o DNI "@${q}".`);
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Buscar</span>
+                  </button>
+                </div>
+
+                {yapoFeedback && (
+                  <div className="text-[11px] font-bold text-purple-300 bg-purple-950/40 p-2 rounded-lg border border-purple-500/20">
+                    {yapoFeedback}
+                  </div>
+                )}
+
+                {/* Selected Yapo Account Card */}
+                {selectedYapoAccount && (
+                  <div className="p-4 rounded-xl bg-[#070914] border border-purple-400/40 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={selectedYapoAccount.avatarUrl}
+                          alt="Avatar"
+                          className="w-12 h-12 rounded-xl bg-black object-cover border-2 border-purple-400 shrink-0"
+                        />
+                        <div>
+                          <div className="font-bold text-white text-sm flex items-center gap-2">
+                            <span>{selectedYapoAccount.fullName}</span>
+                            <span className="font-mono text-xs text-purple-300 font-bold">DNI {selectedYapoAccount.dniNumber}-{selectedYapoAccount.verifyDigit}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-300">
+                            Usuario Roblox: <strong className="text-white font-mono">@{selectedYapoAccount.robloxUsername}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedYapoAccount(null)}
+                        className="text-slate-400 hover:text-white text-xs cursor-pointer px-2 py-1 rounded hover:bg-white/5"
+                      >
+                        ✕ Cerrar
+                      </button>
+                    </div>
+
+                    {/* Status badges */}
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                        selectedYapoAccount.status === 'frozen'
+                          ? 'bg-rose-950 text-rose-300 border-rose-500/50'
+                          : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                      }`}>
+                        Estado de Cuenta: {selectedYapoAccount.status === 'frozen' ? '❄️ CONGELADA' : '✅ VIGENTE'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Patrimonio Total: S/ {(selectedYapoAccount.bankBalance + selectedYapoAccount.cashBalance).toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Balance Modifier Inputs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[10px] font-bold text-purple-300 uppercase mb-1">
+                          Saldo en Banco / Yapo (S/.)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editBankAmount}
+                          onChange={(e) => setEditBankAmount(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-[#05070e] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-teal-300 uppercase mb-1">
+                          Saldo en Mano / Efectivo (S/.)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editCashAmount}
+                          onChange={(e) => setEditCashAmount(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-[#05070e] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-teal-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action buttons for selected user */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      {/* Save Balances */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const bankVal = parseFloat(editBankAmount);
+                          const cashVal = parseFloat(editCashAmount);
+                          adminUpdateBalances(selectedYapoAccount.dniNumber, bankVal, cashVal);
+                          const updated = {
+                            ...selectedYapoAccount,
+                            bankBalance: bankVal,
+                            cashBalance: cashVal,
+                          };
+                          setSelectedYapoAccount(updated);
+                          setYapoAccounts((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+                          playSuccessSound();
+                          setYapoFeedback(`✅ Saldos de @${selectedYapoAccount.robloxUsername} actualizados: Banco S/ ${bankVal.toFixed(2)}, Mano S/ ${cashVal.toFixed(2)}`);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Guardar Saldos</span>
+                      </button>
+
+                      {/* Freeze / Unfreeze */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextFreeze = selectedYapoAccount.status !== 'frozen';
+                          adminToggleFreezeAccount(
+                            selectedYapoAccount.dniNumber,
+                            nextFreeze,
+                            nextFreeze ? (actionReason || 'Medida cautelar policial.') : undefined
+                          );
+                          const updated = {
+                            ...selectedYapoAccount,
+                            status: (nextFreeze ? 'frozen' : 'active') as 'frozen' | 'active',
+                          };
+                          setSelectedYapoAccount(updated);
+                          setYapoAccounts((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+                          playSuccessSound();
+                          setYapoFeedback(nextFreeze ? '❄️ Cuenta de Yapo CONGELADA correctamente.' : '🔓 Cuenta de Yapo DESCONGELADA.');
+                        }}
+                        className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                          selectedYapoAccount.status === 'frozen'
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            : 'bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/40'
+                        }`}
+                      >
+                        <Snowflake className="w-3.5 h-3.5" />
+                        <span>{selectedYapoAccount.status === 'frozen' ? 'Descongelar Cuenta' : 'Congelar Cuenta'}</span>
+                      </button>
+
+                      {/* Reset Account */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`¿Seguro que deseas reiniciar la cuenta Yapo de @${selectedYapoAccount.robloxUsername}? Se borrarán sus fondos y podrá afiliarse nuevamente.`)) {
+                            resetYapoAccount(selectedYapoAccount.dniNumber);
+                            setYapoAccounts((prev) => prev.filter((a) => a.id !== selectedYapoAccount.id));
+                            setSelectedYapoAccount(null);
+                            playSuccessSound();
+                            setYapoFeedback(`Cuenta Yapo de @${selectedYapoAccount.robloxUsername} reiniciada exitosamente.`);
+                          }
+                        }}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Reiniciar Cuenta</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* GENERAL BANK & BOT CONFIGURATION */}
+              <div className="p-4 rounded-2xl bg-[#0b0e1c] border border-white/10 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-sky-400" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                      Configuración de Economía & Bot de Discord
+                    </h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Tipo UnbelievaBoat / Economía Virtual</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                      Bono de Bienvenida al Afiliarse (S/.)
+                    </label>
+                    <input
+                      type="number"
+                      value={yapoBankConfig.welcomeBonus}
+                      onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, welcomeBonus: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                      Límite Máximo por Transferencia (S/.)
+                    </label>
+                    <input
+                      type="number"
+                      value={yapoBankConfig.maxTransferPerTx}
+                      onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, maxTransferPerTx: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                    Webhook URL de Discord (Registro de Transacciones en Vivo)
+                  </label>
+                  <input
+                    type="url"
+                    value={yapoBankConfig.discordBotWebhookUrl || ''}
+                    onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, discordBotWebhookUrl: e.target.value })}
+                    placeholder="https://discord.com/api/webhooks/..."
+                    className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Cada vez que un ciudadano haga un Yapeo o retiro en efectivo, se enviará una notificación a tu canal de Discord configurado.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                    Token o Endpoint del Bot de Discord (Opcional - Para vincular economía)
+                  </label>
+                  <input
+                    type="password"
+                    value={yapoBankConfig.discordBotToken || ''}
+                    onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, discordBotToken: e.target.value })}
+                    placeholder="OTkyNz..."
+                    className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveYapoConfig(yapoBankConfig);
+                      setYapoConfigSaved(true);
+                      playSuccessSound();
+                      setTimeout(() => setYapoConfigSaved(false), 2500);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{yapoConfigSaved ? '¡Configuración Guardada!' : 'Guardar Configuración de Banco'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(YAPO_SUPABASE_SQL);
+                      setCopiedYapoSql(true);
+                      playSuccessSound();
+                      setTimeout(() => setCopiedYapoSql(false), 2500);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-white/10"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-purple-300" />
+                    <span>{copiedYapoSql ? '¡SQL Copiado!' : 'Copiar SQL Tablas Yapo'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* REGISTERED YAPO ACCOUNTS PADRÓN */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider block">
+                      Padrón de Cuentas Yapo Afiliadas ({yapoAccounts.length})
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Haz clic en cualquier ciudadano para editar su saldo o congelar su cuenta.
+                    </span>
+                  </div>
+
+                  {yapoAccounts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('¿Seguro que deseas reiniciar y borrar TODAS las cuentas de Yapo y sus saldos? Los usuarios deberán afiliarse de nuevo.')) {
+                          resetAllYapo();
+                          setYapoAccounts([]);
+                          setSelectedYapoAccount(null);
+                          playSuccessSound();
+                          alert('Todas las cuentas de Yapo han sido reiniciadas.');
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-rose-950 hover:bg-rose-900 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Reiniciar Todas las Cuentas Yapo</span>
+                    </button>
+                  )}
+                </div>
+
+                {yapoAccounts.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+                    {yapoAccounts.map((acc) => (
+                      <div
+                        key={acc.id}
+                        onClick={() => {
+                          setSelectedYapoAccount(acc);
+                          setEditBankAmount(acc.bankBalance.toString());
+                          setEditCashAmount(acc.cashBalance.toString());
+                          playClickSound();
+                        }}
+                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                          selectedYapoAccount?.id === acc.id
+                            ? 'bg-purple-950/60 border-purple-400 ring-1 ring-purple-400'
+                            : 'bg-[#0b0e1b] border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={acc.avatarUrl}
+                            alt="Avatar"
+                            className="w-9 h-9 rounded-lg bg-black object-cover border border-white/20 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="font-bold text-white text-xs truncate">{acc.fullName}</div>
+                            <div className="text-[10px] text-slate-400">
+                              @{acc.robloxUsername} • DNI {acc.dniNumber}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="font-mono text-xs font-black text-purple-300">
+                            S/ {acc.bankBalance.toFixed(2)}
+                          </div>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            acc.status === 'frozen'
+                              ? 'bg-rose-950 text-rose-300 border border-rose-500/40'
+                              : 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
+                          }`}>
+                            {acc.status === 'frozen' ? '❄️ CONGELADA' : 'ACTIVA'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-black/40 border border-white/5 text-center text-xs text-slate-400">
+                    Aún no hay cuentas de Yapo creadas. Los ciudadanos que verifiquen su DNI y se afilien a Yapo aparecerán aquí en tiempo real.
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
 

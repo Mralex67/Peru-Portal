@@ -1,6 +1,10 @@
 /**
- * Helper para resolver avatares y usuarios de Roblox
+ * Helper para resolver avatares y usuarios de Roblox de forma robusta
  */
+
+// Avatar oficial por defecto de Roblox (100% garantizado en CDN de Roblox)
+export const DEFAULT_ROBLOX_AVATAR =
+  'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter';
 
 export const PRESET_ROBLOX_AVATARS = [
   {
@@ -12,6 +16,11 @@ export const PRESET_ROBLOX_AVATARS = [
     id: 'roblox-official-2',
     name: 'Ciudadano Elegante',
     url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
+  },
+  {
+    id: 'roblox-default-user',
+    name: 'Avatar Roblox Clásico',
+    url: DEFAULT_ROBLOX_AVATAR,
   },
 ];
 
@@ -39,44 +48,81 @@ export function generateRandomPeruDniNumber(): { dni: string; digit: string } {
 }
 
 /**
+ * Consulta la URL del avatar headshot directamente por User ID de Roblox
+ */
+export async function getRobloxHeadshotByUserId(userId: string | number): Promise<string | null> {
+  const uId = userId.toString().trim();
+  if (!uId) return null;
+
+  // Método 1: thumbnails.roblox.com directo (CORS enabled para navegador)
+  try {
+    const res = await fetch(
+      `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data.data && data.data.length > 0 && data.data[0].imageUrl) {
+        return data.data[0].imageUrl;
+      }
+    }
+  } catch {}
+
+  // Método 2: thumbnails.roproxy.com
+  try {
+    const res = await fetch(
+      `https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data.data && data.data.length > 0 && data.data[0].imageUrl) {
+        return data.data[0].imageUrl;
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
  * Intenta obtener la imagen real del avatar de Roblox mediante username o user ID
  */
 export async function fetchRobloxAvatarUrl(username: string): Promise<{
   avatarUrl: string;
   userId?: string;
   displayName?: string;
+  success: boolean;
+  message?: string;
 }> {
-  const cleanUsername = username.trim().replace(/^@/, '');
-  if (!cleanUsername) {
-    return { avatarUrl: PRESET_ROBLOX_AVATARS[0].url };
+  let cleanInput = username.trim().replace(/^@/, '');
+  // Extraer ID si el usuario pegó un link de perfil ej. https://www.roblox.com/users/3051711533/profile
+  const profileMatch = cleanInput.match(/roblox\.com\/users\/(\d+)/i);
+  if (profileMatch) {
+    cleanInput = profileMatch[1];
   }
 
-  // Caso 1: Si el usuario ingresó un ID numérico de Roblox directamente (ej. 1560384206)
-  if (/^\d+$/.test(cleanUsername)) {
-    try {
-      const thumbRes = await fetch(
-        `https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=${cleanUsername}&size=420x420&format=Png&isCircular=false`
-      );
-      if (thumbRes.ok) {
-        const thumbData = await thumbRes.json();
-        if (thumbData.data && thumbData.data.length > 0 && thumbData.data[0].imageUrl) {
-          return {
-            userId: cleanUsername,
-            avatarUrl: thumbData.data[0].imageUrl,
-          };
-        }
-      }
-    } catch {}
-
+  if (!cleanInput) {
     return {
-      userId: cleanUsername,
-      avatarUrl: `https://www.roblox.com/headshot-thumbnail/image?userId=${cleanUsername}&width=420&height=420&format=png`,
+      avatarUrl: DEFAULT_ROBLOX_AVATAR,
+      success: false,
+      message: 'Ingresa un usuario o ID de Roblox.',
     };
   }
 
-  // Caso 2: Intentar con el endpoint de backend si está disponible
+  // Caso 1: El usuario ingresó un ID numérico de Roblox directamente (ej. 3051711533)
+  if (/^\d+$/.test(cleanInput)) {
+    const headshot = await getRobloxHeadshotByUserId(cleanInput);
+    if (headshot) {
+      return {
+        userId: cleanInput,
+        avatarUrl: headshot,
+        success: true,
+      };
+    }
+  }
+
+  // Caso 2: Intentar con el endpoint de backend de Node.js si está corriendo
   try {
-    const backendRes = await fetch(`/api/roblox/avatar/${encodeURIComponent(cleanUsername)}`);
+    const backendRes = await fetch(`/api/roblox/avatar/${encodeURIComponent(cleanInput)}`);
     if (backendRes.ok && backendRes.headers.get('content-type')?.includes('application/json')) {
       const data = await backendRes.json();
       if (data.avatarUrl) {
@@ -84,18 +130,19 @@ export async function fetchRobloxAvatarUrl(username: string): Promise<{
           userId: data.userId,
           displayName: data.displayName,
           avatarUrl: data.avatarUrl,
+          success: true,
         };
       }
     }
   } catch {}
 
-  // Caso 3: RoProxy CORS API para buscar usuario por username
+  // Caso 3: RoProxy API para buscar usuario por username
   try {
     const userRes = await fetch('https://users.roproxy.com/v1/usernames/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        usernames: [cleanUsername],
+        usernames: [cleanInput],
         excludeBannedUsers: false,
       }),
     });
@@ -106,37 +153,25 @@ export async function fetchRobloxAvatarUrl(username: string): Promise<{
         const found = userData.data[0];
         const uId = found.id.toString();
 
-        // Obtener avatar headshot oficial en alta resolución
-        try {
-          const thumbRes = await fetch(
-            `https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
-          );
-          if (thumbRes.ok) {
-            const thumbData = await thumbRes.json();
-            if (thumbData.data && thumbData.data.length > 0 && thumbData.data[0].imageUrl) {
-              return {
-                userId: uId,
-                displayName: found.displayName || found.name,
-                avatarUrl: thumbData.data[0].imageUrl,
-              };
-            }
-          }
-        } catch {}
-
-        // Fallback a Roblox headshot CDN directo
-        return {
-          userId: uId,
-          displayName: found.displayName || found.name,
-          avatarUrl: `https://www.roblox.com/headshot-thumbnail/image?userId=${uId}&width=420&height=420&format=png`,
-        };
+        const headshot = await getRobloxHeadshotByUserId(uId);
+        if (headshot) {
+          return {
+            userId: uId,
+            displayName: found.displayName || found.name,
+            avatarUrl: headshot,
+            success: true,
+          };
+        }
       }
     }
   } catch (err) {
-    console.warn('Error resolviendo avatar con RoProxy:', err);
+    console.warn('Error en consulta RoProxy:', err);
   }
 
-  // Caso 4: Fallback con avatar representativo de Roblox en uniforme o estilo civil
+  // Fallback seguro: Avatar oficial funcional de Roblox
   return {
-    avatarUrl: `https://www.roblox.com/headshot-thumbnail/image?userId=1&width=420&height=420&format=png`,
+    avatarUrl: DEFAULT_ROBLOX_AVATAR,
+    success: false,
+    message: `No se pudo encontrar a "${cleanInput}" en Roblox. Puedes ingresar tu ID numérico de Roblox.`,
   };
 }
