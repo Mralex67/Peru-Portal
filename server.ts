@@ -475,6 +475,572 @@ app.post('/api/erlc/config', async (req, res) => {
   }
 });
 
+// ==========================================
+// BANCO YA P & DNI BOT API (FOR DISCORD BOT)
+// ==========================================
+const BANK_FILE = path.resolve(__dirname, '.data/bank_system.json');
+
+interface BankSystemData {
+  dnis: any[];
+  accounts: any[];
+  transactions: any[];
+}
+
+function loadBankSystem(): BankSystemData {
+  try {
+    if (!fs.existsSync(BANK_FILE)) {
+      const initial: BankSystemData = {
+        dnis: [],
+        accounts: [],
+        transactions: [],
+      };
+      const dir = path.dirname(BANK_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(BANK_FILE, JSON.stringify(initial, null, 2));
+      return initial;
+    }
+    const raw = fs.readFileSync(BANK_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading bank system data:', e);
+    return { dnis: [], accounts: [], transactions: [] };
+  }
+}
+
+function saveBankSystem(data: BankSystemData) {
+  try {
+    const dir = path.dirname(BANK_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(BANK_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('Error saving bank system data:', e);
+  }
+}
+
+// Helper to resolve Roblox avatar
+async function fetchRobloxUserAvatar(usernameOrId: string) {
+  const clean = usernameOrId.trim().replace(/^@/, '');
+  let uId = clean;
+  let displayName = clean;
+
+  const defaultAvatar =
+    'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter';
+
+  try {
+    if (!/^\d+$/.test(clean)) {
+      const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usernames: [clean], excludeBannedUsers: false }),
+      });
+      if (userRes.ok) {
+        const userData: any = await userRes.json();
+        if (userData.data && userData.data.length > 0) {
+          uId = userData.data[0].id.toString();
+          displayName = userData.data[0].displayName || userData.data[0].name;
+        }
+      }
+    }
+
+    const thumbRes = await fetch(
+      `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
+    );
+    if (thumbRes.ok) {
+      const thumbData: any = await thumbRes.json();
+      if (thumbData.data && thumbData.data[0]?.imageUrl) {
+        return {
+          userId: uId,
+          displayName,
+          avatarUrl: thumbData.data[0].imageUrl,
+        };
+      }
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  return {
+    userId: uId,
+    displayName,
+    avatarUrl: defaultAvatar,
+  };
+}
+
+// 1. Create Citizen DNI via Bot or Web
+app.post('/api/bot/dni/create', async (req, res) => {
+  try {
+    const {
+      discordId = `bot-${Date.now()}`,
+      robloxUsername,
+      prenames,
+      firstSurname,
+      secondSurname,
+      birthDate = '2000-01-01',
+      gender = 'M',
+      department = 'LIMA',
+      province = 'LIMA',
+      district = 'MIRAFLORES',
+    } = req.body;
+
+    if (!robloxUsername || !prenames || !firstSurname || !secondSurname) {
+      return res.status(400).json({
+        success: false,
+        error: 'Faltan campos obligatorios: robloxUsername, prenames, firstSurname, secondSurname.',
+      });
+    }
+
+    const data = loadBankSystem();
+
+    // Check if user already has a DNI registered by discordId or robloxUsername
+    const existing = data.dnis.find(
+      (d) =>
+        d.discordId === discordId ||
+        d.robloxUsername.toLowerCase() === robloxUsername.toLowerCase()
+    );
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        error: `El usuario ya cuenta con un DNI emitido: ${existing.dniNumber} (@${existing.robloxUsername})`,
+        dni: existing,
+      });
+    }
+
+    // Resolve avatar
+    const robloxInfo = await fetchRobloxUserAvatar(robloxUsername);
+
+    // Generate random 8-digit DNI number
+    let dniNumber = '';
+    do {
+      dniNumber = (Math.floor(10000000 + Math.random() * 90000000)).toString();
+    } while (data.dnis.some((d) => d.dniNumber === dniNumber));
+
+    const fullName = `${firstSurname.toUpperCase()} ${secondSurname.toUpperCase()} ${prenames.toUpperCase()}`.trim();
+
+    const newDni = {
+      dniNumber,
+      discordId,
+      robloxUsername: robloxUsername.trim(),
+      fullName,
+      firstSurname: firstSurname.toUpperCase(),
+      secondSurname: secondSurname.toUpperCase(),
+      prenames: prenames.toUpperCase(),
+      birthDate,
+      gender: gender.toUpperCase(),
+      department: department.toUpperCase(),
+      province: province.toUpperCase(),
+      district: district.toUpperCase(),
+      photoUrl: robloxInfo.avatarUrl,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    };
+
+    data.dnis.unshift(newDni);
+
+    // Also auto-register a Banco YA P account with welcome bonus
+    let account = data.accounts.find((a) => a.dniNumber === dniNumber || a.discordId === discordId);
+    if (!account) {
+      account = {
+        id: `acc-${Date.now()}`,
+        dniNumber,
+        discordId,
+        robloxUsername: robloxUsername.trim(),
+        fullName,
+        avatarUrl: robloxInfo.avatarUrl,
+        bankBalance: 50.0,
+        cashBalance: 20.0,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      data.accounts.unshift(account);
+
+      data.transactions.unshift({
+        id: `tx-${Date.now()}`,
+        operationNumber: `OP-${Math.floor(100000 + Math.random() * 900000)}`,
+        type: 'welcome_bonus',
+        receiverDni: dniNumber,
+        receiverRoblox: robloxUsername.trim(),
+        receiverName: fullName,
+        receiverAvatar: robloxInfo.avatarUrl,
+        amount: 50.0,
+        description: 'Bono de Apertura y Bienvenida a YA P PE:RP',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    saveBankSystem(data);
+
+    res.json({
+      success: true,
+      message: 'DNI creado y cuenta Banco YA P habilitada exitosamente.',
+      dni: newDni,
+      account,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Error registrando DNI' });
+  }
+});
+
+// 2. Lookup Citizen DNI (by DNI number, Discord ID, or Roblox username)
+app.get('/api/bot/dni/:identifier', (req, res) => {
+  const { identifier } = req.params;
+  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const data = loadBankSystem();
+
+  const found = data.dnis.find(
+    (d) =>
+      d.dniNumber.toLowerCase() === clean ||
+      d.discordId.toLowerCase() === clean ||
+      d.robloxUsername.toLowerCase() === clean
+  );
+
+  if (!found) {
+    return res.json({
+      success: true,
+      found: false,
+      message: `No se encontró ningún DNI para el identificador: ${identifier}`,
+    });
+  }
+
+  res.json({
+    success: true,
+    found: true,
+    dni: found,
+  });
+});
+
+// 3. Lookup Balances (Cash en mano, Bank Banco YA P, Total)
+app.get('/api/bot/bank/balance/:identifier', (req, res) => {
+  const { identifier } = req.params;
+  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const data = loadBankSystem();
+
+  const found = data.accounts.find(
+    (a) =>
+      a.dniNumber.toLowerCase() === clean ||
+      a.discordId.toLowerCase() === clean ||
+      a.robloxUsername.toLowerCase() === clean
+  );
+
+  if (!found) {
+    // If not found in accounts, check if they have a DNI, then create account
+    const dni = data.dnis.find(
+      (d) =>
+        d.dniNumber.toLowerCase() === clean ||
+        d.discordId.toLowerCase() === clean ||
+        d.robloxUsername.toLowerCase() === clean
+    );
+
+    if (dni) {
+      const newAcc = {
+        id: `acc-${Date.now()}`,
+        dniNumber: dni.dniNumber,
+        discordId: dni.discordId,
+        robloxUsername: dni.robloxUsername,
+        fullName: dni.fullName,
+        avatarUrl: dni.photoUrl,
+        bankBalance: 50.0,
+        cashBalance: 20.0,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      data.accounts.unshift(newAcc);
+      saveBankSystem(data);
+
+      return res.json({
+        success: true,
+        found: true,
+        account: {
+          ...newAcc,
+          totalBalance: newAcc.bankBalance + newAcc.cashBalance,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      found: false,
+      message: `No se encontró cuenta en Banco YA P para "${identifier}". Primero debe tramitar su DNI.`,
+    });
+  }
+
+  res.json({
+    success: true,
+    found: true,
+    account: {
+      ...found,
+      totalBalance: found.bankBalance + found.cashBalance,
+    },
+  });
+});
+
+// 4. Transfer Money between citizens via DNI number or Roblox username
+app.post('/api/bot/bank/transfer', (req, res) => {
+  try {
+    const { senderIdentifier, recipientIdentifier, amount, note = '' } = req.body;
+    const transferAmount = parseFloat(amount);
+
+    if (isNaN(transferAmount) || transferAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Monto de transferencia inválido.' });
+    }
+
+    const cleanSender = senderIdentifier?.trim().toLowerCase().replace(/^@/, '');
+    const cleanRecipient = recipientIdentifier?.trim().toLowerCase().replace(/^@/, '');
+
+    const data = loadBankSystem();
+
+    const sender = data.accounts.find(
+      (a) =>
+        a.dniNumber.toLowerCase() === cleanSender ||
+        a.discordId.toLowerCase() === cleanSender ||
+        a.robloxUsername.toLowerCase() === cleanSender
+    );
+
+    if (!sender) {
+      return res.status(404).json({
+        success: false,
+        error: `Emisor no encontrado o sin cuenta en Banco YA P: ${senderIdentifier}`,
+      });
+    }
+
+    if (sender.status === 'frozen') {
+      return res.status(403).json({
+        success: false,
+        error: 'Tu cuenta de Banco YA P se encuentra CONGELADA por orden judicial.',
+      });
+    }
+
+    if (sender.bankBalance < transferAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `Saldo insuficiente en Banco YA P. Tienes S/. ${sender.bankBalance.toFixed(2)} pero intentas transferir S/. ${transferAmount.toFixed(2)}.`,
+      });
+    }
+
+    const recipient = data.accounts.find(
+      (a) =>
+        a.dniNumber.toLowerCase() === cleanRecipient ||
+        a.discordId.toLowerCase() === cleanRecipient ||
+        a.robloxUsername.toLowerCase() === cleanRecipient
+    );
+
+    if (!recipient) {
+      return res.status(404).json({
+        success: false,
+        error: `Cuenta inexistente. No se encontró ningún ciudadano registrado como "${recipientIdentifier}" en Banco YA P.`,
+      });
+    }
+
+    if (recipient.dniNumber === sender.dniNumber || recipient.discordId === sender.discordId) {
+      return res.status(400).json({
+        success: false,
+        error: 'No puedes transferirte dinero a ti mismo.',
+      });
+    }
+
+    if (recipient.status === 'frozen') {
+      return res.status(403).json({
+        success: false,
+        error: `La cuenta bancaria del destinatario (@${recipient.robloxUsername}) se encuentra congelada.`,
+      });
+    }
+
+    // Execute transfer
+    sender.bankBalance -= transferAmount;
+    sender.updatedAt = new Date().toISOString();
+
+    recipient.bankBalance += transferAmount;
+    recipient.updatedAt = new Date().toISOString();
+
+    const operationNumber = `OP-${Math.floor(100000 + Math.random() * 900000)}`;
+    const tx = {
+      id: `tx-${Date.now()}`,
+      operationNumber,
+      type: 'transfer_sent',
+      senderDni: sender.dniNumber,
+      senderRoblox: sender.robloxUsername,
+      senderName: sender.fullName,
+      senderAvatar: sender.avatarUrl,
+      receiverDni: recipient.dniNumber,
+      receiverRoblox: recipient.robloxUsername,
+      receiverName: recipient.fullName,
+      receiverAvatar: recipient.avatarUrl,
+      amount: transferAmount,
+      description: note?.trim() || 'Transferencia por YA P',
+      timestamp: new Date().toISOString(),
+    };
+
+    data.transactions.unshift(tx);
+    saveBankSystem(data);
+
+    res.json({
+      success: true,
+      operationNumber,
+      amount: transferAmount,
+      sender: {
+        robloxUsername: sender.robloxUsername,
+        dniNumber: sender.dniNumber,
+        newBankBalance: sender.bankBalance,
+      },
+      recipient: {
+        robloxUsername: recipient.robloxUsername,
+        dniNumber: recipient.dniNumber,
+        fullName: recipient.fullName,
+      },
+      note: tx.description,
+      timestamp: tx.timestamp,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Error procesando transferencia' });
+  }
+});
+
+// 5. Withdraw Cash (Retirar de Banco YA P a mano)
+app.post('/api/bot/bank/withdraw', (req, res) => {
+  try {
+    const { identifier, amount } = req.body;
+    const withdrawAmount = parseFloat(amount);
+
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Monto de retiro inválido.' });
+    }
+
+    const clean = identifier?.trim().toLowerCase().replace(/^@/, '');
+    const data = loadBankSystem();
+
+    const account = data.accounts.find(
+      (a) =>
+        a.dniNumber.toLowerCase() === clean ||
+        a.discordId.toLowerCase() === clean ||
+        a.robloxUsername.toLowerCase() === clean
+    );
+
+    if (!account) {
+      return res.status(404).json({ success: false, error: `Cuenta no encontrada: ${identifier}` });
+    }
+
+    if (account.bankBalance < withdrawAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `Saldo insuficiente en Banco YA P. Disponible: S/. ${account.bankBalance.toFixed(2)}`,
+      });
+    }
+
+    account.bankBalance -= withdrawAmount;
+    account.cashBalance += withdrawAmount;
+    account.updatedAt = new Date().toISOString();
+
+    data.transactions.unshift({
+      id: `tx-${Date.now()}`,
+      operationNumber: `OP-${Math.floor(100000 + Math.random() * 900000)}`,
+      type: 'withdraw_cash',
+      senderDni: account.dniNumber,
+      senderRoblox: account.robloxUsername,
+      senderName: account.fullName,
+      senderAvatar: account.avatarUrl,
+      amount: withdrawAmount,
+      description: 'Retiro en cajero automático (a la mano)',
+      timestamp: new Date().toISOString(),
+    });
+
+    saveBankSystem(data);
+
+    res.json({
+      success: true,
+      message: `Has retirado S/. ${withdrawAmount.toFixed(2)} a tu mano exitosamente.`,
+      cashBalance: account.cashBalance,
+      bankBalance: account.bankBalance,
+      totalBalance: account.cashBalance + account.bankBalance,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Error procesando retiro' });
+  }
+});
+
+// 6. Deposit Cash (Depositar de mano a Banco YA P)
+app.post('/api/bot/bank/deposit', (req, res) => {
+  try {
+    const { identifier, amount } = req.body;
+    const depositAmount = parseFloat(amount);
+
+    if (isNaN(depositAmount) || depositAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Monto de depósito inválido.' });
+    }
+
+    const clean = identifier?.trim().toLowerCase().replace(/^@/, '');
+    const data = loadBankSystem();
+
+    const account = data.accounts.find(
+      (a) =>
+        a.dniNumber.toLowerCase() === clean ||
+        a.discordId.toLowerCase() === clean ||
+        a.robloxUsername.toLowerCase() === clean
+    );
+
+    if (!account) {
+      return res.status(404).json({ success: false, error: `Cuenta no encontrada: ${identifier}` });
+    }
+
+    if (account.cashBalance < depositAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `No tienes suficiente dinero en efectivo en mano. Efectivo disponible: S/. ${account.cashBalance.toFixed(2)}`,
+      });
+    }
+
+    account.cashBalance -= depositAmount;
+    account.bankBalance += depositAmount;
+    account.updatedAt = new Date().toISOString();
+
+    data.transactions.unshift({
+      id: `tx-${Date.now()}`,
+      operationNumber: `OP-${Math.floor(100000 + Math.random() * 900000)}`,
+      type: 'deposit_cash',
+      receiverDni: account.dniNumber,
+      receiverRoblox: account.robloxUsername,
+      receiverName: account.fullName,
+      receiverAvatar: account.avatarUrl,
+      amount: depositAmount,
+      description: 'Depósito de dinero en mano al Banco YA P',
+      timestamp: new Date().toISOString(),
+    });
+
+    saveBankSystem(data);
+
+    res.json({
+      success: true,
+      message: `Has depositado S/. ${depositAmount.toFixed(2)} en tu Banco YA P exitosamente.`,
+      cashBalance: account.cashBalance,
+      bankBalance: account.bankBalance,
+      totalBalance: account.cashBalance + account.bankBalance,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Error procesando depósito' });
+  }
+});
+
+// 7. Transaction History
+app.get('/api/bot/bank/history/:identifier', (req, res) => {
+  const { identifier } = req.params;
+  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const data = loadBankSystem();
+
+  const userTxs = data.transactions.filter(
+    (t) =>
+      t.senderDni?.toLowerCase() === clean ||
+      t.senderRoblox?.toLowerCase() === clean ||
+      t.receiverDni?.toLowerCase() === clean ||
+      t.receiverRoblox?.toLowerCase() === clean
+  );
+
+  res.json({
+    success: true,
+    transactions: userTxs.slice(0, 15),
+  });
+});
+
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 

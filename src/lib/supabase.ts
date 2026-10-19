@@ -304,6 +304,9 @@ export async function updateDniAdministrativeStatus(
       if (updates.bankFreezeReason !== undefined) payload.bank_freeze_reason = updates.bankFreezeReason;
       if (updates.wantedStatus !== undefined) payload.wanted_status = updates.wantedStatus;
       if (updates.wantedReason !== undefined) payload.wanted_reason = updates.wantedReason;
+      if (updates.photoUrl !== undefined) payload.photo_url = updates.photoUrl;
+      if (updates.robloxUsername !== undefined) payload.roblox_username = updates.robloxUsername;
+      if (updates.robloxUserId !== undefined) payload.roblox_user_id = updates.robloxUserId;
 
       await supabase
         .from('peru_dnis')
@@ -315,6 +318,19 @@ export async function updateDniAdministrativeStatus(
   }
 
   return true;
+}
+
+/**
+ * Actualiza la foto del avatar de Roblox del usuario en su DNI
+ */
+export async function updateUserDniPhoto(
+  discordId: string,
+  photoUrl: string,
+  robloxUsername?: string
+): Promise<boolean> {
+  const updates: Partial<PeruDni> = { photoUrl };
+  if (robloxUsername) updates.robloxUsername = robloxUsername;
+  return updateDniAdministrativeStatus(discordId, updates);
 }
 
 /**

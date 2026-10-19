@@ -67,7 +67,7 @@ export const AdminPanelModal: React.FC = () => {
   const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin } = useServer();
 
   const [formData, setFormData] = useState({ ...config });
-  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot'>('general');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
 
@@ -95,6 +95,17 @@ export const AdminPanelModal: React.FC = () => {
   const [yapoFeedback, setYapoFeedback] = useState('');
   const [copiedYapoSql, setCopiedYapoSql] = useState(false);
   const [yapoConfigSaved, setYapoConfigSaved] = useState(false);
+
+  // Discord Bot Simulator State
+  const [simCommand, setSimCommand] = useState<'saldo' | 'dni-ver' | 'transferir' | 'crear-dni' | 'retirar' | 'depositar' | 'ayuda'>('saldo');
+  const [simUser, setSimUser] = useState('');
+  const [simAmount, setSimAmount] = useState('25.00');
+  const [simDest, setSimDest] = useState('');
+  const [simNote, setSimNote] = useState('Pago de servicio');
+  const [simDniSide, setSimDniSide] = useState<'front' | 'back'>('front');
+  const [simResult, setSimResult] = useState<any>(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [copiedBotEnv, setCopiedBotEnv] = useState(false);
 
   // File upload refs
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -459,6 +470,132 @@ export const AdminPanelModal: React.FC = () => {
     lockAdmin();
   };
 
+  // Handler for Discord Bot simulator
+  const handleRunSimulation = async () => {
+    setSimLoading(true);
+    playClickSound();
+
+    try {
+      if (simCommand === 'saldo') {
+        const target = simUser.trim() || (yapoAccounts[0]?.robloxUsername || 'MrAlex_Peru');
+        const found = yapoAccounts.find(
+          (a) => a.robloxUsername.toLowerCase() === target.toLowerCase() || a.dniNumber === target
+        );
+        if (found) {
+          setSimResult({
+            type: 'saldo',
+            account: found,
+            total: found.bankBalance + found.cashBalance,
+          });
+        } else {
+          setSimResult({
+            type: 'saldo',
+            account: {
+              robloxUsername: target,
+              fullName: 'QUISPE MAMANI CARLOS DANIEL',
+              dniNumber: '74829104',
+              avatarUrl: 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter',
+              cashBalance: 45.0,
+              bankBalance: 150.0,
+            },
+            total: 195.0,
+          });
+        }
+      } else if (simCommand === 'dni-ver') {
+        const target = simUser.trim() || (registeredDnis[0]?.robloxUsername || 'MrAlex_Peru');
+        const found = registeredDnis.find(
+          (d) => d.robloxUsername.toLowerCase() === target.toLowerCase() || d.dniNumber === target
+        );
+        if (found) {
+          setSimResult({
+            type: 'dni-ver',
+            dni: found,
+          });
+        } else {
+          setSimResult({
+            type: 'dni-ver',
+            dni: {
+              dniNumber: '74829104',
+              robloxUsername: target,
+              fullName: 'QUISPE MAMANI CARLOS DANIEL',
+              firstSurname: 'QUISPE',
+              secondSurname: 'MAMANI',
+              prenames: 'CARLOS DANIEL',
+              birthDate: '2002-05-14',
+              gender: 'M',
+              department: 'LIMA',
+              province: 'LIMA',
+              district: 'MIRAFLORES',
+              photoUrl: 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter',
+              status: 'active',
+            },
+          });
+        }
+      } else if (simCommand === 'transferir') {
+        const amountNum = parseFloat(simAmount) || 25;
+        const sender = yapoAccounts[0] || {
+          robloxUsername: 'MrAlex_Peru',
+          dniNumber: '74829104',
+          bankBalance: 200,
+        };
+        const dest = simDest.trim() || '82910432';
+        setSimResult({
+          type: 'transferir',
+          operationNumber: `OP-${Math.floor(100000 + Math.random() * 900000)}`,
+          sender,
+          dest,
+          amount: amountNum,
+          note: simNote.trim() || 'Transferencia por YA P',
+          timestamp: new Date().toLocaleTimeString(),
+        });
+      } else if (simCommand === 'retirar') {
+        const amountNum = parseFloat(simAmount) || 20;
+        setSimResult({
+          type: 'retirar',
+          amount: amountNum,
+          cashBalance: 40.0,
+          bankBalance: 120.0,
+          total: 160.0,
+        });
+      } else if (simCommand === 'depositar') {
+        const amountNum = parseFloat(simAmount) || 20;
+        setSimResult({
+          type: 'depositar',
+          amount: amountNum,
+          cashBalance: 10.0,
+          bankBalance: 150.0,
+          total: 160.0,
+        });
+      } else if (simCommand === 'crear-dni') {
+        const cleanUser = simUser.trim() || 'MrAlex_Peru';
+        setSimResult({
+          type: 'crear-dni',
+          dni: {
+            dniNumber: `${Math.floor(10000000 + Math.random() * 90000000)}`,
+            robloxUsername: cleanUser,
+            fullName: 'QUISPE MAMANI CARLOS DANIEL',
+            firstSurname: 'QUISPE',
+            secondSurname: 'MAMANI',
+            prenames: 'CARLOS DANIEL',
+            birthDate: '2002-05-14',
+            gender: 'M',
+            district: 'MIRAFLORES',
+            department: 'LIMA',
+            photoUrl: 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter',
+          },
+          bonus: yapoBankConfig.welcomeBonus || 50,
+        });
+      } else if (simCommand === 'ayuda') {
+        setSimResult({ type: 'ayuda' });
+      }
+      playSuccessSound();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
       <div className="relative w-full max-w-3xl bg-[#0c0e18] border border-red-500/30 rounded-3xl p-5 sm:p-8 shadow-2xl shadow-red-950/60 my-6 max-h-[92vh] flex flex-col">
@@ -571,12 +708,25 @@ export const AdminPanelModal: React.FC = () => {
             }`}
           >
             <YapoLogo size="sm" withContainer={false} className="w-3.5 h-3.5" />
-            Banco & Yapo
+            Banco YA P
             {yapoAccounts.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40 text-[10px] font-mono">
                 {yapoAccounts.length}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('bot')}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'bot' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5 text-indigo-400" />
+            Bot de Discord & Comandos
+            <span className="px-1.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono">
+              Slash
+            </span>
           </button>
         </div>
 
@@ -1723,7 +1873,7 @@ export const AdminPanelModal: React.FC = () => {
                     <YapoLogo size="sm" />
                     <div>
                       <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">
-                        Administración Central: Banco & Yapo (PE:RP)
+                        Administración Central: Banco YA P (PE:RP)
                       </h4>
                       <p className="text-[11px] text-slate-300">
                         Gestiona los fondos de los ciudadanos por usuario de Roblox, congela cuentas bancarias, edita saldos en mano/banco y sincroniza con el bot de Discord.
@@ -1777,7 +1927,7 @@ export const AdminPanelModal: React.FC = () => {
                         playSuccessSound();
                       } else {
                         setSelectedYapoAccount(null);
-                        setYapoFeedback(`No se encontró ninguna cuenta de Yapo con el usuario o DNI "@${q}".`);
+                        setYapoFeedback(`No se encontró ninguna cuenta de Banco YA P con el usuario o DNI "@${q}".`);
                       }
                     }}
                     className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
@@ -1841,7 +1991,7 @@ export const AdminPanelModal: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <div>
                         <label className="block text-[10px] font-bold text-purple-300 uppercase mb-1">
-                          Saldo en Banco / Yapo (S/.)
+                          Saldo en Banco YA P (S/.)
                         </label>
                         <input
                           type="number"
@@ -1908,7 +2058,7 @@ export const AdminPanelModal: React.FC = () => {
                           setSelectedYapoAccount(updated);
                           setYapoAccounts((prev) => prev.map((a) => a.id === updated.id ? updated : a));
                           playSuccessSound();
-                          setYapoFeedback(nextFreeze ? '❄️ Cuenta de Yapo CONGELADA correctamente.' : '🔓 Cuenta de Yapo DESCONGELADA.');
+                          setYapoFeedback(nextFreeze ? '❄️ Cuenta de Banco YA P CONGELADA correctamente.' : '🔓 Cuenta de Banco YA P DESCONGELADA.');
                         }}
                         className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
                           selectedYapoAccount.status === 'frozen'
@@ -1924,12 +2074,12 @@ export const AdminPanelModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`¿Seguro que deseas reiniciar la cuenta Yapo de @${selectedYapoAccount.robloxUsername}? Se borrarán sus fondos y podrá afiliarse nuevamente.`)) {
+                          if (window.confirm(`¿Seguro que deseas reiniciar la cuenta Banco YA P de @${selectedYapoAccount.robloxUsername}? Se borrarán sus fondos y podrá afiliarse nuevamente.`)) {
                             resetYapoAccount(selectedYapoAccount.dniNumber);
                             setYapoAccounts((prev) => prev.filter((a) => a.id !== selectedYapoAccount.id));
                             setSelectedYapoAccount(null);
                             playSuccessSound();
-                            setYapoFeedback(`Cuenta Yapo de @${selectedYapoAccount.robloxUsername} reiniciada exitosamente.`);
+                            setYapoFeedback(`Cuenta Banco YA P de @${selectedYapoAccount.robloxUsername} reiniciada exitosamente.`);
                           }
                         }}
                         className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
@@ -2035,7 +2185,7 @@ export const AdminPanelModal: React.FC = () => {
                     className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-white/10"
                   >
                     <FileCode className="w-3.5 h-3.5 text-purple-300" />
-                    <span>{copiedYapoSql ? '¡SQL Copiado!' : 'Copiar SQL Tablas Yapo'}</span>
+                    <span>{copiedYapoSql ? '¡SQL Copiado!' : 'Copiar SQL Tablas Banco YA P'}</span>
                   </button>
                 </div>
               </div>
@@ -2045,7 +2195,7 @@ export const AdminPanelModal: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-white uppercase tracking-wider block">
-                      Padrón de Cuentas Yapo Afiliadas ({yapoAccounts.length})
+                      Padrón de Cuentas Banco YA P Afiliadas ({yapoAccounts.length})
                     </span>
                     <span className="text-[10px] text-slate-400">
                       Haz clic en cualquier ciudadano para editar su saldo o congelar su cuenta.
@@ -2056,18 +2206,18 @@ export const AdminPanelModal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm('¿Seguro que deseas reiniciar y borrar TODAS las cuentas de Yapo y sus saldos? Los usuarios deberán afiliarse de nuevo.')) {
+                        if (window.confirm('¿Seguro que deseas reiniciar y borrar TODAS las cuentas de Banco YA P y sus saldos? Los usuarios deberán afiliarse de nuevo.')) {
                           resetAllYapo();
                           setYapoAccounts([]);
                           setSelectedYapoAccount(null);
                           playSuccessSound();
-                          alert('Todas las cuentas de Yapo han sido reiniciadas.');
+                          alert('Todas las cuentas de Banco YA P han sido reiniciadas.');
                         }
                       }}
                       className="px-3 py-1.5 rounded-xl bg-rose-950 hover:bg-rose-900 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Reiniciar Todas las Cuentas Yapo</span>
+                      <span>Reiniciar Todas las Cuentas Banco YA P</span>
                     </button>
                   )}
                 </div>
@@ -2120,7 +2270,562 @@ export const AdminPanelModal: React.FC = () => {
                   </div>
                 ) : (
                   <div className="p-4 rounded-xl bg-black/40 border border-white/5 text-center text-xs text-slate-400">
-                    Aún no hay cuentas de Yapo creadas. Los ciudadanos que verifiquen su DNI y se afilien a Yapo aparecerán aquí en tiempo real.
+                    Aún no hay cuentas de Banco YA P creadas. Los ciudadanos que verifiquen su DNI y se afilien a YA P aparecerán aquí en tiempo real.
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 7: DISCORD BOT & SLASH COMMANDS CONFIGURATION & SIMULATOR */}
+          {activeTab === 'bot' && (
+            <div className="space-y-6">
+              
+              {/* Header Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-[#10142b] to-black border border-indigo-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold uppercase tracking-wider text-white">
+                        Configuración del Bot de Discord & Comandos Slash
+                      </h4>
+                      <p className="text-xs text-slate-300">
+                        Sincronización completa con Banco YA P, DNI con Avatar de Roblox y economía estilo UnbelievaBoat.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono font-bold">
+                    discord.js v14
+                  </span>
+                </div>
+              </div>
+
+              {/* Security Banner */}
+              <div className="p-3.5 rounded-2xl bg-rose-950/30 border border-rose-500/30 flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  <strong className="text-white">🔒 Seguridad Garantizada — Sin Comandos Administrativos en el Bot:</strong>
+                  <br />
+                  Para proteger la economía y orden del servidor PE:RP, los comandos de Discord son <strong>100% ciudadanos</strong> (/crear-dni, /dni-ver, /saldo, /transferir, /retirar, /depositar, /historial, /ayuda).
+                  Todas las funciones de <em>congelar cuentas, editar saldos, reiniciar bases de datos o suspender ciudadanos</em> se gestionan <strong>exclusivamente desde este panel web con contraseña</strong>.
+                </div>
+              </div>
+
+              {/* STEP BY STEP GUIDE ("QUÉ SE DEBE HACER PARA CONFIGURAR CADA COSA") */}
+              <div className="p-4 rounded-2xl bg-[#090b16] border border-white/10 space-y-4">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <h5 className="font-bold text-white text-xs uppercase tracking-wider">
+                      Guía Paso a Paso: ¿Qué se debe hacer para configurar el Bot?
+                    </h5>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const envText = `DISCORD_TOKEN=${yapoBankConfig.discordBotToken || 'tu_token_aqui'}\nCLIENT_ID=${clientId || 'tu_client_id_aqui'}\nGUILD_ID=id_de_tu_servidor\nAPI_BASE_URL=http://localhost:3000`;
+                      navigator.clipboard.writeText(envText);
+                      setCopiedBotEnv(true);
+                      playSuccessSound();
+                      setTimeout(() => setCopiedBotEnv(false), 2500);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{copiedBotEnv ? '¡.env Copiado!' : 'Copiar Plantilla .env'}</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs text-slate-300">
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5">
+                    <div className="font-bold text-indigo-300 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-950 border border-indigo-500/40 flex items-center justify-center text-[10px] text-white">1</span>
+                      Crear la Aplicación en Discord Developer Portal
+                    </div>
+                    <p className="text-slate-400 pl-7 text-[11px] leading-relaxed">
+                      Entra a <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline font-semibold">Discord Developer Portal</a>, crea una aplicación llamada <strong>Banco YA P - PE:RP</strong>. En la pestaña <em>Bot</em>, haz clic en <strong>Reset Token</strong> y copia tu <strong>DISCORD_TOKEN</strong>. En <em>General Information</em> copia tu <strong>Application ID</strong> (es tu <strong>CLIENT_ID</strong>).
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5">
+                    <div className="font-bold text-sky-300 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-sky-950 border border-sky-500/40 flex items-center justify-center text-[10px] text-white">2</span>
+                      Activar Privileged Gateway Intents
+                    </div>
+                    <p className="text-slate-400 pl-7 text-[11px] leading-relaxed">
+                      En la pestaña <em>Bot</em> del Developer Portal, baja hasta la sección <strong>Privileged Gateway Intents</strong> y activa <strong>Server Members Intent</strong> y <strong>Message Content Intent</strong> para que el bot pueda leer interacciones de usuarios en el servidor.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5">
+                    <div className="font-bold text-purple-300 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-purple-950 border border-purple-500/40 flex items-center justify-center text-[10px] text-white">3</span>
+                      Invitar el Bot a tu Servidor con Permisos Slash
+                    </div>
+                    <p className="text-slate-400 pl-7 text-[11px] leading-relaxed">
+                      En <em>OAuth2</em> → <em>URL Generator</em>, marca <code>bot</code> y <code>applications.commands</code>. En permisos selecciona: <em>Send Messages</em>, <em>Embed Links</em>, <em>Attach Files</em> y <em>Read Message History</em>. Abre el enlace en tu navegador para invitarlo al servidor de tu comunidad PE:RP.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5">
+                    <div className="font-bold text-emerald-300 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-[10px] text-white">4</span>
+                      Desplegar Comandos Slash y Encender el Bot en Node.js
+                    </div>
+                    <div className="pl-7 font-mono text-[11px] space-y-1 text-slate-300">
+                      <div className="p-2 rounded-lg bg-black/60 border border-white/10 text-emerald-400">
+                        cd discord-bot<br />
+                        npm install<br />
+                        npm run deploy <span className="text-slate-500"># Registra instantáneamente los comandos Slash</span><br />
+                        npm start <span className="text-slate-500"># Enciende el bot conectado a Banco YA P</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-sans">
+                        Los archivos ya están creados en la carpeta <code>discord-bot/</code> (<code>index.js</code>, <code>deploy-commands.js</code>, <code>package.json</code> y <code>README.md</code>).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* LIST OF BOT COMMANDS */}
+              <div className="p-4 rounded-2xl bg-[#090b16] border border-white/10 space-y-3">
+                <h5 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
+                  <Coins className="w-4 h-4 text-purple-400" />
+                  Comandos de Discord Disponibles para los Ciudadanos:
+                </h5>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs font-mono">
+                  <div className="p-3 rounded-xl bg-black/40 border border-purple-500/20 space-y-1">
+                    <strong className="text-purple-300">/saldo [usuario_o_dni]</strong>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Desglose idéntico a UnbelievaBoat: 💵 <strong>En mano</strong>, 🏦 <strong>Banco YA P</strong> y 💰 <strong>Total</strong>.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-sky-500/20 space-y-1">
+                    <strong className="text-sky-300">/dni-ver [usuario_o_dni]</strong>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Muestra la foto del DNI con botones interactivos <strong>[📄 Anverso]</strong> y <strong>[🔄 Reverso]</strong> con código MRZ.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-emerald-500/20 space-y-1">
+                    <strong className="text-emerald-300">/crear-dni &lt;datos&gt;</strong>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Registra nombres, apellidos y usuario de Roblox. Asigna DNI peruano y foto de avatar automáticamente.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-amber-500/20 space-y-1">
+                    <strong className="text-amber-300">/transferir &lt;dni o @user&gt; &lt;monto&gt;</strong>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Envía Soles por YA P. Valida saldo en banco, transfiere y genera comprobante con número de operación.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-teal-500/20 space-y-1">
+                    <strong className="text-teal-300">/retirar &lt;monto&gt;</strong>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Retira dinero de tu Banco YA P para tenerlo en efectivo (en mano) para el roleplay.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-teal-500/20 space-y-1">
+                    <strong className="text-teal-300">/depositar &lt;monto&gt;</strong>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Deposita efectivo de tu mano a tu cuenta de Banco YA P.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* LIVE DISCORD COMMAND SIMULATOR & TESTER */}
+              <div className="p-4 rounded-2xl bg-[#090b16] border border-indigo-500/40 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400 animate-pulse" />
+                    <div>
+                      <h5 className="font-bold text-white text-xs uppercase tracking-wider">
+                        Probador y Simulador en Vivo de Comandos de Discord
+                      </h5>
+                      <p className="text-[10px] text-slate-400">
+                        Prueba aquí mismo en pantalla cómo responderá el bot a los usuarios en Discord.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono">
+                    Live Embed Tester
+                  </span>
+                </div>
+
+                {/* Command Selector & Parameters */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                      Comando a Probar:
+                    </label>
+                    <select
+                      value={simCommand}
+                      onChange={(e: any) => {
+                        setSimCommand(e.target.value);
+                        setSimResult(null);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-indigo-400 cursor-pointer"
+                    >
+                      <option value="saldo">/saldo (En mano, Banco, Total)</option>
+                      <option value="dni-ver">/dni-ver (Foto DNI + Botones Anverso/Reverso)</option>
+                      <option value="transferir">/transferir (Envío YA P + Comprobante)</option>
+                      <option value="crear-dni">/crear-dni (Registro ciudadano + Avatar)</option>
+                      <option value="retirar">/retirar (De Banco a Mano)</option>
+                      <option value="depositar">/depositar (De Mano a Banco)</option>
+                      <option value="ayuda">/ayuda (Guía de comandos)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                      Usuario de Roblox o DNI:
+                    </label>
+                    <input
+                      type="text"
+                      value={simUser}
+                      onChange={(e) => setSimUser(e.target.value)}
+                      placeholder="ej. MrAlex_Peru o 74829104"
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                      Monto (S/. Soles):
+                    </label>
+                    <input
+                      type="number"
+                      value={simAmount}
+                      onChange={(e) => setSimAmount(e.target.value)}
+                      placeholder="25.00"
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+                </div>
+
+                {simCommand === 'transferir' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                        Destinatario (DNI o Usuario Roblox):
+                      </label>
+                      <input
+                        type="text"
+                        value={simDest}
+                        onChange={(e) => setSimDest(e.target.value)}
+                        placeholder="ej. 82910432 o StumbleAlex"
+                        className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                        Motivo / Concepto:
+                      </label>
+                      <input
+                        type="text"
+                        value={simNote}
+                        onChange={(e) => setSimNote(e.target.value)}
+                        placeholder="ej. Pago de gasolina"
+                        className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleRunSimulation}
+                    disabled={simLoading}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-950 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>{simLoading ? 'Simulando respuesta...' : '▶️ Probar y Simular Comando en Discord'}</span>
+                  </button>
+                </div>
+
+                {/* DISCORD MESSAGE INTERFACE MOCKUP */}
+                {simResult && (
+                  <div className="rounded-2xl bg-[#313338] border border-[#1e1f22] p-4 text-slate-200 font-sans shadow-2xl space-y-3">
+                    {/* Discord Author Header */}
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white text-xs shrink-0 shadow">
+                        YA
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white text-sm">Banco YA P</span>
+                        <span className="px-1 py-0.2 rounded bg-[#5865F2] text-white text-[9px] font-bold uppercase">
+                          BOT
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono ml-1">Hoy a las {new Date().toLocaleTimeString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Discord Embed Output */}
+                    <div className="ml-11">
+                      
+                      {/* 1. SIMULATION: /saldo */}
+                      {simResult.type === 'saldo' && (
+                        <div className="p-3.5 rounded-lg bg-[#2b2d31] border-l-4 border-purple-500 space-y-2.5 max-w-lg">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-bold text-white text-sm">
+                                🏦 Estado de Cuenta Bancaria — @{simResult.account.robloxUsername}
+                              </div>
+                              <p className="text-[11px] text-slate-300">
+                                <strong>Banco YA P & Billetera Móvil Oficial PE:RP</strong><br />
+                                Titular: {simResult.account.fullName} • DNI: <code className="bg-black/40 px-1 py-0.5 rounded text-purple-300">{simResult.account.dniNumber}</code>
+                              </p>
+                            </div>
+                            <img
+                              src={simResult.account.avatarUrl}
+                              alt="Avatar"
+                              className="w-12 h-12 rounded-lg bg-black border border-white/20 shrink-0"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 font-mono text-xs pt-1 border-t border-white/10">
+                            <div className="flex justify-between p-2 rounded bg-black/40">
+                              <span className="text-slate-300 font-sans">💵 Dinero en Mano (Cash):</span>
+                              <span className="text-teal-300 font-bold">S/ {simResult.account.cashBalance.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between p-2 rounded bg-black/40">
+                              <span className="text-slate-300 font-sans">🏦 Dinero en Banco (Banco YA P):</span>
+                              <span className="text-purple-300 font-bold">S/ {simResult.account.bankBalance.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between p-2 rounded bg-purple-950/40 border border-purple-500/30">
+                              <span className="text-amber-300 font-sans font-bold">💰 Patrimonio Total:</span>
+                              <span className="text-amber-300 font-black text-sm">S/ {simResult.total.toFixed(2)}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-[10px] text-slate-400 pt-1 flex items-center justify-between">
+                            <span>Banco YA P PE:RP • Retira con /retirar o deposita con /depositar</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 2. SIMULATION: /dni-ver (WITH INTERACTIVE BUTTONS!) */}
+                      {simResult.type === 'dni-ver' && (
+                        <div className="space-y-2.5 max-w-lg">
+                          <div className="p-3.5 rounded-lg bg-[#2b2d31] border-l-4 border-sky-500 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-bold text-white text-sm">
+                                  🇵🇪 REPÚBLICA DEL PERÚ — {simDniSide === 'front' ? 'DOCUMENTO NACIONAL DE IDENTIDAD [ANVERSO]' : 'DOCUMENTO NACIONAL DE IDENTIDAD [REVERSO]'}
+                                </div>
+                                <p className="text-[11px] text-slate-300">
+                                  <strong>REGISTRO NACIONAL DE IDENTIFICACIÓN Y ESTADO CIVIL (RENIEC)</strong><br />
+                                  DNI Electrónico Oficial PE:RP • Ciudadano: @{simResult.dni.robloxUsername}
+                                </p>
+                              </div>
+                              <img
+                                src={simResult.dni.photoUrl}
+                                alt="Avatar"
+                                className="w-14 h-14 rounded-lg bg-black border border-sky-400 shrink-0"
+                              />
+                            </div>
+
+                            {simDniSide === 'front' ? (
+                              <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-black/30 p-2.5 rounded-lg">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">🆔 CÚI / N° DNI:</span>
+                                  <span className="text-white font-bold">{simResult.dni.dniNumber}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">⚧️ SEXO:</span>
+                                  <span className="text-white font-bold">{simResult.dni.gender === 'F' ? 'FEMENINO' : 'MASCULINO'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">PRIMER APELLIDO:</span>
+                                  <span className="text-white font-bold">{simResult.dni.firstSurname}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">SEGUNDO APELLIDO:</span>
+                                  <span className="text-white font-bold">{simResult.dni.secondSurname}</span>
+                                </div>
+                                <div className="col-span-2">
+                                  <span className="text-[10px] text-slate-400 block font-sans">PRENOMBRES:</span>
+                                  <span className="text-white font-bold">{simResult.dni.prenames}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">NACIMIENTO:</span>
+                                  <span className="text-white font-bold">{simResult.dni.birthDate}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">ESTADO:</span>
+                                  <span className="text-emerald-400 font-bold">🟢 EMITIDO Y VÁLIDO</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2 text-xs font-mono bg-black/30 p-2.5 rounded-lg">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block font-sans">📍 DOMICILIO & UBIGEO:</span>
+                                  <span className="text-white font-bold">{simResult.dni.district || 'MIRAFLORES'}, {simResult.dni.department || 'LIMA'}</span>
+                                </div>
+                                <div className="p-2 rounded bg-black/60 border border-white/10 font-mono text-[10px] text-sky-300">
+                                  IDPER{simResult.dni.dniNumber}&lt;7&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;<br />
+                                  0205148M3010195PER&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;0<br />
+                                  {simResult.dni.firstSurname}&lt;&lt;{simResult.dni.prenames.split(' ')[0]}&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+                                </div>
+                                <span className="text-[10px] text-emerald-400">🔏 Huella digital y firma electrónica registradas</span>
+                              </div>
+                            )}
+
+                            <div className="text-[10px] text-slate-400 pt-1">
+                              PE:RP Streets • Vista activa: <strong>{simDniSide === 'front' ? '[ANVERSO FRONTAL]' : '[REVERSO POSTERIOR]'}</strong>
+                            </div>
+                          </div>
+
+                          {/* Interactive Discord ActionRow Buttons */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSimDniSide('front');
+                                playClickSound();
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                simDniSide === 'front'
+                                  ? 'bg-[#5865F2] text-white shadow'
+                                  : 'bg-[#4e5058] hover:bg-[#6d6f78] text-slate-200'
+                              }`}
+                            >
+                              📄 Ver Anverso
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSimDniSide('back');
+                                playClickSound();
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                simDniSide === 'back'
+                                  ? 'bg-[#5865F2] text-white shadow'
+                                  : 'bg-[#4e5058] hover:bg-[#6d6f78] text-slate-200'
+                              }`}
+                            >
+                              🔄 Ver Reverso
+                            </button>
+                            <span className="text-[10px] text-slate-400 italic">
+                              (Botones interactivos en vivo)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 3. SIMULATION: /transferir */}
+                      {simResult.type === 'transferir' && (
+                        <div className="p-3.5 rounded-lg bg-[#2b2d31] border-l-4 border-emerald-500 space-y-2.5 max-w-lg">
+                          <div className="font-bold text-emerald-400 text-sm flex items-center gap-2">
+                            <span>✅ ¡YA P Enviado con Éxito!</span>
+                          </div>
+                          <p className="text-[11px] text-slate-300">
+                            <strong>COMPROBANTE ELECTRÓNICO OFICIAL DE BANCO YA P</strong><br />
+                            Operación: <code className="bg-black/40 px-1 py-0.5 rounded text-white">{simResult.operationNumber}</code>
+                          </p>
+
+                          <div className="p-2.5 rounded bg-black/40 space-y-1.5 text-xs font-mono">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 font-sans">📤 Emisor:</span>
+                              <span className="text-white font-bold">@{simResult.sender.robloxUsername}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 font-sans">📥 Destinatario:</span>
+                              <span className="text-purple-300 font-bold">{simResult.dest}</span>
+                            </div>
+                            <div className="flex justify-between pt-1 border-t border-white/10 text-sm">
+                              <span className="text-slate-300 font-sans">💸 Monto Enviado:</span>
+                              <span className="text-emerald-300 font-black">S/. {simResult.amount.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 font-sans">📝 Motivo:</span>
+                              <span className="text-slate-300">{simResult.note}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-[10px] text-slate-400">
+                            Banco YA P • Tu dinero seguro e instantáneo en PE:RP Streets
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 4. SIMULATION: /retirar or /depositar */}
+                      {(simResult.type === 'retirar' || simResult.type === 'depositar') && (
+                        <div className="p-3.5 rounded-lg bg-[#2b2d31] border-l-4 border-teal-500 space-y-2.5 max-w-lg">
+                          <div className="font-bold text-teal-300 text-sm">
+                            {simResult.type === 'retirar' ? '🏧 Cajero ATM: Retiro a la Mano Exitoso' : '🏦 Depósito en Banco YA P Exitoso'}
+                          </div>
+                          <p className="text-xs text-slate-200">
+                            Has {simResult.type === 'retirar' ? 'retirado' : 'depositado'} <strong>S/. {simResult.amount.toFixed(2)}</strong> exitosamente.
+                          </p>
+                          <div className="grid grid-cols-3 gap-2 text-xs font-mono bg-black/40 p-2.5 rounded">
+                            <div>
+                              <span className="text-[10px] text-slate-400 block font-sans">💵 En Mano:</span>
+                              <span className="text-teal-300 font-bold">S/ {simResult.cashBalance.toFixed(2)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block font-sans">🏦 Banco:</span>
+                              <span className="text-purple-300 font-bold">S/ {simResult.bankBalance.toFixed(2)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block font-sans">💰 Total:</span>
+                              <span className="text-amber-300 font-bold">S/ {simResult.total.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 5. SIMULATION: /crear-dni */}
+                      {simResult.type === 'crear-dni' && (
+                        <div className="p-3.5 rounded-lg bg-[#2b2d31] border-l-4 border-sky-500 space-y-2.5 max-w-lg">
+                          <div className="font-bold text-sky-300 text-sm">
+                            🎉 ¡DNI Tramitado y Emitido con Éxito!
+                          </div>
+                          <p className="text-xs text-slate-200">
+                            Se ha generado tu DNI electrónico oficial <strong>{simResult.dni.dniNumber}</strong> vinculado a tu avatar de Roblox (@{simResult.dni.robloxUsername}) y se te acreditó un bono de <strong>S/. {simResult.bonus.toFixed(2)}</strong> en tu cuenta de Banco YA P.
+                          </p>
+                          <div className="flex items-center gap-3 p-2 bg-black/40 rounded">
+                            <img src={simResult.dni.photoUrl} alt="Avatar" className="w-10 h-10 rounded border border-sky-400" />
+                            <div className="text-xs">
+                              <strong className="text-white">{simResult.dni.fullName}</strong>
+                              <span className="text-[10px] text-slate-400 block">DNI: {simResult.dni.dniNumber} • {simResult.dni.district}, {simResult.dni.department}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 6. SIMULATION: /ayuda */}
+                      {simResult.type === 'ayuda' && (
+                        <div className="p-3.5 rounded-lg bg-[#2b2d31] border-l-4 border-red-500 space-y-2 max-w-lg text-xs">
+                          <div className="font-bold text-red-400 text-sm">
+                            🇵🇪 Comandos Oficiales de PE:RP Streets & Banco YA P
+                          </div>
+                          <p className="text-[11px] text-slate-300">
+                            Usa estos comandos en cualquier canal autorizado de Discord:
+                          </p>
+                          <ul className="space-y-1 font-mono text-[11px] text-slate-300">
+                            <li><strong className="text-purple-300">/saldo</strong> — Consulta en mano, banco y total.</li>
+                            <li><strong className="text-sky-300">/dni-ver</strong> — Muestra foto de DNI con botones Anverso/Reverso.</li>
+                            <li><strong className="text-emerald-300">/crear-dni</strong> — Registra tus datos ciudadanos y Roblox.</li>
+                            <li><strong className="text-amber-300">/transferir</strong> — Envía Soles por YA P por DNI o usuario.</li>
+                            <li><strong className="text-teal-300">/retirar</strong> — Saca Soles de tu Banco a tu mano.</li>
+                            <li><strong className="text-teal-300">/depositar</strong> — Guarda efectivo en tu Banco YA P.</li>
+                          </ul>
+                        </div>
+                      )}
+
+                    </div>
                   </div>
                 )}
               </div>

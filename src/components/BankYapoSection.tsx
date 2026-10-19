@@ -139,7 +139,7 @@ export const BankYapoSection: React.FC = () => {
 
       if (res.success && res.account) {
         setAccount(res.account);
-        setRegisterSuccess(`¡Cuenta de Yapo creada y verificada exitosamente! Se acreditaron S/. ${bankConfig.welcomeBonus.toFixed(2)} de bienvenida.`);
+        setRegisterSuccess(`¡Cuenta de YA P creada y verificada exitosamente! Se acreditaron S/. ${bankConfig.welcomeBonus.toFixed(2)} de bienvenida.`);
         playYapeChimeSound();
         const txs = getAccountTransactions(res.account.dniNumber);
         setTransactions(txs);
@@ -168,7 +168,7 @@ export const BankYapoSection: React.FC = () => {
       const found = await findYapoAccount(q);
       if (!found) {
         setRecipientFound(null);
-        setTransferError('Cuenta inexistente. El usuario de Roblox o número de DNI no está registrado en Yapo PE:RP.');
+        setTransferError('Cuenta inexistente. El usuario de Roblox o número de DNI no está registrado en YA P PE:RP.');
       } else if (found.discordId === account?.discordId || found.dniNumber === account?.dniNumber) {
         setRecipientFound(null);
         setTransferError('No puedes transferirte dinero a tu propia cuenta.');
@@ -196,7 +196,7 @@ export const BankYapoSection: React.FC = () => {
       return;
     }
     if (amountNum > account.bankBalance) {
-      setTransferError(`Saldo insuficiente en Yapo. Saldo disponible: S/. ${account.bankBalance.toFixed(2)}`);
+      setTransferError(`Saldo insuficiente en Banco YA P. Saldo disponible: S/. ${account.bankBalance.toFixed(2)}`);
       return;
     }
 
@@ -252,7 +252,7 @@ export const BankYapoSection: React.FC = () => {
           if (res.transaction) setTransactions((prev) => [res.transaction!, ...prev]);
           setCashFeedback({
             success: true,
-            message: `¡Retiro exitoso! Retiraste S/. ${amountNum.toFixed(2)} del Banco a tu Mano.`,
+            message: `¡Retiro exitoso! Retiraste S/. ${amountNum.toFixed(2)} de YA P a tu Mano.`,
           });
           playSuccessSound();
           setCashAmount('');
@@ -266,7 +266,7 @@ export const BankYapoSection: React.FC = () => {
           if (res.transaction) setTransactions((prev) => [res.transaction!, ...prev]);
           setCashFeedback({
             success: true,
-            message: `¡Depósito exitoso! Depositaste S/. ${amountNum.toFixed(2)} de tu Mano a tu cuenta de Yapo.`,
+            message: `¡Depósito exitoso! Depositaste S/. ${amountNum.toFixed(2)} de tu Mano a tu cuenta YA P.`,
           });
           playSuccessSound();
           setCashAmount('');
@@ -299,7 +299,7 @@ export const BankYapoSection: React.FC = () => {
           <div className="flex items-center justify-center gap-3 mb-4">
             <YapoLogo size="md" />
             <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              BANCO <span className="text-purple-400">YAPO</span>
+              BANCO <span className="text-purple-400">YA P</span>
             </h2>
           </div>
 
@@ -319,7 +319,7 @@ export const BankYapoSection: React.FC = () => {
             <div>
               <h3 className="text-xl font-bold text-white mb-2">Inicia Sesión para Acceder a tu Cuenta Bancaria</h3>
               <p className="text-xs sm:text-sm text-slate-300">
-                Tu cuenta de Yapo está vinculada directamente a tu identidad ciudadana verificada por Discord y tu DNI Peruano de RENIEC.
+                Tu cuenta bancaria YA P está vinculada directamente a tu identidad ciudadana verificada por Discord y tu DNI Peruano de RENIEC.
               </p>
             </div>
 
@@ -345,7 +345,7 @@ export const BankYapoSection: React.FC = () => {
             <div>
               <h3 className="text-xl font-bold text-white mb-2">Requisito Previo: Tramita tu DNI Peruano</h3>
               <p className="text-xs sm:text-sm text-slate-300">
-                Para aperturar tu cuenta bancaria y registrarte en <strong className="text-purple-400">Yapo</strong>, es obligatorio poseer primero tu DNI Peruano emitido por RENIEC con tu avatar de Roblox.
+                Para aperturar tu cuenta bancaria y registrarte en <strong className="text-cyan-300">YA P</strong>, es obligatorio poseer primero tu DNI Peruano emitido por RENIEC con tu avatar de Roblox.
               </p>
             </div>
 
@@ -359,7 +359,7 @@ export const BankYapoSection: React.FC = () => {
           </div>
         )}
 
-        {/* STATE 3: HAS DNI BUT NOT YET REGISTERED TO YAPO */}
+        {/* STATE 3: HAS DNI BUT NOT YET REGISTERED TO YA P */}
         {discordUser && userDni && !account && !loading && (
           <div className="max-w-lg mx-auto p-8 rounded-3xl bg-[#111425] border-2 border-purple-500/40 shadow-2xl relative overflow-hidden">
             {/* Top Badge */}
@@ -367,7 +367,7 @@ export const BankYapoSection: React.FC = () => {
               <div className="flex items-center gap-3">
                 <YapoLogo size="sm" />
                 <div>
-                  <h3 className="text-lg font-black text-white">Afiliación a Yapo PE:RP</h3>
+                  <h3 className="text-lg font-black text-white">Afiliación a YA P PE:RP</h3>
                   <p className="text-[11px] text-purple-300">Vincula tu número de DNI oficial</p>
                 </div>
               </div>
@@ -431,13 +431,13 @@ export const BankYapoSection: React.FC = () => {
                 className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-purple-900/40 cursor-pointer transition-all disabled:opacity-50"
               >
                 <YapoLogo size="sm" withContainer={false} className="w-5 h-5" />
-                <span>{isRegistering ? 'Verificando con RENIEC...' : 'Crear Mi Cuenta Yapo'}</span>
+                <span>{isRegistering ? 'Verificando con RENIEC...' : 'Crear Mi Cuenta YA P'}</span>
               </button>
             </form>
           </div>
         )}
 
-        {/* STATE 4: ACTIVE YAPO ACCOUNT DASHBOARD */}
+        {/* STATE 4: ACTIVE YA P ACCOUNT DASHBOARD */}
         {discordUser && account && (
           <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
@@ -448,7 +448,7 @@ export const BankYapoSection: React.FC = () => {
                 {/* Phone Speaker Notch */}
                 <div className="w-24 h-4 bg-[#1f233b] rounded-full mx-auto mb-3" />
 
-                {/* Yapo App Header */}
+                {/* YA P App Header */}
                 <div className="rounded-3xl bg-gradient-to-b from-[#6b12b5] to-[#4c0a85] p-5 text-white shadow-xl relative overflow-hidden mb-4">
                   {/* Background Accents */}
                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-xl pointer-events-none" />
@@ -456,7 +456,7 @@ export const BankYapoSection: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <YapoLogo size="sm" />
-                      <span className="font-extrabold text-base tracking-wide">yapo</span>
+                      <span className="font-extrabold text-base tracking-wide font-mono text-cyan-300">YA P</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -487,7 +487,7 @@ export const BankYapoSection: React.FC = () => {
                   {/* Bank & Cash Balances (UnbelievaBoat Style Economy) */}
                   <div className="space-y-2 pt-2 border-t border-white/10">
                     <div className="flex items-baseline justify-between">
-                      <span className="text-[11px] text-purple-200 font-medium">Saldo en Yapo (Banco):</span>
+                      <span className="text-[11px] text-purple-200 font-medium">Saldo en Banco (YA P):</span>
                       <span className="text-xl font-black text-white font-mono">
                         {showBalance ? `S/ ${account.bankBalance.toFixed(2)}` : 'S/ ••••••'}
                       </span>
@@ -785,7 +785,7 @@ export const BankYapoSection: React.FC = () => {
                         className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-black font-black text-sm flex items-center justify-center gap-2 shadow-xl cursor-pointer transition-all disabled:opacity-50"
                       >
                         <YapoLogo size="sm" withContainer={false} className="w-5 h-5 text-black" />
-                        <span>{isTransferring ? 'Procesando Yapeo...' : `Confirmar y Yapear S/ ${transferAmount || '0.00'}`}</span>
+                        <span>{isTransferring ? 'Enviando YA P...' : `Confirmar y Enviar YA P S/ ${transferAmount || '0.00'}`}</span>
                       </button>
                     </div>
                   )}
@@ -799,7 +799,7 @@ export const BankYapoSection: React.FC = () => {
 
                       <div>
                         <span className="text-[11px] font-bold uppercase tracking-wider text-teal-300 block mb-1">
-                          ¡Yapeo Exitoso!
+                          ¡Transferencia YA P Exitosa!
                         </span>
                         <div className="text-3xl font-black text-white font-mono">
                           S/ {lastVoucher.amount.toFixed(2)}
@@ -830,7 +830,7 @@ export const BankYapoSection: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            const text = `Comprobante Yapo PE:RP | Monto: S/ ${lastVoucher.amount.toFixed(2)} | Destinatario: @${lastVoucher.receiverRoblox} (${lastVoucher.receiverName}) | Operación: ${lastVoucher.operationNumber} | Fecha: ${new Date(lastVoucher.timestamp).toLocaleString()}`;
+                            const text = `Comprobante YA P PE:RP | Monto: S/ ${lastVoucher.amount.toFixed(2)} | Destinatario: @${lastVoucher.receiverRoblox} (${lastVoucher.receiverName}) | Operación: ${lastVoucher.operationNumber} | Fecha: ${new Date(lastVoucher.timestamp).toLocaleString()}`;
                             navigator.clipboard.writeText(text);
                             setCopiedVoucher(true);
                             setTimeout(() => setCopiedVoucher(false), 2000);
@@ -873,7 +873,7 @@ export const BankYapoSection: React.FC = () => {
                   {/* Balance Comparison */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3.5 rounded-2xl bg-purple-950/40 border border-purple-500/30">
-                      <span className="text-[10px] uppercase font-bold text-purple-300">En Banco (Yapo)</span>
+                      <span className="text-[10px] uppercase font-bold text-purple-300">En Banco (YA P)</span>
                       <div className="text-xl font-black text-white font-mono mt-0.5">
                         S/ {account.bankBalance.toFixed(2)}
                       </div>
@@ -1085,13 +1085,13 @@ export const BankYapoSection: React.FC = () => {
                   </div>
 
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    El sistema bancario de <strong className="text-white">Yapo</strong> está diseñado para reflejarse automáticamente en los comandos de economía de Discord. Tu dinero en mano, banco y total están unificados.
+                    El sistema bancario de <strong className="text-white">Banco YA P</strong> está diseñado para reflejarse automáticamente en los comandos de economía de Discord. Tu dinero en mano, banco y total están unificados en tiempo real.
                   </p>
 
                   {/* Economy breakdown preview */}
                   <div className="p-4 rounded-2xl bg-[#080a14] border border-sky-500/30 font-mono text-xs space-y-2">
                     <div className="text-slate-400 text-[11px] pb-1 border-b border-white/10 flex items-center justify-between">
-                      <span>Vista previa de comando: <strong>/balance @{account.robloxUsername}</strong></span>
+                      <span>Vista previa de comando: <strong>/saldo @{account.robloxUsername}</strong></span>
                       <span className="text-sky-400">Bot Oficial PE:RP</span>
                     </div>
 
@@ -1101,12 +1101,12 @@ export const BankYapoSection: React.FC = () => {
                     </div>
 
                     <div className="text-white font-bold flex justify-between">
-                      <span className="text-slate-300">🏦 Dinero en Banco (Bank):</span>
+                      <span className="text-slate-300">🏦 Dinero en Banco YA P (Bank):</span>
                       <span className="text-purple-300">S/ {account.bankBalance.toFixed(2)}</span>
                     </div>
 
                     <div className="text-white font-bold flex justify-between pt-1 border-t border-white/10">
-                      <span className="text-amber-300">💎 Patrimonio Total (Net Worth):</span>
+                      <span className="text-amber-300">💰 Dinero Total (Net Worth):</span>
                       <span className="text-amber-300">S/ {(account.bankBalance + account.cashBalance).toFixed(2)}</span>
                     </div>
                   </div>
@@ -1114,33 +1114,43 @@ export const BankYapoSection: React.FC = () => {
                   {/* Discord Commands Cheat Sheet */}
                   <div className="space-y-2">
                     <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                      Comandos Sincronizados de Discord:
+                      Comandos de Discord para Usuarios:
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
                       <div className="p-2.5 rounded-xl bg-black/40 border border-white/5">
-                        <strong className="text-purple-400">/saldo</strong> o <strong className="text-purple-400">/balance</strong>
-                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Muestra tu dinero en mano, banco y total.</p>
+                        <strong className="text-purple-400">/saldo</strong> o <strong className="text-purple-400">/ver-saldo</strong>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Muestra tu dinero en mano, banco y total en Soles.</p>
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-black/40 border border-white/5">
                         <strong className="text-teal-400">/retirar &lt;monto&gt;</strong>
-                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Saca efectivo del banco a tu mano.</p>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Saca dinero del Banco YA P a tu mano.</p>
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-black/40 border border-white/5">
                         <strong className="text-teal-400">/depositar &lt;monto&gt;</strong>
-                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Guarda tu dinero en mano en tu cuenta Yapo.</p>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Deposita dinero de tu mano al Banco YA P.</p>
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-black/40 border border-white/5">
-                        <strong className="text-amber-400">/transferir @usuario &lt;monto&gt;</strong>
-                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Envía un Yapeo a otro ciudadano.</p>
+                        <strong className="text-amber-400">/transferir &lt;dni o @usuario&gt; &lt;monto&gt;</strong>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Envía dinero por YA P con número de DNI o usuario de Roblox.</p>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-black/40 border border-white/5">
+                        <strong className="text-sky-400">/dni-ver &lt;dni o @usuario&gt;</strong>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Muestra la foto del DNI con botones [Anverso] y [Reverso].</p>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-black/40 border border-white/5">
+                        <strong className="text-emerald-400">/crear-dni</strong>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">Registra tus datos ciudadanos y foto de Roblox.</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="text-[11px] text-slate-400 bg-white/5 p-3 rounded-xl border border-white/5">
-                    💡 <em>Nota del Administrador:</em> Puedes vincular o modificar los tokens y webhooks de tu bot de Discord directamente desde el <strong>Panel de Administración</strong> en la pestaña <strong>Banco & Yapo</strong>.
+                    ⚙️ <em>Configuración de Administrador:</em> Todo lo referente a tokens, webhooks, base de datos y comandos se gestiona exclusivamente desde el <strong>Panel de Administración</strong> (no hay comandos administrativos en el bot).
                   </div>
                 </div>
               )}
@@ -1151,7 +1161,7 @@ export const BankYapoSection: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <YapoLogo size="md" />
                     <div>
-                      <h3 className="font-extrabold text-white text-lg">Billetera Digital Yapo PE:RP</h3>
+                      <h3 className="font-extrabold text-white text-lg">Billetera Digital YA P PE:RP</h3>
                       <p className="text-xs text-slate-300">Tu cuenta bancaria está activa y lista para operar.</p>
                     </div>
                   </div>
@@ -1164,8 +1174,8 @@ export const BankYapoSection: React.FC = () => {
                       <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
                         <Send className="w-5 h-5" />
                       </div>
-                      <h4 className="font-bold text-white text-sm mb-1">Yapear a un Ciudadano</h4>
-                      <p className="text-xs text-slate-400">Transfiere Soles mediante usuario de Roblox o DNI al instante.</p>
+                      <h4 className="font-bold text-white text-sm mb-1">Transferir por YA P</h4>
+                      <p className="text-xs text-slate-400">Transfiere Soles mediante número de DNI o usuario de Roblox al instante.</p>
                     </div>
 
                     <div

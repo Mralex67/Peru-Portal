@@ -300,7 +300,7 @@ export async function registerYapoAccount(params: {
     receiverName: newAccount.fullName,
     receiverAvatar: newAccount.avatarUrl,
     amount: initialBank,
-    description: 'Bono de Apertura y Bienvenida a Yapo PE:RP',
+    description: 'Bono de Apertura y Bienvenida a YA P PE:RP',
     timestamp: new Date().toISOString(),
   };
   const txs = getLocalYapoTransactions();
@@ -374,7 +374,7 @@ export async function transferYapo(params: {
 
   const sender = await getYapoAccountByDiscordId(senderDiscordId);
   if (!sender) {
-    return { success: false, error: 'Tu cuenta de Yapo no está activa. Debes afiliarte primero.' };
+    return { success: false, error: 'Tu cuenta de YA P no está activa. Debes afiliarte primero.' };
   }
 
   if (sender.status === 'frozen') {
@@ -387,7 +387,7 @@ export async function transferYapo(params: {
   if (sender.bankBalance < amount) {
     return {
       success: false,
-      error: `Saldo insuficiente. Tu saldo en Yapo es de S/. ${sender.bankBalance.toFixed(2)}, pero intentas transferir S/. ${amount.toFixed(2)}.`,
+      error: `Saldo insuficiente. Tu saldo en Banco YA P es de S/. ${sender.bankBalance.toFixed(2)}, pero intentas transferir S/. ${amount.toFixed(2)}.`,
     };
   }
 
@@ -396,7 +396,7 @@ export async function transferYapo(params: {
   if (!recipient) {
     return {
       success: false,
-      error: `Cuenta inexistente. No se encontró ningún usuario o DNI registrado como "${recipientIdentifier}" en Yapo.`,
+      error: `Cuenta inexistente. No se encontró ningún usuario o DNI registrado como "${recipientIdentifier}" en Banco YA P.`,
     };
   }
 
@@ -441,7 +441,7 @@ export async function transferYapo(params: {
     receiverName: recipient.fullName,
     receiverAvatar: recipient.avatarUrl,
     amount,
-    description: note?.trim() || 'Transferencia por Yapo PE:RP',
+    description: note?.trim() || 'Transferencia por YA P',
     timestamp: new Date().toISOString(),
   };
 
@@ -629,7 +629,7 @@ export async function depositCash(
     receiverName: account.fullName,
     receiverAvatar: account.avatarUrl,
     amount,
-    description: 'Depósito de dinero en mano al Banco Yapo',
+    description: 'Depósito de dinero en mano al Banco YA P',
     timestamp: new Date().toISOString(),
   };
 

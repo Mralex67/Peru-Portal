@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { PeruDni } from '../types/dni';
-import { getUserDni, saveUserDni, deleteUserDni } from '../lib/supabase';
+import { getUserDni, saveUserDni, deleteUserDni, updateUserDniPhoto } from '../lib/supabase';
 import { generateRandomPeruDniNumber, fetchRobloxAvatarUrl, DEFAULT_ROBLOX_AVATAR } from '../utils/roblox';
 import { playClickSound, playSuccessSound } from '../utils/audio';
 
@@ -32,6 +32,11 @@ export const PeruDniSection: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isFlipped, setIsFlipped] = useState(false);
+
+  // Avatar sync for existing DNI
+  const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
+  const [showAvatarSyncModal, setShowAvatarSyncModal] = useState(false);
+  const [newRobloxInput, setNewRobloxInput] = useState('');
 
   // Form states
   const [robloxUsername, setRobloxUsername] = useState('');
@@ -164,6 +169,45 @@ export const PeruDniSection: React.FC = () => {
       setExistingDni(null);
       setSuccessMessage('DNI reiniciado exitosamente. Ahora puedes tramitarlo de nuevo con tu foto de Roblox.');
       playSuccessSound();
+    }
+  };
+
+  // Sync / update Roblox Avatar for already issued DNI
+  const handleSyncExistingAvatar = async (targetUsername?: string) => {
+    if (!discordUser || !existingDni) return;
+    const userToFetch = (targetUsername || newRobloxInput || existingDni.robloxUsername).trim();
+    if (!userToFetch) return;
+
+    setIsSyncingAvatar(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    playClickSound();
+
+    try {
+      const res = await fetchRobloxAvatarUrl(userToFetch);
+      if (res.avatarUrl) {
+        await updateUserDniPhoto(discordUser.id, res.avatarUrl, userToFetch);
+        setExistingDni((prev: PeruDni | null) =>
+          prev
+            ? {
+                ...prev,
+                photoUrl: res.avatarUrl,
+                robloxUsername: userToFetch,
+                robloxUserId: res.userId || prev.robloxUserId,
+              }
+            : null
+        );
+        setSuccessMessage(`¡Foto de avatar de Roblox (@${userToFetch}) actualizada correctamente en tu DNI!`);
+        setShowAvatarSyncModal(false);
+        setNewRobloxInput('');
+        playSuccessSound();
+      } else {
+        setErrorMessage(res.message || 'No se pudo obtener el avatar de Roblox. Revisa el usuario o escribe tu ID.');
+      }
+    } catch {
+      setErrorMessage('Error al sincronizar avatar con Roblox.');
+    } finally {
+      setIsSyncingAvatar(false);
     }
   };
 
@@ -618,6 +662,86 @@ export const PeruDniSection: React.FC = () => {
                         <Database className="w-3.5 h-3.5" /> Supabase Activo
                       </span>
                     </div>
+                  </div>
+
+                  {/* Feedback banners */}
+                  {errorMessage && (
+                    <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-200 text-xs flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <span>{errorMessage}</span>
+                    </div>
+                  )}
+
+                  {successMessage && (
+                    <div className="p-3 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 text-xs flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>{successMessage}</span>
+                    </div>
+                  )}
+
+                  {/* Action: Sync Avatar with Roblox */}
+                  <div className="p-3.5 rounded-2xl bg-[#090d18] border border-sky-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white">Avatar de Roblox</div>
+                          <div className="text-[10px] text-slate-400">Usuario: @{existingDni.robloxUsername}</div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSyncExistingAvatar()}
+                        disabled={isSyncingAvatar}
+                        className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-md disabled:opacity-60"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAvatar ? 'animate-spin' : ''}`} />
+                        <span>{isSyncingAvatar ? 'Sincronizando...' : 'Actualizar Foto'}</span>
+                      </button>
+                    </div>
+
+                    {!showAvatarSyncModal ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowAvatarSyncModal(true)}
+                        className="text-[11px] text-sky-400 hover:text-sky-300 underline cursor-pointer block"
+                      >
+                        ¿Cambiaste de usuario o quieres ingresar tu ID de Roblox? Clic aquí
+                      </button>
+                    ) : (
+                      <div className="pt-2 border-t border-white/10 space-y-2">
+                        <div className="text-[11px] text-slate-300 font-medium">
+                          Ingresa tu nuevo Usuario o ID numérico de Roblox:
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={newRobloxInput}
+                            onChange={(e) => setNewRobloxInput(e.target.value)}
+                            placeholder="ej. TuNuevoUsuario o 3051711533"
+                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#070912] border border-white/20 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSyncExistingAvatar(newRobloxInput)}
+                            disabled={isSyncingAvatar || !newRobloxInput.trim()}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowAvatarSyncModal(false)}
+                            className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {existingDni.status === 'suspended' && (

@@ -66,7 +66,7 @@ export const Navbar: React.FC = () => {
             className="hover:text-purple-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 text-purple-400 font-bold"
           >
             <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
-            <span>Banco Yapo</span>
+            <span>Banco YA P</span>
           </a>
           <a
             href="#album"
@@ -169,7 +169,7 @@ export const Navbar: React.FC = () => {
                     className="w-full text-left px-3 py-2 text-xs text-purple-300 hover:text-white hover:bg-purple-950/30 rounded-lg flex items-center gap-2 cursor-pointer transition-colors font-semibold"
                   >
                     <YapoLogo size="sm" withContainer={false} className="w-3.5 h-3.5" />
-                    Mi Cuenta Yapo (S/.)
+                    Mi Cuenta YA P (S/.)
                   </a>
 
                   <button
@@ -234,7 +234,7 @@ export const Navbar: React.FC = () => {
             className="block text-purple-400 hover:text-purple-300 font-semibold py-1 flex items-center gap-2"
           >
             <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
-            <span>Banco Yapo (S/.)</span>
+            <span>Banco YA P (S/.)</span>
           </a>
           <a
             href="#album"
