@@ -6,8 +6,14 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  REST,
+  Routes,
+  SlashCommandBuilder,
 } from 'discord.js';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -18,35 +24,176 @@ const client = new Client({
   ],
 });
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
+// ==========================================
+// SUPABASE CLIENT INITIALIZATION (DIRECT CLOUD SYNC)
+// ==========================================
+const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const supabaseKey = (process.env.SUPABASE_ANON_KEY || '').trim();
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
-client.once('ready', () => {
-  console.log(`🤖 Bot oficial PE:RP conectado exitosamente como ${client.user.tag}`);
-  client.user.setActivity('Banco YA P | /ayuda', { type: 3 }); // Watching
-});
+if (supabase) {
+  console.log('⚡ Conectado directamente a Supabase Cloud (DNI y Banco YA P sincronizados en vivo con la Web).');
+} else {
+  console.log('ℹ️ Operando con base de datos local (agrega SUPABASE_URL y SUPABASE_ANON_KEY en tu .env para sincronizar con la web).');
+}
 
-// Helper: Make fetch request to the web API
-async function apiRequest(endpoint, options = {}) {
+// ==========================================
+// LOCAL DATABASE FALLBACK ENGINE
+// ==========================================
+const DB_FILE = path.resolve('.data/bot_system.json');
+
+function loadLocalDb() {
   try {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-    return await res.json();
-  } catch (err) {
-    console.error(`Error connecting to API ${endpoint}:`, err);
-    return { success: false, error: 'No se pudo contactar con la API central de PE:RP.' };
+    if (!fs.existsSync(DB_FILE)) {
+      const dir = path.dirname(DB_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const initial = { dnis: [], accounts: [], transactions: [] };
+      fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2));
+      return initial;
+    }
+    return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
+  } catch {
+    return { dnis: [], accounts: [], transactions: [] };
   }
 }
+
+function saveLocalDb(data) {
+  try {
+    const dir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('Error saving local bot DB:', e);
+  }
+}
+
+// Resolver avatar oficial de Roblox
+async function fetchRobloxUserAvatar(username) {
+  const clean = username.trim().replace(/^@/, '');
+  const defaultAvatar = 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter';
+  try {
+    const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usernames: [clean], excludeBannedUsers: false }),
+    });
+    if (userRes.ok) {
+      const userData = await userRes.json();
+      if (userData.data && userData.data.length > 0) {
+        const uId = userData.data[0].id.toString();
+        const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
+        if (thumbRes.ok) {
+          const thumbData = await thumbRes.json();
+          if (thumbData.data && thumbData.data[0]?.imageUrl) {
+            return { avatarUrl: thumbData.data[0].imageUrl, userId: uId };
+          }
+        }
+      }
+    }
+  } catch {}
+  return { avatarUrl: defaultAvatar, userId: '' };
+}
+
+// Definition of citizen Slash Commands
+const slashCommandsData = [
+  new SlashCommandBuilder()
+    .setName('crear-dni')
+    .setDescription('Registra tus datos ciudadanos y genera tu DNI peruano con tu avatar de Roblox')
+    .addStringOption((o) => o.setName('usuario_roblox').setDescription('Tu nombre de usuario exacto en Roblox').setRequired(true))
+    .addStringOption((o) => o.setName('nombres').setDescription('Tus prenombres (ej. Carlos Daniel)').setRequired(true))
+    .addStringOption((o) => o.setName('apellido_paterno').setDescription('Tu primer apellido (ej. Quispe)').setRequired(true))
+    .addStringOption((o) => o.setName('apellido_materno').setDescription('Tu segundo apellido (ej. Mamani)').setRequired(true))
+    .addStringOption((o) => o.setName('fecha_nacimiento').setDescription('Fecha AAAA-MM-DD (ej. 2002-05-14)').setRequired(false))
+    .addStringOption((o) =>
+      o.setName('sexo').setDescription('Sexo ciudadano (M o F)').setRequired(false)
+        .addChoices({ name: 'Masculino (M)', value: 'M' }, { name: 'Femenino (F)', value: 'F' })
+    ),
+  new SlashCommandBuilder()
+    .setName('dni-ver')
+    .setDescription('Muestra el DNI peruano oficial con foto de Roblox y botones de Anverso/Reverso')
+    .addStringOption((o) => o.setName('usuario_o_dni').setDescription('Número de DNI (8 dígitos) o usuario de Roblox').setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('saldo')
+    .setDescription('Consulta tu dinero: en mano (cash), banco (Banco YA P) y total')
+    .addStringOption((o) => o.setName('usuario_o_dni').setDescription('Usuario de Roblox o número de DNI a consultar').setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('transferir')
+    .setDescription('Transfiere Soles mediante Banco YA P a otro ciudadano por DNI o usuario de Roblox')
+    .addStringOption((o) => o.setName('destino').setDescription('DNI (8 dígitos) o usuario de Roblox del destinatario').setRequired(true))
+    .addNumberOption((o) => o.setName('monto').setDescription('Cantidad de Soles (S/.) a transferir').setRequired(true).setMinValue(0.1))
+    .addStringOption((o) => o.setName('motivo').setDescription('Motivo o concepto de la transferencia').setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('retirar')
+    .setDescription('Retira dinero de tu cuenta de Banco YA P hacia tu mano (efectivo en mano)')
+    .addNumberOption((o) => o.setName('monto').setDescription('Cantidad en Soles a retirar').setRequired(true).setMinValue(0.1)),
+  new SlashCommandBuilder()
+    .setName('depositar')
+    .setDescription('Deposita dinero en efectivo de tu mano hacia tu cuenta de Banco YA P')
+    .addNumberOption((o) => o.setName('monto').setDescription('Cantidad en Soles a depositar').setRequired(true).setMinValue(0.1)),
+  new SlashCommandBuilder()
+    .setName('historial')
+    .setDescription('Revisa los últimos movimientos y comprobantes de tu Banco YA P')
+    .addStringOption((o) => o.setName('usuario_o_dni').setDescription('Usuario de Roblox o DNI').setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('ayuda')
+    .setDescription('Guía de comandos ciudadanos de PE:RP y Banco YA P'),
+].map((c) => c.toJSON());
+
+client.once('ready', async () => {
+  console.log(`🤖 Bot oficial PE:RP conectado exitosamente como ${client.user.tag}`);
+  console.log(`🆔 ID de Aplicación del Bot: ${client.user.id}`);
+  client.user.setActivity('Banco YA P | /ayuda', { type: 3 });
+
+  // AUTO-REGISTRO SEGURO DE COMANDOS SLASH EN DISCORD
+  try {
+    const token = process.env.DISCORD_TOKEN;
+    const realClientId = client.user.id;
+    const guildId = process.env.GUILD_ID;
+
+    if (token) {
+      console.log(`🚀 Registrando automáticamente ${slashCommandsData.length} comandos Slash en Discord para App ${realClientId}...`);
+      const rest = new REST({ version: '10' }).setToken(token);
+
+      // 1. Si especificó GUILD_ID en .env, registrar ahí de inmediato
+      if (guildId && guildId !== 'tu_guild_id_aqui') {
+        try {
+          await rest.put(Routes.applicationGuildCommands(realClientId, guildId), { body: slashCommandsData });
+          console.log(`⚡ ¡Comandos registrados INSTANTÁNEAMENTE en el servidor Guild (${guildId})!`);
+        } catch (guildErr) {
+          console.warn(`Aviso al registrar en Guild ${guildId}:`, guildErr.message);
+        }
+      }
+
+      // 2. Registrar en servidores en caché
+      const cachedGuilds = client.guilds.cache;
+      for (const [gId, guild] of cachedGuilds) {
+        if (gId !== guildId) {
+          try {
+            await rest.put(Routes.applicationGuildCommands(realClientId, gId), { body: slashCommandsData });
+            console.log(`⚡ ¡Comandos registrados INSTANTÁNEAMENTE en servidor "${guild.name}" (${gId})!`);
+          } catch (err) {
+            console.warn(`Aviso al registrar comandos en servidor ${gId}:`, err.message);
+          }
+        }
+      }
+
+      // 3. Limpiar comandos globales para evitar comandos duplicados en la lista del servidor
+      try {
+        await rest.put(Routes.applicationCommands(realClientId), { body: [] });
+        console.log('🧹 Comandos globales duplicados limpiados con éxito (lista limpia 1:1 en Discord).');
+      } catch (cleanErr) {
+        // Ignorar si no hay comandos globales previos
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error registrando comandos Slash automáticamente:', error);
+  }
+});
 
 // Helper: Build DNI Front Embed
 function buildDniFrontEmbed(dni) {
   return new EmbedBuilder()
-    .setColor(0x0284c7) // Sky blue (DNI electrónico)
+    .setColor(0x0284c7)
     .setTitle('🇵🇪 REPÚBLICA DEL PERÚ — DOCUMENTO NACIONAL DE IDENTIDAD')
     .setDescription('**REGISTRO NACIONAL DE IDENTIFICACIÓN Y ESTADO CIVIL (RENIEC)**\n*DNI Electrónico Ciudadano Oficial PE:RP*')
     .setThumbnail(dni.photoUrl || 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter')
@@ -98,7 +245,7 @@ function buildDniBackEmbed(dni) {
     .setTimestamp();
 }
 
-// Helper: Navigation Buttons for DNI
+// Botones interactivos Anverso / Reverso
 function buildDniButtonRow(currentSide = 'front') {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -114,90 +261,177 @@ function buildDniButtonRow(currentSide = 'front') {
   );
 }
 
-// Interaction handling
+// ==========================================
+// INTERACTION HANDLING (SUPABASE + LOCAL ENGINE)
+// ==========================================
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
+    const db = loadLocalDb();
 
     // 1. /crear-dni
     if (commandName === 'crear-dni') {
       await interaction.deferReply();
 
-      const robloxUsername = interaction.options.getString('usuario_roblox');
-      const prenames = interaction.options.getString('nombres');
-      const firstSurname = interaction.options.getString('apellido_paterno');
-      const secondSurname = interaction.options.getString('apellido_materno');
+      const robloxUsername = interaction.options.getString('usuario_roblox').trim();
+      const prenames = interaction.options.getString('nombres').trim();
+      const firstSurname = interaction.options.getString('apellido_paterno').trim();
+      const secondSurname = interaction.options.getString('apellido_materno').trim();
       const birthDate = interaction.options.getString('fecha_nacimiento') || '2000-01-01';
-      const gender = interaction.options.getString('sexo') || 'M';
+      const gender = (interaction.options.getString('sexo') || 'M').toUpperCase();
 
-      const res = await apiRequest('/api/bot/dni/create', {
-        method: 'POST',
-        body: JSON.stringify({
-          discordId: interaction.user.id,
-          robloxUsername,
-          prenames,
-          firstSurname,
-          secondSurname,
-          birthDate,
-          gender,
-        }),
-      });
+      let dni;
 
-      if (!res.success) {
-        return interaction.editReply({
-          content: `❌ **Error al tramitar DNI:** ${res.error || 'Ocurrió un error inesperado.'}`,
-        });
+      if (supabase) {
+        try {
+          // Verificar si ya existe en Supabase
+          const { data: existing } = await supabase
+            .from('peru_dnis')
+            .select('*')
+            .or(`discord_id.eq.${interaction.user.id},roblox_username.ilike.${robloxUsername}`)
+            .maybeSingle();
+
+          if (existing) {
+            return interaction.editReply({
+              content: `❌ **Ya posees un DNI emitido:** N° \`${existing.dni_number}\` (@${existing.roblox_username}). Usa \`/dni-ver\` para consultarlo.`,
+            });
+          }
+
+          const robloxInfo = await fetchRobloxUserAvatar(robloxUsername);
+          const dniNumber = (Math.floor(10000000 + Math.random() * 90000000)).toString();
+          const fullName = `${firstSurname.toUpperCase()} ${secondSurname.toUpperCase()} ${prenames.toUpperCase()}`.trim();
+
+          const insertPayload = {
+            discord_id: interaction.user.id,
+            discord_username: interaction.user.username,
+            discord_display_name: interaction.user.displayName || interaction.user.username,
+            roblox_username: robloxUsername,
+            roblox_user_id: robloxInfo.userId || null,
+            dni_number: dniNumber,
+            verify_digit: '7',
+            full_name: fullName,
+            first_surname: firstSurname.toUpperCase(),
+            second_surname: secondSurname.toUpperCase(),
+            given_names: prenames.toUpperCase(),
+            birth_date: birthDate,
+            gender,
+            photo_url: robloxInfo.avatarUrl,
+            status: 'active',
+          };
+
+          await supabase.from('peru_dnis').insert([insertPayload]);
+
+          // Crear cuenta en yapo_accounts en Supabase
+          await supabase.from('yapo_accounts').upsert([
+            {
+              discord_id: interaction.user.id,
+              discord_username: interaction.user.username,
+              roblox_username: robloxUsername,
+              dni_number: dniNumber,
+              verify_digit: '7',
+              full_name: fullName,
+              avatar_url: robloxInfo.avatarUrl,
+              bank_balance: 1000.0,
+              cash_balance: 250.0,
+              status: 'active',
+            },
+          ], { onConflict: 'discord_id' });
+
+          // Registrar bono de bienvenida en transacciones
+          await supabase.from('yapo_transactions').insert([
+            {
+              operation_number: `OP-${Math.floor(100000 + Math.random() * 900000)}`,
+              type: 'welcome_bonus',
+              receiver_dni: dniNumber,
+              receiver_roblox: robloxUsername,
+              receiver_name: fullName,
+              receiver_avatar: robloxInfo.avatarUrl,
+              amount: 1000.0,
+              description: 'Bono de Apertura y Bienvenida Banco YA P',
+            },
+          ]);
+
+          dni = {
+            dniNumber,
+            discordId: interaction.user.id,
+            robloxUsername,
+            fullName,
+            firstSurname: firstSurname.toUpperCase(),
+            secondSurname: secondSurname.toUpperCase(),
+            prenames: prenames.toUpperCase(),
+            birthDate,
+            gender,
+            photoUrl: robloxInfo.avatarUrl,
+            department: 'LIMA',
+            province: 'LIMA',
+            district: 'MIRAFLORES',
+          };
+        } catch (supaErr) {
+          console.error('Error insertando en Supabase:', supaErr);
+        }
       }
 
-      const dni = res.dni;
-      const embed = buildDniFrontEmbed(dni);
-      const row = buildDniButtonRow('front');
+      // Si no hay Supabase o falló la conexión, usar motor local
+      if (!dni) {
+        const existing = db.dnis.find(
+          (d) => d.discordId === interaction.user.id || d.robloxUsername?.toLowerCase() === robloxUsername.toLowerCase()
+        );
 
-      const reply = await interaction.editReply({
-        content: `🎉 **¡DNI tramitado con éxito!** Se te ha asignado el DNI **${dni.dniNumber}** con tu avatar oficial de Roblox (@${dni.robloxUsername}) y se te acreditó un bono de bienvenida en tu **Banco YA P**.`,
-        embeds: [embed],
-        components: [row],
-      });
-
-      // Collector for flipping buttons
-      const collector = reply.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: 120000, // 2 minutes
-      });
-
-      collector.on('collect', async (i) => {
-        if (i.customId === 'btn_dni_front') {
-          await i.update({
-            embeds: [buildDniFrontEmbed(dni)],
-            components: [buildDniButtonRow('front')],
-          });
-        } else if (i.customId === 'btn_dni_back') {
-          await i.update({
-            embeds: [buildDniBackEmbed(dni)],
-            components: [buildDniButtonRow('back')],
+        if (existing) {
+          return interaction.editReply({
+            content: `❌ **Ya tienes un DNI emitido:** N° \`${existing.dniNumber}\` (@${existing.robloxUsername}). Usa \`/dni-ver\` para consultarlo.`,
           });
         }
-      });
-    }
 
-    // 2. /dni-ver
-    else if (commandName === 'dni-ver') {
-      await interaction.deferReply();
-      const identifier = interaction.options.getString('usuario_o_dni') || interaction.user.id;
+        const robloxInfo = await fetchRobloxUserAvatar(robloxUsername);
+        const dniNumber = (Math.floor(10000000 + Math.random() * 90000000)).toString();
+        const fullName = `${firstSurname.toUpperCase()} ${secondSurname.toUpperCase()} ${prenames.toUpperCase()}`.trim();
 
-      const res = await apiRequest(`/api/bot/dni/${encodeURIComponent(identifier)}`);
+        dni = {
+          dniNumber,
+          discordId: interaction.user.id,
+          robloxUsername,
+          fullName,
+          firstSurname: firstSurname.toUpperCase(),
+          secondSurname: secondSurname.toUpperCase(),
+          prenames: prenames.toUpperCase(),
+          birthDate,
+          gender,
+          photoUrl: robloxInfo.avatarUrl,
+          department: 'LIMA',
+          province: 'LIMA',
+          district: 'MIRAFLORES',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        };
 
-      if (!res.success || !res.found) {
-        return interaction.editReply({
-          content: `❌ **No encontrado:** No se encontró ningún DNI registrado para \`${identifier}\`.\nPuedes registrarte con \`/crear-dni\` o en la página web oficial.`,
-        });
+        db.dnis.unshift(dni);
+
+        let acc = db.accounts.find((a) => a.discordId === interaction.user.id || a.dniNumber === dniNumber);
+        if (!acc) {
+          acc = {
+            id: `acc-${Date.now()}`,
+            dniNumber,
+            discordId: interaction.user.id,
+            robloxUsername,
+            fullName,
+            avatarUrl: robloxInfo.avatarUrl,
+            bankBalance: 1000.0,
+            cashBalance: 250.0,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          db.accounts.unshift(acc);
+        }
+        saveLocalDb(db);
       }
 
-      const dni = res.dni;
       const embed = buildDniFrontEmbed(dni);
       const row = buildDniButtonRow('front');
 
       const reply = await interaction.editReply({
+        content: `🎉 **¡DNI tramitado con éxito!** Se te ha asignado el DNI **${dni.dniNumber}** con tu avatar oficial de Roblox (@${dni.robloxUsername}) y se habilitó tu cuenta en **Banco YA P**.`,
         embeds: [embed],
         components: [row],
       });
@@ -209,15 +443,87 @@ client.on('interactionCreate', async (interaction) => {
 
       collector.on('collect', async (i) => {
         if (i.customId === 'btn_dni_front') {
-          await i.update({
-            embeds: [buildDniFrontEmbed(dni)],
-            components: [buildDniButtonRow('front')],
-          });
+          await i.update({ embeds: [buildDniFrontEmbed(dni)], components: [buildDniButtonRow('front')] });
         } else if (i.customId === 'btn_dni_back') {
-          await i.update({
-            embeds: [buildDniBackEmbed(dni)],
-            components: [buildDniButtonRow('back')],
-          });
+          await i.update({ embeds: [buildDniBackEmbed(dni)], components: [buildDniButtonRow('back')] });
+        }
+      });
+    }
+
+    // 2. /dni-ver
+    else if (commandName === 'dni-ver') {
+      await interaction.deferReply();
+      const identifier = interaction.options.getString('usuario_o_dni') || interaction.user.id;
+      const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+
+      let dni = null;
+
+      // 1. Consultar en Supabase
+      if (supabase) {
+        try {
+          let query = supabase.from('peru_dnis').select('*');
+          if (clean.length === 8 && /^\d+$/.test(clean)) {
+            query = query.eq('dni_number', clean);
+          } else if (/^\d{17,20}$/.test(clean)) {
+            query = query.eq('discord_id', clean);
+          } else {
+            query = query.or(`roblox_username.ilike.${clean},discord_id.eq.${clean},dni_number.eq.${clean}`);
+          }
+
+          const { data: row } = await query.maybeSingle();
+          if (row) {
+            dni = {
+              dniNumber: row.dni_number,
+              discordId: row.discord_id,
+              robloxUsername: row.roblox_username,
+              fullName: row.full_name,
+              firstSurname: row.first_surname || 'QUISPE',
+              secondSurname: row.second_surname || 'MAMANI',
+              prenames: row.given_names || 'CIUDADANO',
+              birthDate: row.birth_date || '2000-01-01',
+              gender: row.gender || 'M',
+              photoUrl: row.photo_url,
+              status: row.status || 'active',
+              department: 'LIMA',
+              province: 'LIMA',
+              district: 'MIRAFLORES',
+            };
+          }
+        } catch (e) {
+          console.error('Error buscando DNI en Supabase:', e);
+        }
+      }
+
+      // 2. Fallback a BD local
+      if (!dni) {
+        dni = db.dnis.find(
+          (d) =>
+            d.dniNumber?.toLowerCase() === clean ||
+            d.discordId?.toLowerCase() === clean ||
+            d.robloxUsername?.toLowerCase() === clean
+        );
+      }
+
+      if (!dni) {
+        return interaction.editReply({
+          content: `❌ **No encontrado:** No se encontró ningún DNI registrado para \`${identifier}\`.\nPuedes tramitarlo en Discord con \`/crear-dni\` o en la web oficial.`,
+        });
+      }
+
+      const embed = buildDniFrontEmbed(dni);
+      const row = buildDniButtonRow('front');
+
+      const reply = await interaction.editReply({ embeds: [embed], components: [row] });
+      const collector = reply.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 120000,
+      });
+
+      collector.on('collect', async (i) => {
+        if (i.customId === 'btn_dni_front') {
+          await i.update({ embeds: [buildDniFrontEmbed(dni)], components: [buildDniButtonRow('front')] });
+        } else if (i.customId === 'btn_dni_back') {
+          await i.update({ embeds: [buildDniBackEmbed(dni)], components: [buildDniButtonRow('back')] });
         }
       });
     }
@@ -226,42 +532,100 @@ client.on('interactionCreate', async (interaction) => {
     else if (commandName === 'saldo') {
       await interaction.deferReply();
       const identifier = interaction.options.getString('usuario_o_dni') || interaction.user.id;
+      const clean = identifier.trim().toLowerCase().replace(/^@/, '');
 
-      const res = await apiRequest(`/api/bot/bank/balance/${encodeURIComponent(identifier)}`);
+      let acc = null;
 
-      if (!res.success || !res.found) {
+      // 1. Consultar en Supabase
+      if (supabase) {
+        try {
+          let query = supabase.from('yapo_accounts').select('*');
+          if (clean.length === 8 && /^\d+$/.test(clean)) {
+            query = query.eq('dni_number', clean);
+          } else if (/^\d{17,20}$/.test(clean)) {
+            query = query.eq('discord_id', clean);
+          } else {
+            query = query.or(`roblox_username.ilike.${clean},dni_number.eq.${clean},discord_id.eq.${clean}`);
+          }
+
+          const { data: row } = await query.maybeSingle();
+          if (row) {
+            acc = {
+              dniNumber: row.dni_number,
+              discordId: row.discord_id,
+              robloxUsername: row.roblox_username,
+              fullName: row.full_name,
+              avatarUrl: row.avatar_url,
+              bankBalance: Number(row.bank_balance) || 0,
+              cashBalance: Number(row.cash_balance) || 0,
+            };
+          } else {
+            // Si no tiene fila en yapo_accounts pero sí tiene DNI, crearle su cuenta automáticamente
+            const { data: dniRow } = await supabase
+              .from('peru_dnis')
+              .select('*')
+              .or(`discord_id.eq.${clean},dni_number.eq.${clean},roblox_username.ilike.${clean}`)
+              .maybeSingle();
+
+            if (dniRow) {
+              const newAccRow = {
+                discord_id: dniRow.discord_id,
+                discord_username: dniRow.discord_username,
+                roblox_username: dniRow.roblox_username,
+                dni_number: dniRow.dni_number,
+                verify_digit: '7',
+                full_name: dniRow.full_name,
+                avatar_url: dniRow.photo_url,
+                bank_balance: 1000.0,
+                cash_balance: 250.0,
+                status: 'active',
+              };
+              await supabase.from('yapo_accounts').insert([newAccRow]);
+              acc = {
+                dniNumber: newAccRow.dni_number,
+                discordId: newAccRow.discord_id,
+                robloxUsername: newAccRow.roblox_username,
+                fullName: newAccRow.full_name,
+                avatarUrl: newAccRow.avatar_url,
+                bankBalance: 1000.0,
+                cashBalance: 250.0,
+              };
+            }
+          }
+        } catch (e) {
+          console.error('Error consultando saldo en Supabase:', e);
+        }
+      }
+
+      // 2. Fallback a BD local
+      if (!acc) {
+        acc = db.accounts.find(
+          (a) =>
+            a.dniNumber?.toLowerCase() === clean ||
+            a.discordId?.toLowerCase() === clean ||
+            a.robloxUsername?.toLowerCase() === clean
+        );
+      }
+
+      if (!acc) {
         return interaction.editReply({
-          content: `❌ **Cuenta no encontrada:** ${res.message || `No hay cuenta en Banco YA P para ${identifier}.`}\nCrea tu DNI primero con \`/crear-dni\`.`,
+          content: `❌ **Cuenta no encontrada:** No se encontró cuenta bancaria para \`${identifier}\`.\nCrea tu DNI primero con \`/crear-dni\` o en la página web.`,
         });
       }
 
-      const acc = res.account;
+      const totalBalance = Number(acc.cashBalance || 0) + Number(acc.bankBalance || 0);
+
       const embed = new EmbedBuilder()
-        .setColor(0x8b5cf6) // Purple YA P
+        .setColor(0x8b5cf6)
         .setTitle(`🏦 Estado de Cuenta Bancaria — @${acc.robloxUsername}`)
         .setDescription(`**Banco YA P & Billetera Móvil Oficial PE:RP**\nTitular: **${acc.fullName}** | DNI: \`${acc.dniNumber}\``)
         .setThumbnail(acc.avatarUrl)
         .addFields(
-          {
-            name: '💵 Dinero en Mano (Efectivo)',
-            value: `\`S/. ${acc.cashBalance.toFixed(2)}\``,
-            inline: false,
-          },
-          {
-            name: '🏦 Dinero en Banco (Banco YA P)',
-            value: `\`S/. ${acc.bankBalance.toFixed(2)}\``,
-            inline: false,
-          },
-          {
-            name: '💰 Dinero Total (Patrimonio Neto)',
-            value: `**\`S/. ${acc.totalBalance.toFixed(2)}\`**`,
-            inline: false,
-          }
+          { name: '💵 Dinero en Mano (Efectivo)', value: `\`S/. ${Number(acc.cashBalance).toFixed(2)}\``, inline: false },
+          { name: '🏦 Dinero en Banco (Banco YA P)', value: `\`S/. ${Number(acc.bankBalance).toFixed(2)}\``, inline: false },
+          { name: '💰 Dinero Total (Patrimonio)', value: `**\`S/. ${Number(totalBalance).toFixed(2)}\`**`, inline: false }
         )
-        .setFooter({
-          text: 'Banco YA P PE:RP • Retira a la mano con /retirar o deposita con /depositar',
-          iconURL: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
-        })
+        .setFooter({ text: 'Banco YA P PE:RP • Retira con /retirar o deposita con /depositar' })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
@@ -272,41 +636,111 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply();
       const destino = interaction.options.getString('destino');
       const monto = interaction.options.getNumber('monto');
-      const motivo = interaction.options.getString('motivo') || 'Transferencia por YA P';
+      const motivo = interaction.options.getString('motivo') || 'Transferencia por Banco YA P';
+      const cleanDestino = destino.trim().toLowerCase().replace(/^@/, '');
 
-      const res = await apiRequest('/api/bot/bank/transfer', {
-        method: 'POST',
-        body: JSON.stringify({
-          senderIdentifier: interaction.user.id,
-          recipientIdentifier: destino,
-          amount: monto,
-          note: motivo,
-        }),
-      });
+      if (supabase) {
+        try {
+          // Obtener emisor
+          const { data: sender } = await supabase
+            .from('yapo_accounts')
+            .select('*')
+            .eq('discord_id', interaction.user.id)
+            .maybeSingle();
 
-      if (!res.success) {
-        return interaction.editReply({
-          content: `❌ **Error en transferencia:** ${res.error || 'No se pudo completar el envío de dinero.'}`,
-        });
+          if (!sender) {
+            return interaction.editReply({ content: '❌ **No tienes cuenta:** Tramita tu DNI primero con `/crear-dni`.' });
+          }
+
+          if (Number(sender.bank_balance) < monto) {
+            return interaction.editReply({
+              content: `❌ **Saldo insuficiente:** Tienes \`S/. ${Number(sender.bank_balance).toFixed(2)}\` en tu banco.`,
+            });
+          }
+
+          // Obtener receptor
+          let queryRec = supabase.from('yapo_accounts').select('*');
+          if (cleanDestino.length === 8 && /^\d+$/.test(cleanDestino)) {
+            queryRec = queryRec.eq('dni_number', cleanDestino);
+          } else {
+            queryRec = queryRec.or(`dni_number.eq.${cleanDestino},roblox_username.ilike.${cleanDestino}`);
+          }
+          const { data: receiver } = await queryRec.maybeSingle();
+
+          if (!receiver) {
+            return interaction.editReply({ content: `❌ **Destinatario no encontrado:** No existe cuenta con DNI o usuario \`${destino}\`.` });
+          }
+
+          if (sender.dni_number === receiver.dni_number) {
+            return interaction.editReply({ content: '❌ **Error:** No puedes transferirte a ti mismo.' });
+          }
+
+          // Ejecutar transferencia en Supabase
+          const newSenderBank = Number(sender.bank_balance) - monto;
+          const newReceiverBank = Number(receiver.bank_balance) + monto;
+
+          await supabase.from('yapo_accounts').update({ bank_balance: newSenderBank }).eq('id', sender.id);
+          await supabase.from('yapo_accounts').update({ bank_balance: newReceiverBank }).eq('id', receiver.id);
+
+          const opNumber = `OP-${Math.floor(100000 + Math.random() * 900000)}`;
+          await supabase.from('yapo_transactions').insert([
+            {
+              operation_number: opNumber,
+              type: 'transfer',
+              sender_dni: sender.dni_number,
+              sender_roblox: sender.roblox_username,
+              sender_name: sender.full_name,
+              receiver_dni: receiver.dni_number,
+              receiver_roblox: receiver.roblox_username,
+              receiver_name: receiver.full_name,
+              amount: monto,
+              description: motivo,
+            },
+          ]);
+
+          const voucherEmbed = new EmbedBuilder()
+            .setColor(0x10b981)
+            .setTitle('✅ ¡YA P Enviado con Éxito!')
+            .setDescription(`**COMPROBANTE ELECTRÓNICO OFICIAL DE BANCO YA P**\nOperación: \`${opNumber}\``)
+            .addFields(
+              { name: '📤 Emisor', value: `@${sender.roblox_username} (DNI: \`${sender.dni_number}\`)`, inline: true },
+              { name: '📥 Destinatario', value: `${receiver.full_name} (@${receiver.roblox_username})\nDNI: \`${receiver.dni_number}\``, inline: true },
+              { name: '💸 Monto Transferido', value: `**S/. ${monto.toFixed(2)}**`, inline: false },
+              { name: '📝 Motivo', value: motivo, inline: true },
+              { name: '🏦 Saldo Restante en Banco', value: `S/. ${newSenderBank.toFixed(2)}`, inline: true }
+            )
+            .setFooter({ text: 'Banco YA P • Tu dinero seguro e instantáneo en PE:RP Streets' })
+            .setTimestamp();
+
+          return interaction.editReply({ embeds: [voucherEmbed] });
+        } catch (supaErr) {
+          console.error('Error transfiriendo en Supabase:', supaErr);
+        }
       }
 
-      const voucherEmbed = new EmbedBuilder()
-        .setColor(0x10b981) // Green success
-        .setTitle('✅ ¡YA P Enviado con Éxito!')
-        .setDescription(`**COMPROBANTE ELECTRÓNICO OFICIAL DE BANCO YA P**\nOperación: \`${res.operationNumber}\``)
-        .addFields(
-          { name: '📤 Emisor', value: `@${res.sender.robloxUsername} (DNI: \`${res.sender.dniNumber}\`)`, inline: true },
-          { name: '📥 Destinatario', value: `${res.recipient.fullName} (@${res.recipient.robloxUsername})\nDNI: \`${res.recipient.dniNumber}\``, inline: true },
-          { name: '💸 Monto Transferido', value: `**S/. ${res.amount.toFixed(2)}**`, inline: false },
-          { name: '📝 Motivo / Nota', value: res.note || 'Sin nota', inline: true },
-          { name: '🏦 Nuevo Saldo en Banco', value: `S/. ${res.sender.newBankBalance.toFixed(2)}`, inline: true }
-        )
-        .setFooter({
-          text: 'Banco YA P • Tu dinero seguro e instantáneo en PE:RP Streets',
-        })
-        .setTimestamp();
+      // Fallback local
+      const senderAcc = db.accounts.find((a) => a.discordId === interaction.user.id);
+      if (!senderAcc) return interaction.editReply({ content: '❌ **No tienes cuenta:** Crea tu DNI primero.' });
+      if (senderAcc.bankBalance < monto) return interaction.editReply({ content: '❌ **Saldo insuficiente.**' });
 
-      await interaction.editReply({ embeds: [voucherEmbed] });
+      const recipientAcc = db.accounts.find((a) => a.dniNumber?.toLowerCase() === cleanDestino || a.robloxUsername?.toLowerCase() === cleanDestino);
+      if (!recipientAcc) return interaction.editReply({ content: '❌ **Destinatario no encontrado.**' });
+
+      senderAcc.bankBalance -= monto;
+      recipientAcc.bankBalance += monto;
+      const op = `OP-${Math.floor(100000 + Math.random() * 900000)}`;
+      saveLocalDb(db);
+
+      const voucher = new EmbedBuilder()
+        .setColor(0x10b981)
+        .setTitle('✅ ¡YA P Enviado con Éxito!')
+        .setDescription(`Operación: \`${op}\``)
+        .addFields(
+          { name: '📤 Emisor', value: `@${senderAcc.robloxUsername}`, inline: true },
+          { name: '📥 Destinatario', value: `@${recipientAcc.robloxUsername}`, inline: true },
+          { name: '💸 Monto', value: `S/. ${monto.toFixed(2)}`, inline: false }
+        );
+      await interaction.editReply({ embeds: [voucher] });
     }
 
     // 5. /retirar
@@ -314,32 +748,38 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply();
       const monto = interaction.options.getNumber('monto');
 
-      const res = await apiRequest('/api/bot/bank/withdraw', {
-        method: 'POST',
-        body: JSON.stringify({
-          identifier: interaction.user.id,
-          amount: monto,
-        }),
-      });
+      if (supabase) {
+        try {
+          const { data: acc } = await supabase.from('yapo_accounts').select('*').eq('discord_id', interaction.user.id).maybeSingle();
+          if (!acc) return interaction.editReply({ content: '❌ **No tienes cuenta.**' });
+          if (Number(acc.bank_balance) < monto) return interaction.editReply({ content: '❌ **Fondos insuficientes en banco.**' });
 
-      if (!res.success) {
-        return interaction.editReply({
-          content: `❌ **Error al retirar:** ${res.error || 'No se pudo retirar el dinero.'}`,
-        });
+          const newBank = Number(acc.bank_balance) - monto;
+          const newCash = Number(acc.cash_balance) + monto;
+          await supabase.from('yapo_accounts').update({ bank_balance: newBank, cash_balance: newCash }).eq('id', acc.id);
+
+          const embed = new EmbedBuilder()
+            .setColor(0x14b8a6)
+            .setTitle('🏧 Cajero Automático: Retiro Exitoso')
+            .setDescription(`Has retirado **S/. ${monto.toFixed(2)}** de tu Banco YA P a tu mano.`)
+            .addFields(
+              { name: '💵 Efectivo en Mano', value: `S/. ${newCash.toFixed(2)}`, inline: true },
+              { name: '🏦 Saldo en Banco YA P', value: `S/. ${newBank.toFixed(2)}`, inline: true }
+            );
+          return interaction.editReply({ embeds: [embed] });
+        } catch (e) {
+          console.error(e);
+        }
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(0x14b8a6) // Teal
-        .setTitle('🏧 Cajero Automático: Retiro Exitoso')
-        .setDescription(`Has retirado **S/. ${monto.toFixed(2)}** de tu Banco YA P a tu mano.`)
-        .addFields(
-          { name: '💵 Efectivo en Mano', value: `S/. ${res.cashBalance.toFixed(2)}`, inline: true },
-          { name: '🏦 Saldo en Banco YA P', value: `S/. ${res.bankBalance.toFixed(2)}`, inline: true },
-          { name: '💰 Total', value: `S/. ${res.totalBalance.toFixed(2)}`, inline: true }
-        )
-        .setTimestamp();
-
-      await interaction.editReply({ embeds: [embed] });
+      // Local fallback
+      const acc = db.accounts.find((a) => a.discordId === interaction.user.id);
+      if (!acc) return interaction.editReply({ content: '❌ **No tienes cuenta.**' });
+      if (acc.bankBalance < monto) return interaction.editReply({ content: '❌ **Fondos insuficientes.**' });
+      acc.bankBalance -= monto;
+      acc.cashBalance += monto;
+      saveLocalDb(db);
+      await interaction.editReply({ content: `✅ Retiraste **S/. ${monto.toFixed(2)}** de tu banco a tu mano.` });
     }
 
     // 6. /depositar
@@ -347,52 +787,73 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply();
       const monto = interaction.options.getNumber('monto');
 
-      const res = await apiRequest('/api/bot/bank/deposit', {
-        method: 'POST',
-        body: JSON.stringify({
-          identifier: interaction.user.id,
-          amount: monto,
-        }),
-      });
+      if (supabase) {
+        try {
+          const { data: acc } = await supabase.from('yapo_accounts').select('*').eq('discord_id', interaction.user.id).maybeSingle();
+          if (!acc) return interaction.editReply({ content: '❌ **No tienes cuenta.**' });
+          if (Number(acc.cash_balance) < monto) return interaction.editReply({ content: '❌ **Fondos insuficientes en mano.**' });
 
-      if (!res.success) {
-        return interaction.editReply({
-          content: `❌ **Error al depositar:** ${res.error || 'No se pudo depositar el dinero.'}`,
-        });
+          const newBank = Number(acc.bank_balance) + monto;
+          const newCash = Number(acc.cash_balance) - monto;
+          await supabase.from('yapo_accounts').update({ bank_balance: newBank, cash_balance: newCash }).eq('id', acc.id);
+
+          const embed = new EmbedBuilder()
+            .setColor(0xa855f7)
+            .setTitle('🏦 Depósito Exitoso')
+            .setDescription(`Has depositado **S/. ${monto.toFixed(2)}** de tu mano en tu cuenta bancaria.`)
+            .addFields(
+              { name: '💵 Efectivo en Mano', value: `S/. ${newCash.toFixed(2)}`, inline: true },
+              { name: '🏦 Saldo en Banco YA P', value: `S/. ${newBank.toFixed(2)}`, inline: true }
+            );
+          return interaction.editReply({ embeds: [embed] });
+        } catch (e) {
+          console.error(e);
+        }
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(0xa855f7)
-        .setTitle('🏦 Depósito en Banco YA P Exitoso')
-        .setDescription(`Has depositado **S/. ${monto.toFixed(2)}** de tu mano en tu cuenta bancaria.`)
-        .addFields(
-          { name: '💵 Efectivo en Mano', value: `S/. ${res.cashBalance.toFixed(2)}`, inline: true },
-          { name: '🏦 Saldo en Banco YA P', value: `S/. ${res.bankBalance.toFixed(2)}`, inline: true },
-          { name: '💰 Total', value: `S/. ${res.totalBalance.toFixed(2)}`, inline: true }
-        )
-        .setTimestamp();
-
-      await interaction.editReply({ embeds: [embed] });
+      // Local fallback
+      const acc = db.accounts.find((a) => a.discordId === interaction.user.id);
+      if (!acc) return interaction.editReply({ content: '❌ **No tienes cuenta.**' });
+      if (acc.cashBalance < monto) return interaction.editReply({ content: '❌ **Fondos insuficientes en mano.**' });
+      acc.cashBalance -= monto;
+      acc.bankBalance += monto;
+      saveLocalDb(db);
+      await interaction.editReply({ content: `✅ Depositaste **S/. ${monto.toFixed(2)}** en tu cuenta de Banco YA P.` });
     }
 
     // 7. /historial
     else if (commandName === 'historial') {
       await interaction.deferReply();
       const identifier = interaction.options.getString('usuario_o_dni') || interaction.user.id;
+      const clean = identifier.trim().toLowerCase().replace(/^@/, '');
 
-      const res = await apiRequest(`/api/bot/bank/history/${encodeURIComponent(identifier)}`);
+      let txs = [];
 
-      if (!res.success || !res.transactions || res.transactions.length === 0) {
-        return interaction.editReply({
-          content: `ℹ️ **Sin movimientos:** No se encontraron transacciones recientes para \`${identifier}\`.`,
-        });
+      if (supabase) {
+        try {
+          const { data } = await supabase
+            .from('yapo_transactions')
+            .select('*')
+            .or(`sender_dni.ilike.${clean},sender_roblox.ilike.${clean},receiver_dni.ilike.${clean},receiver_roblox.ilike.${clean}`)
+            .order('timestamp', { ascending: false })
+            .limit(10);
+
+          if (data && data.length > 0) {
+            txs = data;
+          }
+        } catch (e) {
+          console.error(e);
+        }
       }
 
-      const txs = res.transactions;
+      if (txs.length === 0) {
+        return interaction.editReply({ content: `ℹ️ **Sin movimientos:** No se encontraron transacciones para \`${identifier}\`.` });
+      }
+
       const lines = txs.map((t, idx) => {
-        const isReceived = t.receiverDni === identifier || t.receiverRoblox?.toLowerCase() === identifier.toLowerCase();
+        const isReceived = t.receiver_dni?.toLowerCase() === clean || t.receiver_roblox?.toLowerCase() === clean;
         const sign = isReceived ? '+' : '-';
-        return `**${idx + 1}.** \`${t.operationNumber}\` • **${sign}S/. ${t.amount.toFixed(2)}** • ${t.description} (<t:${Math.floor(new Date(t.timestamp).getTime() / 1000)}:R>)`;
+        return `**${idx + 1}.** \`${t.operation_number}\` • **${sign}S/. ${Number(t.amount).toFixed(2)}** • ${t.description} (<t:${Math.floor(new Date(t.timestamp).getTime() / 1000)}:R>)`;
       });
 
       const embed = new EmbedBuilder()
@@ -407,42 +868,19 @@ client.on('interactionCreate', async (interaction) => {
     // 8. /ayuda
     else if (commandName === 'ayuda') {
       const embed = new EmbedBuilder()
-        .setColor(0xef4444) // Red PE:RP
+        .setColor(0xef4444)
         .setTitle('🇵🇪 Comandos Oficiales de PE:RP Streets & Banco YA P')
         .setDescription('Lista de comandos disponibles para ciudadanos en Discord:')
         .addFields(
-          {
-            name: '🪪 `/crear-dni`',
-            value: 'Registra tus datos ciudadanos (nombres, apellidos, usuario de Roblox) y vincula tu avatar oficial de Roblox al DNI.',
-          },
-          {
-            name: '📄 `/dni-ver [dni o usuario]`',
-            value: 'Muestra tu DNI electrónico oficial peruano con botones interactivos para ver el **[Anverso]** y el **[Reverso]**.',
-          },
-          {
-            name: '🏦 `/saldo [usuario opcional]`',
-            value: 'Muestra tu desglose financiero estilo UnbelievaBoat: **En mano** (efectivo), **Banco YA P** y **Total**.',
-          },
-          {
-            name: '💸 `/transferir <destino> <monto> [motivo]`',
-            value: 'Envía Soles al instante a otro ciudadano usando su número de DNI de 8 dígitos o su usuario de Roblox.',
-          },
-          {
-            name: '🏧 `/retirar <monto>`',
-            value: 'Retira Soles de tu Banco YA P para tener efectivo en mano.',
-          },
-          {
-            name: '📥 `/depositar <monto>`',
-            value: 'Deposita efectivo de tu mano a tu cuenta segura en Banco YA P.',
-          },
-          {
-            name: '📜 `/historial [usuario opcional]`',
-            value: 'Muestra los últimos movimientos y números de operación.',
-          }
+          { name: '🪪 `/crear-dni`', value: 'Registra tus datos ciudadanos y vincula tu avatar oficial de Roblox al DNI.' },
+          { name: '📄 `/dni-ver [dni o usuario]`', value: 'Muestra tu DNI electrónico oficial con botones interactivos **[Anverso]** y **[Reverso]**.' },
+          { name: '🏦 `/saldo [usuario opcional]`', value: 'Muestra tu desglose: **En mano** (efectivo), **Banco YA P** y **Total**.' },
+          { name: '💸 `/transferir <destino> <monto> [motivo]`', value: 'Envía Soles al instante por número de DNI (8 dígitos) o usuario de Roblox.' },
+          { name: '🏧 `/retirar <monto>`', value: 'Retira Soles de Banco YA P a tu efectivo en mano.' },
+          { name: '📥 `/depositar <monto>`', value: 'Deposita efectivo de tu mano a Banco YA P.' },
+          { name: '📜 `/historial [usuario opcional]`', value: 'Muestra los últimos movimientos y comprobantes.' }
         )
-        .setFooter({
-          text: 'Toda la administración y configuración se realiza desde el Panel Web de PE:RP.',
-        });
+        .setFooter({ text: 'PE:RP Streets • Sincronización en la Nube con Supabase' });
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
     }
@@ -455,5 +893,5 @@ if (process.env.DISCORD_TOKEN && process.env.DISCORD_TOKEN !== 'tu_token_de_bot_
     console.error('❌ Error iniciando sesión del bot de Discord:', err.message);
   });
 } else {
-  console.log('ℹ️ Bot de Discord listo para ser configurado con tu token en el archivo discord-bot/.env');
+  console.log('ℹ️ Bot listo. Configura tu token en el archivo .env');
 }

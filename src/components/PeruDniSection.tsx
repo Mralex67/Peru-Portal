@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { PeruDni } from '../types/dni';
-import { getUserDni, saveUserDni, deleteUserDni, updateUserDniPhoto } from '../lib/supabase';
+import { getUserDni, saveUserDni, deleteUserDni, updateUserDniPhoto, getLocalDnis } from '../lib/supabase';
 import { generateRandomPeruDniNumber, fetchRobloxAvatarUrl, DEFAULT_ROBLOX_AVATAR } from '../utils/roblox';
 import { playClickSound, playSuccessSound } from '../utils/audio';
 
@@ -55,10 +55,33 @@ export const PeruDniSection: React.FC = () => {
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-sync any existing local DNIs to backend server & Discord Bot
+  useEffect(() => {
+    try {
+      const locals = getLocalDnis();
+      if (locals && locals.length > 0) {
+        locals.forEach((d: any) => {
+          fetch('/api/bot/dni/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(d),
+          }).catch(() => {});
+        });
+      }
+    } catch {}
+  }, []);
+
   // Check if current discord user has a DNI registered
   useEffect(() => {
     if (!discordUser) {
-      setExistingDni(null);
+      // Check if there is any local DNI saved in this browser
+      const locals = getLocalDnis();
+      if (locals.length > 0) {
+        setExistingDni(locals[0]);
+        setAvatarPreview(locals[0].photoUrl);
+      } else {
+        setExistingDni(null);
+      }
       return;
     }
 
@@ -85,6 +108,12 @@ export const PeruDniSection: React.FC = () => {
         if (dni) {
           setExistingDni(dni);
           setAvatarPreview(dni.photoUrl);
+          // Auto-sync to server bot database so Discord bot always has it
+          fetch('/api/bot/dni/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dni),
+          }).catch(() => {});
         } else {
           setExistingDni(null);
           // Auto fetch Roblox avatar for initial username

@@ -57,6 +57,103 @@ CREATE POLICY "Permitir eliminar DNIs"
   USING (true);
 `;
 
+export const COMBINED_SUPABASE_SQL = `-- =========================================================================
+-- SCRIPT SQL OFICIAL COMPLETO: PE:RP STREETS - RENIEC DNI & BANCO YA P
+-- Ejecuta este script en Supabase > SQL Editor para crear todas las tablas
+-- =========================================================================
+
+-- 1. TABLA OFICIAL DE DNIS (RENIEC)
+CREATE TABLE IF NOT EXISTS peru_dnis (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discord_id TEXT UNIQUE NOT NULL,
+  discord_username TEXT,
+  discord_display_name TEXT,
+  roblox_username TEXT NOT NULL,
+  roblox_user_id TEXT,
+  dni_number TEXT UNIQUE NOT NULL,
+  verify_digit TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  first_surname TEXT NOT NULL,
+  second_surname TEXT NOT NULL,
+  given_names TEXT NOT NULL,
+  birth_date TEXT,
+  issue_date TEXT,
+  expiry_date TEXT,
+  gender TEXT DEFAULT 'M',
+  civil_status TEXT DEFAULT 'S',
+  ubigeo TEXT DEFAULT '150101',
+  photo_url TEXT,
+  signature_text TEXT,
+  status TEXT DEFAULT 'active',
+  suspension_reason TEXT,
+  bank_status TEXT DEFAULT 'active',
+  bank_freeze_reason TEXT,
+  wanted_status BOOLEAN DEFAULT false,
+  wanted_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. TABLA OFICIAL DE BANCO YA P (CUENTAS Y SALDOS)
+CREATE TABLE IF NOT EXISTS yapo_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discord_id TEXT UNIQUE NOT NULL,
+  discord_username TEXT,
+  roblox_username TEXT NOT NULL,
+  roblox_user_id TEXT,
+  dni_number TEXT UNIQUE NOT NULL,
+  verify_digit TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  avatar_url TEXT,
+  bank_balance NUMERIC DEFAULT 1000.00,
+  cash_balance NUMERIC DEFAULT 250.00,
+  status TEXT DEFAULT 'active',
+  freeze_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. TABLA DE HISTORIAL Y COMPROBANTES DE TRANSACCIONES
+CREATE TABLE IF NOT EXISTS yapo_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  operation_number TEXT NOT NULL,
+  type TEXT NOT NULL,
+  sender_dni TEXT,
+  sender_roblox TEXT,
+  sender_name TEXT,
+  sender_avatar TEXT,
+  receiver_dni TEXT,
+  receiver_roblox TEXT,
+  receiver_name TEXT,
+  receiver_avatar TEXT,
+  amount NUMERIC NOT NULL,
+  description TEXT,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- HABILITAR ROW LEVEL SECURITY (RLS)
+ALTER TABLE peru_dnis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE yapo_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE yapo_transactions ENABLE ROW LEVEL SECURITY;
+
+-- POLÍTICAS PARA peru_dnis
+DROP POLICY IF EXISTS "Permitir lectura de DNIs" ON peru_dnis;
+CREATE POLICY "Permitir lectura de DNIs" ON peru_dnis FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Permitir crear DNI único por Discord" ON peru_dnis;
+CREATE POLICY "Permitir crear DNI único por Discord" ON peru_dnis FOR ALL USING (true);
+
+-- POLÍTICAS PARA yapo_accounts
+DROP POLICY IF EXISTS "Lectura pública de Yapo" ON yapo_accounts;
+CREATE POLICY "Lectura pública de Yapo" ON yapo_accounts FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Gestión pública de Yapo" ON yapo_accounts;
+CREATE POLICY "Gestión pública de Yapo" ON yapo_accounts FOR ALL USING (true);
+
+-- POLÍTICAS PARA yapo_transactions
+DROP POLICY IF EXISTS "Lectura transacciones Yapo" ON yapo_transactions;
+CREATE POLICY "Lectura transacciones Yapo" ON yapo_transactions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Registro transacciones Yapo" ON yapo_transactions;
+CREATE POLICY "Registro transacciones Yapo" ON yapo_transactions FOR ALL USING (true);
+`;
+
 export function getSupabaseConfig(): SupabaseConfig {
   let url = '';
   let anonKey = '';
@@ -106,7 +203,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 }
 
 // Local storage fallback helpers
-function getLocalDnis(): PeruDni[] {
+export function getLocalDnis(): PeruDni[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(LOCAL_DNIS_KEY);
@@ -185,7 +282,49 @@ export async function getUserDni(discordId: string): Promise<PeruDni | null> {
   }
 
   const locals = getLocalDnis();
-  return locals.find((d) => d.discordId === discordId) || null;
+  const foundLocal = locals.find((d) => d.discordId === discordId);
+  if (foundLocal) return foundLocal;
+
+  // Fallback to Backend Server API (synced with Discord Bot)
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch(`/api/bot/dni/${encodeURIComponent(discordId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.found && json.dni) {
+          const s = json.dni;
+          const mapped: PeruDni = {
+            id: `server-${s.dniNumber}`,
+            discordId: s.discordId,
+            discordUsername: s.robloxUsername || 'Ciudadano',
+            discordDisplayName: s.fullName || '',
+            robloxUsername: s.robloxUsername,
+            robloxUserId: '',
+            dniNumber: s.dniNumber,
+            verifyDigit: '7',
+            fullName: s.fullName,
+            firstSurname: s.firstSurname || '',
+            secondSurname: s.secondSurname || '',
+            givenNames: s.prenames || '',
+            birthDate: s.birthDate || '2000-01-01',
+            issueDate: '18 OCT 2026',
+            expiryDate: '18 OCT 2034',
+            gender: (s.gender as 'M' | 'F') || 'M',
+            civilStatus: 'S',
+            ubigeo: '150101',
+            photoUrl: s.photoUrl || '',
+            signatureText: `${(s.prenames || 'A')[0] || 'C'}.${s.firstSurname || 'PERU'}`,
+            status: (s.status as any) || 'active',
+            createdAt: s.createdAt || new Date().toISOString(),
+          };
+          saveLocalDni(mapped);
+          return mapped;
+        }
+      }
+    } catch {}
+  }
+
+  return null;
 }
 
 /**
@@ -209,6 +348,17 @@ export async function saveUserDni(dni: PeruDni): Promise<{
   dni.status = dni.status || 'active';
   dni.bankStatus = dni.bankStatus || 'active';
   saveLocalDni(dni);
+
+  // Sincronización en tiempo real con el servidor central y el Bot de Discord
+  if (typeof window !== 'undefined') {
+    try {
+      fetch('/api/bot/dni/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dni),
+      }).catch((e) => console.warn('Sync DNI error:', e));
+    } catch {}
+  }
 
   const supabase = getSupabaseClient();
   if (supabase) {

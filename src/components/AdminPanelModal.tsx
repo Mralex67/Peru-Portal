@@ -38,6 +38,7 @@ import {
   getSupabaseConfig,
   saveSupabaseConfig,
   SUPABASE_SQL_INIT,
+  COMBINED_SUPABASE_SQL,
   getAllRegisteredDnis,
   resetAllDnis,
   updateDniAdministrativeStatus,
@@ -1505,19 +1506,22 @@ export const AdminPanelModal: React.FC = () => {
                     <span>{supabaseSaved ? '¡Credenciales Guardadas!' : 'Guardar Credenciales Supabase'}</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(SUPABASE_SQL_INIT);
-                      setCopiedSql(true);
-                      playSuccessSound();
-                      setTimeout(() => setCopiedSql(false), 2500);
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-white/10"
-                  >
-                    <FileCode className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{copiedSql ? '¡Script SQL Copiado!' : 'Copiar SQL para Crear Tabla'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(COMBINED_SUPABASE_SQL);
+                        setCopiedSql(true);
+                        playSuccessSound();
+                        setTimeout(() => setCopiedSql(false), 2500);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-purple-500/40"
+                      title="Copia el script SQL completo que crea tanto peru_dnis como yapo_accounts y yapo_transactions"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{copiedSql ? '¡SQL Completo Copiado!' : 'Copiar SQL Completo (DNI + YA P)'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

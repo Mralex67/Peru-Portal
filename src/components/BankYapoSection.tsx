@@ -103,11 +103,36 @@ export const BankYapoSection: React.FC = () => {
       setUserDni(dni);
 
       const yapoAcc = await getYapoAccountByDiscordId(discordUser.id);
-      setAccount(yapoAcc);
-
       if (yapoAcc) {
+        setAccount(yapoAcc);
         const txs = getAccountTransactions(yapoAcc.dniNumber);
         setTransactions(txs);
+      } else {
+        // Try fetching from central server Bot API
+        try {
+          const res = await fetch(`/api/bot/bank/balance/${encodeURIComponent(discordUser.id)}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.found && json.account) {
+              const a = json.account;
+              const mappedAcc: any = {
+                id: a.id || `acc-${a.dniNumber}`,
+                discordId: a.discordId,
+                robloxUsername: a.robloxUsername,
+                dniNumber: a.dniNumber,
+                verifyDigit: '7',
+                fullName: a.fullName,
+                avatarUrl: a.avatarUrl,
+                bankBalance: a.bankBalance,
+                cashBalance: a.cashBalance,
+                status: a.status || 'active',
+                createdAt: a.createdAt,
+                updatedAt: a.updatedAt,
+              };
+              setAccount(mappedAcc);
+            }
+          }
+        } catch {}
       }
     } catch (e) {
       console.error(e);

@@ -17,6 +17,17 @@ const __dirname = path.dirname(__filename);
 const app = expressApp();
 const PORT = process.env.PORT || 3000;
 
+// Universal CORS middleware to allow requests from GitHub Pages and Discloud
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(expressApp.json({ limit: '50mb' }));
 app.use(expressApp.urlencoded({ limit: '50mb', extended: true }));
 
@@ -570,6 +581,109 @@ async function fetchRobloxUserAvatar(usernameOrId: string) {
   };
 }
 
+// 0. Sync DNI from Web App to Server & Discord Bot
+app.post('/api/bot/dni/sync', async (req, res) => {
+  try {
+    const dni = req.body;
+    if (!dni || (!dni.dniNumber && !dni.robloxUsername)) {
+      return res.status(400).json({ success: false, error: 'DNI inválido para sincronización.' });
+    }
+
+    const data = loadBankSystem();
+
+    const cleanRoblox = (dni.robloxUsername || '').trim();
+    const cleanDni = (dni.dniNumber || '').trim();
+    const cleanDiscordId = (dni.discordId || '').trim();
+
+    const existingIndex = data.dnis.findIndex(
+      (d) =>
+        (cleanDni && d.dniNumber === cleanDni) ||
+        (cleanDiscordId && d.discordId === cleanDiscordId) ||
+        (cleanRoblox && d.robloxUsername?.toLowerCase() === cleanRoblox.toLowerCase())
+    );
+
+    const formattedDni = {
+      dniNumber: cleanDni || (Math.floor(10000000 + Math.random() * 90000000)).toString(),
+      discordId: cleanDiscordId || `web-${Date.now()}`,
+      robloxUsername: cleanRoblox || 'Ciudadano',
+      fullName: (dni.fullName || `${dni.firstSurname || ''} ${dni.secondSurname || ''} ${dni.givenNames || ''}`).trim().toUpperCase(),
+      firstSurname: (dni.firstSurname || '').toUpperCase(),
+      secondSurname: (dni.secondSurname || '').toUpperCase(),
+      prenames: (dni.givenNames || dni.prenames || '').toUpperCase(),
+      birthDate: dni.birthDate || '2000-01-01',
+      gender: (dni.gender || 'M').toUpperCase(),
+      department: (dni.department || 'LIMA').toUpperCase(),
+      province: (dni.province || 'LIMA').toUpperCase(),
+      district: (dni.district || 'MIRAFLORES').toUpperCase(),
+      photoUrl: dni.photoUrl || '',
+      status: dni.status || 'active',
+      createdAt: dni.createdAt || new Date().toISOString(),
+    };
+
+    if (existingIndex >= 0) {
+      data.dnis[existingIndex] = { ...data.dnis[existingIndex], ...formattedDni };
+    } else {
+      data.dnis.unshift(formattedDni);
+    }
+
+    // Auto-create or sync Banco YA P account
+    let accIndex = data.accounts.findIndex(
+      (a) =>
+        (formattedDni.dniNumber && a.dniNumber === formattedDni.dniNumber) ||
+        (formattedDni.discordId && a.discordId === formattedDni.discordId) ||
+        (formattedDni.robloxUsername && a.robloxUsername?.toLowerCase() === formattedDni.robloxUsername.toLowerCase())
+    );
+
+    if (accIndex >= 0) {
+      data.accounts[accIndex] = {
+        ...data.accounts[accIndex],
+        dniNumber: formattedDni.dniNumber,
+        discordId: formattedDni.discordId,
+        robloxUsername: formattedDni.robloxUsername,
+        fullName: formattedDni.fullName,
+        avatarUrl: formattedDni.photoUrl || data.accounts[accIndex].avatarUrl,
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      const newAcc = {
+        id: `acc-${Date.now()}`,
+        dniNumber: formattedDni.dniNumber,
+        discordId: formattedDni.discordId,
+        robloxUsername: formattedDni.robloxUsername,
+        fullName: formattedDni.fullName,
+        avatarUrl: formattedDni.photoUrl,
+        bankBalance: 1000.0,
+        cashBalance: 250.0,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      data.accounts.unshift(newAcc);
+      data.transactions.unshift({
+        id: `tx-${Date.now()}`,
+        operationNumber: `OP-${Math.floor(100000 + Math.random() * 900000)}`,
+        type: 'welcome_bonus',
+        receiverDni: formattedDni.dniNumber,
+        receiverRoblox: formattedDni.robloxUsername,
+        receiverName: formattedDni.fullName,
+        receiverAvatar: formattedDni.photoUrl,
+        amount: 1000.0,
+        description: 'Bono de Apertura y Bienvenida a YA P PE:RP',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    saveBankSystem(data);
+    return res.json({
+      success: true,
+      message: 'DNI y Banco YA P sincronizados en vivo con el Bot de Discord.',
+      dni: formattedDni,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 1. Create Citizen DNI via Bot or Web
 app.post('/api/bot/dni/create', async (req, res) => {
   try {
@@ -1047,13 +1161,18 @@ app.get('/api/bot/bank/history/:identifier', (req, res) => {
 
 // 8. Download complete bot package as ZIP ready for 24/7 hosting
 app.get('/api/bot/download-zip', (req, res) => {
+  const prebuiltZip = path.resolve(__dirname, 'public/perp-discord-bot-24-7.zip');
+  if (fs.existsSync(prebuiltZip)) {
+    return res.download(prebuiltZip, 'perp-discord-bot-24-7.zip');
+  }
+
   const botDir = path.resolve(__dirname, 'discord-bot');
   if (!fs.existsSync(botDir)) {
     return res.status(404).json({ success: false, error: 'Directorio discord-bot no encontrado' });
   }
 
   res.attachment('perp-discord-bot-24-7.zip');
-  const archive = archiver('zip', { zlib: { level: 9 } });
+  const archive = new (archiver.ZipArchive || archiver)({ zlib: { level: 9 } });
 
   archive.on('error', (err: any) => {
     console.error('Error zipping discord bot:', err);
