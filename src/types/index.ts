@@ -12,6 +12,7 @@ export interface ServerConfig {
   patrolAlert: string;
   customLogoUrl?: string;
   customPatrolTruckUrl?: string;
+  heroCardImage?: string;
   albumUploadsLocked?: boolean;
   erlcServerKey?: string;
   erlcAutoSync?: boolean;

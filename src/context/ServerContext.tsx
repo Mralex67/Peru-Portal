@@ -17,6 +17,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   patrolAlert: 'Patrullaje Preventivo Nacional',
   customLogoUrl: '',
   customPatrolTruckUrl: '',
+  heroCardImage: '/src/assets/images/roblox_sunset_pier_1792185364963.jpg',
   albumUploadsLocked: true,
   erlcServerKey: '',
   erlcAutoSync: true,
@@ -38,6 +39,8 @@ interface ServerContextType {
   isAdminPasswordModalOpen: boolean;
   setIsAdminPasswordModalOpen: (open: boolean) => void;
   isAdminAuthenticated: boolean;
+  adminRole: 'none' | 'superadmin' | 'db_manager';
+  setAdminRole: (role: 'none' | 'superadmin' | 'db_manager') => void;
   requestAdminAccess: () => void;
   unlockAdminWithPassword: (pass: string) => boolean;
   lockAdmin: () => void;
@@ -115,6 +118,7 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   // Admin authentication state
+  const [adminRole, setAdminRole] = useState<'none' | 'superadmin' | 'db_manager'>('none');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isAdminPasswordModalOpen, setIsAdminPasswordModalOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -286,7 +290,16 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const unlockAdminWithPassword = (password: string): boolean => {
-    if (password === 'CheilaRamirez') {
+    const trimmed = password.trim();
+    if (trimmed === 'CheilaRamirez') {
+      setAdminRole('superadmin');
+      setIsAdminAuthenticated(true);
+      setIsAdminPasswordModalOpen(false);
+      setIsAdminOpen(true);
+      return true;
+    }
+    if (trimmed === 'DEXPERUANOSTREET') {
+      setAdminRole('db_manager');
       setIsAdminAuthenticated(true);
       setIsAdminPasswordModalOpen(false);
       setIsAdminOpen(true);
@@ -296,6 +309,7 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const lockAdmin = () => {
+    setAdminRole('none');
     setIsAdminAuthenticated(false);
     setIsAdminOpen(false);
   };
@@ -317,6 +331,8 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isAdminPasswordModalOpen,
         setIsAdminPasswordModalOpen,
         isAdminAuthenticated,
+        adminRole,
+        setAdminRole,
         requestAdminAccess,
         unlockAdminWithPassword,
         lockAdmin,

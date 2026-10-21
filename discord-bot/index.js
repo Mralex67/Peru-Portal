@@ -67,30 +67,72 @@ function saveLocalDb(data) {
   }
 }
 
-// Resolver avatar oficial de Roblox
+// Resolver avatar oficial de Roblox con soporte para nombre, ID y búsqueda
 async function fetchRobloxUserAvatar(username) {
-  const clean = username.trim().replace(/^@/, '');
+  let clean = username.trim().replace(/^@/, '');
+  // Extraer ID si es un link de perfil de Roblox
+  const profileMatch = clean.match(/roblox\.com\/users\/(\d+)/i);
+  if (profileMatch) {
+    clean = profileMatch[1];
+  }
+
   const defaultAvatar = 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter';
-  try {
-    const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usernames: [clean], excludeBannedUsers: false }),
-    });
-    if (userRes.ok) {
-      const userData = await userRes.json();
-      if (userData.data && userData.data.length > 0) {
-        const uId = userData.data[0].id.toString();
-        const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
-        if (thumbRes.ok) {
-          const thumbData = await thumbRes.json();
-          if (thumbData.data && thumbData.data[0]?.imageUrl) {
-            return { avatarUrl: thumbData.data[0].imageUrl, userId: uId };
-          }
+  let uId = '';
+
+  // 1. Si ya es un ID numérico de Roblox
+  if (/^\d+$/.test(clean)) {
+    uId = clean;
+  } else {
+    // 2. Buscar por nombre exacto en la API de Roblox
+    try {
+      const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usernames: [clean], excludeBannedUsers: false }),
+      });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        if (userData.data && userData.data.length > 0) {
+          uId = userData.data[0].id.toString();
         }
       }
+    } catch {}
+
+    // 3. Si no se encontró por coincidencia exacta, usar search de Roblox
+    if (!uId) {
+      try {
+        const searchRes = await fetch(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(clean)}&limit=10`);
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          if (searchData.data && searchData.data.length > 0) {
+            const matched = searchData.data.find(
+              (u) => (u.name && u.name.toLowerCase() === clean.toLowerCase()) ||
+                     (u.displayName && u.displayName.toLowerCase() === clean.toLowerCase())
+            ) || searchData.data[0];
+            if (matched && matched.id) {
+              uId = matched.id.toString();
+            }
+          }
+        }
+      } catch {}
     }
-  } catch {}
+  }
+
+  if (uId) {
+    // URL directa y garantizada de CDN de Roblox Headshot
+    let avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${uId}&width=420&height=420&format=png`;
+    try {
+      const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
+      if (thumbRes.ok) {
+        const thumbData = await thumbRes.json();
+        if (thumbData.data && thumbData.data[0]?.imageUrl) {
+          avatarUrl = thumbData.data[0].imageUrl;
+        }
+      }
+    } catch {}
+    return { avatarUrl, userId: uId };
+  }
+
   return { avatarUrl: defaultAvatar, userId: '' };
 }
 
@@ -99,13 +141,13 @@ const slashCommandsData = [
   new SlashCommandBuilder()
     .setName('crear-dni')
     .setDescription('Registra tus datos ciudadanos y genera tu DNI peruano con tu avatar de Roblox')
-    .addStringOption((o) => o.setName('usuario_roblox').setDescription('Tu nombre de usuario exacto en Roblox').setRequired(true))
-    .addStringOption((o) => o.setName('nombres').setDescription('Tus prenombres (ej. Carlos Daniel)').setRequired(true))
+    .addStringOption((o) => o.setName('usuario_roblox').setDescription('Tu nombre de usuario o ID en Roblox').setRequired(true))
+    .addStringOption((o) => o.setName('nombres').setDescription('Tus prenombres (ej. Juan Diego o tus nombres)').setRequired(true))
     .addStringOption((o) => o.setName('apellido_paterno').setDescription('Tu primer apellido (ej. Quispe)').setRequired(true))
     .addStringOption((o) => o.setName('apellido_materno').setDescription('Tu segundo apellido (ej. Mamani)').setRequired(true))
-    .addStringOption((o) => o.setName('fecha_nacimiento').setDescription('Fecha AAAA-MM-DD (ej. 2002-05-14)').setRequired(false))
+    .addStringOption((o) => o.setName('fecha_nacimiento').setDescription('Fecha de nacimiento obligatoria AAAA-MM-DD (ej. 2002-05-14)').setRequired(true))
     .addStringOption((o) =>
-      o.setName('sexo').setDescription('Sexo ciudadano (M o F)').setRequired(false)
+      o.setName('sexo').setDescription('Sexo ciudadano obligatorio (M o F)').setRequired(true)
         .addChoices({ name: 'Masculino (M)', value: 'M' }, { name: 'Femenino (F)', value: 'F' })
     ),
   new SlashCommandBuilder()
@@ -190,22 +232,57 @@ client.once('ready', async () => {
   }
 });
 
+// Helper: Extraer prenombres reales del ciudadano sin fallbacks hardcodeados
+function getDniPrenames(dni) {
+  const p = dni.prenames || dni.givenNames || dni.given_names || dni.nombres;
+  if (p && p.trim() && p.trim().toUpperCase() !== 'CARLOS DANIEL') {
+    return p.trim().toUpperCase();
+  }
+  // Si en fullName está guardado ej. "SANCHEZ MAMANI JUAN DIEGO"
+  const rawFull = (dni.fullName || dni.full_name || '').replace(/,/g, ' ').trim();
+  if (rawFull) {
+    const parts = rawFull.split(/\s+/);
+    if (parts.length >= 3) {
+      const parsed = parts.slice(2).join(' ').toUpperCase();
+      if (parsed !== 'CARLOS DANIEL') return parsed;
+    } else if (parts.length === 2) {
+      return parts[1].toUpperCase();
+    }
+  }
+  return 'CIUDADANO';
+}
+
+// Helper: Extraer primer apellido del ciudadano
+function getDniFirstSurname(dni) {
+  const s = dni.firstSurname || dni.first_surname || dni.apellido_paterno;
+  if (s && s.trim()) return s.trim().toUpperCase();
+  const rawFull = (dni.fullName || dni.full_name || '').replace(/,/g, ' ').trim();
+  if (rawFull) {
+    const parts = rawFull.split(/\s+/);
+    if (parts.length > 0) return parts[0].toUpperCase();
+  }
+  return 'QUISPE';
+}
+
 // Helper: Build DNI Front Embed
 function buildDniFrontEmbed(dni) {
+  const prenames = getDniPrenames(dni);
+  const firstSurname = getDniFirstSurname(dni);
+  const secondSurname = dni.secondSurname || dni.second_surname || dni.apellido_materno || 'MAMANI';
+
   return new EmbedBuilder()
     .setColor(0x0284c7)
     .setTitle('🇵🇪 REPÚBLICA DEL PERÚ — DOCUMENTO NACIONAL DE IDENTIDAD')
     .setDescription('**REGISTRO NACIONAL DE IDENTIFICACIÓN Y ESTADO CIVIL (RENIEC)**\n*DNI Electrónico Ciudadano Oficial PE:RP*')
-    .setThumbnail(dni.photoUrl || 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter')
+    .setThumbnail(dni.photoUrl || dni.photo_url || 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter')
     .addFields(
-      { name: '🆔 CÚI / N° DE DNI', value: `\`${dni.dniNumber}\``, inline: true },
-      { name: '👤 CIUDADANO (ROBLOX)', value: `**@${dni.robloxUsername}**`, inline: true },
+      { name: '🆔 CÚI / N° DE DNI', value: `\`${dni.dniNumber || dni.dni_number}\``, inline: true },
+      { name: '👤 CIUDADANO (ROBLOX)', value: `**@${dni.robloxUsername || dni.roblox_username}**`, inline: true },
       { name: '⚧️ SEXO', value: dni.gender === 'F' ? 'FEMENINO' : 'MASCULINO', inline: true },
-      { name: '📝 PRIMER APELLIDO', value: dni.firstSurname || 'QUISPE', inline: true },
-      { name: '📝 SEGUNDO APELLIDO', value: dni.secondSurname || 'MAMANI', inline: true },
-      { name: '📝 PRENOMBRES', value: dni.prenames || 'CARLOS DANIEL', inline: true },
-      { name: '🎂 FECHA DE NACIMIENTO', value: dni.birthDate || '2000-01-01', inline: true },
-      { name: '📍 UBICACIÓN', value: `${dni.district || 'MIRAFLORES'} / ${dni.department || 'LIMA'}`, inline: true },
+      { name: '📝 PRIMER APELLIDO', value: firstSurname, inline: true },
+      { name: '📝 SEGUNDO APELLIDO', value: secondSurname, inline: true },
+      { name: '📝 PRENOMBRES', value: prenames, inline: true },
+      { name: '🎂 FECHA DE NACIMIENTO', value: dni.birthDate || dni.birth_date || '2000-01-01', inline: true },
       { name: '🏛️ ESTADO RENIEC', value: '🟢 **EMITIDO Y VIGENTE**', inline: true }
     )
     .setFooter({
@@ -217,18 +294,18 @@ function buildDniFrontEmbed(dni) {
 
 // Helper: Build DNI Back Embed
 function buildDniBackEmbed(dni) {
-  const cleanDni = (dni.dniNumber || '00000000').padStart(8, '0');
-  const cleanName = (dni.firstSurname || 'CIUDADANO').toUpperCase().replace(/[^A-Z]/g, '');
+  const cleanDni = (dni.dniNumber || dni.dni_number || '00000000').padStart(8, '0');
+  const cleanSurname = getDniFirstSurname(dni).replace(/[^A-Z]/g, '');
+  const cleanPrenames = getDniPrenames(dni).replace(/[^A-Z]/g, '<');
   const mrzLine1 = `IDPER${cleanDni}<7<<<<<<<<<<<<<<<`;
   const mrzLine2 = `0205148M3010195PER<<<<<<<<<<<0`;
-  const mrzLine3 = `${cleanName}<<CARLOS<DANIEL<<<<<<<<<<`;
+  const mrzLine3 = `${cleanSurname}<<${cleanPrenames}<<<<<<<<<<<<<<<`.substring(0, 30);
 
   return new EmbedBuilder()
     .setColor(0x0369a1)
     .setTitle('🇵🇪 DOCUMENTO NACIONAL DE IDENTIDAD — [REVERSO]')
     .setDescription('**DATOS COMPLEMENTARIOS Y ZONA DE LECTURA MECÁNICA (MRZ)**')
     .addFields(
-      { name: '📍 DOMICILIO', value: `${dni.district || 'MIRAFLORES'}, ${dni.province || 'LIMA'}, ${dni.department || 'LIMA'}`, inline: true },
       { name: '🗳️ GRUPO DE VOTACIÓN', value: '849201', inline: true },
       { name: '🩸 GRUPO SANGUÍNEO', value: 'O +', inline: true },
       { name: '🔏 HUELLA DIGITAL & FIRMA', value: 'Digitally Registered & Encrypted', inline: false },
@@ -273,12 +350,18 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'crear-dni') {
       await interaction.deferReply();
 
-      const robloxUsername = interaction.options.getString('usuario_roblox').trim();
-      const prenames = interaction.options.getString('nombres').trim();
-      const firstSurname = interaction.options.getString('apellido_paterno').trim();
-      const secondSurname = interaction.options.getString('apellido_materno').trim();
-      const birthDate = interaction.options.getString('fecha_nacimiento') || '2000-01-01';
-      const gender = (interaction.options.getString('sexo') || 'M').toUpperCase();
+      const robloxUsername = interaction.options.getString('usuario_roblox')?.trim() || '';
+      const prenames = interaction.options.getString('nombres')?.trim() || '';
+      const firstSurname = interaction.options.getString('apellido_paterno')?.trim() || '';
+      const secondSurname = interaction.options.getString('apellido_materno')?.trim() || '';
+      const birthDate = interaction.options.getString('fecha_nacimiento')?.trim() || '';
+      const gender = (interaction.options.getString('sexo') || '').toUpperCase().trim();
+
+      if (!robloxUsername || !prenames || !firstSurname || !secondSurname || !birthDate || !gender) {
+        return interaction.editReply({
+          content: '❌ **Todos los campos son obligatorios para emitir tu DNI:**\n• Usuario o ID de Roblox\n• Prenombres\n• Primer Apellido\n• Segundo Apellido\n• Fecha de Nacimiento (AAAA-MM-DD)\n• Sexo (M o F)',
+        });
+      }
 
       let dni;
 
@@ -865,7 +948,15 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply({ embeds: [embed] });
     }
 
-    // 8. /ayuda
+    // 8. /reiniciar-dni (Restringido solo a administradores en la web)
+    else if (commandName === 'reiniciar-dni') {
+      await interaction.reply({
+        ephemeral: true,
+        content: '🔒 **Acción Administrativa Restringida:** Por normativas de PE:RP, el reinicio de DNI solo puede ser ejecutado por un **Administrador** desde el **Panel de Base de Datos Web Oficial**.',
+      });
+    }
+
+    // 9. /ayuda
     else if (commandName === 'ayuda') {
       const embed = new EmbedBuilder()
         .setColor(0xef4444)
@@ -877,6 +968,13 @@ client.on('interactionCreate', async (interaction) => {
           { name: '🏦 `/saldo [usuario opcional]`', value: 'Muestra tu desglose: **En mano** (efectivo), **Banco YA P** y **Total**.' },
           { name: '💸 `/transferir <destino> <monto> [motivo]`', value: 'Envía Soles al instante por número de DNI (8 dígitos) o usuario de Roblox.' },
           { name: '🏧 `/retirar <monto>`', value: 'Retira Soles de Banco YA P a tu efectivo en mano.' },
+          { name: '📥 `/depositar <monto>`', value: 'Deposita efectivo de tu mano a Banco YA P.' },
+          { name: '📜 `/historial [usuario opcional]`', value: 'Muestra los últimos movimientos y comprobantes.' }
+        )
+        .setFooter({ text: 'PE:RP Streets • Sincronización en la Nube con Supabase' });
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
           { name: '📥 `/depositar <monto>`', value: 'Deposita efectivo de tu mano a Banco YA P.' },
           { name: '📜 `/historial [usuario opcional]`', value: 'Muestra los últimos movimientos y comprobantes.' }
         )

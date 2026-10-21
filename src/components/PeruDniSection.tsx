@@ -37,6 +37,10 @@ export const PeruDniSection: React.FC = () => {
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
   const [showAvatarSyncModal, setShowAvatarSyncModal] = useState(false);
   const [newRobloxInput, setNewRobloxInput] = useState('');
+  const [photoUpdateTab, setPhotoUpdateTab] = useState<'roblox' | 'upload' | 'url'>('roblox');
+  const [customPhotoUrlInput, setCustomPhotoUrlInput] = useState('');
+  const [tempPreviewUrl, setTempPreviewUrl] = useState('');
+  const [isSearchingAvatar, setIsSearchingAvatar] = useState(false);
 
   // Form states
   const [robloxUsername, setRobloxUsername] = useState('');
@@ -54,6 +58,7 @@ export const PeruDniSection: React.FC = () => {
 
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-sync any existing local DNIs to backend server & Discord Bot
   useEffect(() => {
@@ -201,11 +206,54 @@ export const PeruDniSection: React.FC = () => {
     }
   };
 
+  // Save custom or uploaded photo for existing DNI
+  const handleSavePhotoDirectly = async (photoUrlToSave: string, robloxName?: string) => {
+    if (!discordUser || !existingDni) return;
+    const finalPhoto = photoUrlToSave.trim();
+    if (!finalPhoto) return;
+
+    setIsSyncingAvatar(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    playClickSound();
+
+    try {
+      const userToUse = (robloxName || existingDni.robloxUsername).trim();
+      await updateUserDniPhoto(discordUser.id, finalPhoto, userToUse);
+      const updated: PeruDni = {
+        ...existingDni,
+        photoUrl: finalPhoto,
+        robloxUsername: userToUse,
+      };
+      setExistingDni(updated);
+      setAvatarPreview(finalPhoto);
+
+      fetch('/api/bot/dni/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {});
+
+      setSuccessMessage('¡Foto del DNI actualizada con éxito y registrada en Supabase!');
+      setShowAvatarSyncModal(false);
+      setTempPreviewUrl('');
+      setCustomPhotoUrlInput('');
+      playSuccessSound();
+    } catch {
+      setErrorMessage('Error al actualizar la foto en la base de datos.');
+    } finally {
+      setIsSyncingAvatar(false);
+    }
+  };
+
   // Sync / update Roblox Avatar for already issued DNI
   const handleSyncExistingAvatar = async (targetUsername?: string) => {
     if (!discordUser || !existingDni) return;
     const userToFetch = (targetUsername || newRobloxInput || existingDni.robloxUsername).trim();
-    if (!userToFetch) return;
+    if (!userToFetch) {
+      setErrorMessage('Ingresa un usuario o ID de Roblox.');
+      return;
+    }
 
     setIsSyncingAvatar(true);
     setErrorMessage('');
@@ -216,19 +264,25 @@ export const PeruDniSection: React.FC = () => {
       const res = await fetchRobloxAvatarUrl(userToFetch);
       if (res.avatarUrl) {
         await updateUserDniPhoto(discordUser.id, res.avatarUrl, userToFetch);
-        setExistingDni((prev: PeruDni | null) =>
-          prev
-            ? {
-                ...prev,
-                photoUrl: res.avatarUrl,
-                robloxUsername: userToFetch,
-                robloxUserId: res.userId || prev.robloxUserId,
-              }
-            : null
-        );
+        const updated: PeruDni = {
+          ...existingDni,
+          photoUrl: res.avatarUrl,
+          robloxUsername: userToFetch,
+          robloxUserId: res.userId || existingDni.robloxUserId,
+        };
+        setExistingDni(updated);
+        setAvatarPreview(res.avatarUrl);
+
+        fetch('/api/bot/dni/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        }).catch(() => {});
+
         setSuccessMessage(`¡Foto de avatar de Roblox (@${userToFetch}) actualizada correctamente en tu DNI!`);
         setShowAvatarSyncModal(false);
         setNewRobloxInput('');
+        setTempPreviewUrl('');
         playSuccessSound();
       } else {
         setErrorMessage(res.message || 'No se pudo obtener el avatar de Roblox. Revisa el usuario o escribe tu ID.');
@@ -240,7 +294,7 @@ export const PeruDniSection: React.FC = () => {
     }
   };
 
-  // Submit and create unique Peruvian DNI in Supabase
+  // Submit and create unique Peruvian DNI in Supabase (All fields strictly required)
   const handleGenerateDni = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!discordUser) return;
@@ -250,11 +304,27 @@ export const PeruDniSection: React.FC = () => {
     }
 
     if (!robloxUsername.trim()) {
-      setErrorMessage('Por favor ingresa tu usuario o ID de Roblox.');
+      setErrorMessage('El usuario o ID de Roblox es obligatorio.');
       return;
     }
-    if (!firstSurname.trim() || !givenNames.trim()) {
-      setErrorMessage('Por favor completa tus apellidos y nombres para el DNI.');
+    if (!firstSurname.trim()) {
+      setErrorMessage('El Primer Apellido es obligatorio.');
+      return;
+    }
+    if (!secondSurname.trim()) {
+      setErrorMessage('El Segundo Apellido es obligatorio.');
+      return;
+    }
+    if (!givenNames.trim()) {
+      setErrorMessage('Los Prenombres son obligatorios.');
+      return;
+    }
+    if (!birthDay || !birthMonth || !birthYear) {
+      setErrorMessage('La fecha de nacimiento completa (Día, Mes y Año) es obligatoria.');
+      return;
+    }
+    if (!gender) {
+      setErrorMessage('El Sexo (M / F) es obligatorio.');
       return;
     }
 
@@ -264,7 +334,7 @@ export const PeruDniSection: React.FC = () => {
 
     const { dni: dniNum, digit } = generateRandomPeruDniNumber();
     const cleanFirstSurname = firstSurname.trim().toUpperCase();
-    const cleanSecondSurname = (secondSurname.trim() || 'PEREZ').toUpperCase();
+    const cleanSecondSurname = secondSurname.trim().toUpperCase();
     const cleanGivenNames = givenNames.trim().toUpperCase();
     const birthDateStr = `${birthDay.padStart(2, '0')} ${birthMonth} ${birthYear}`;
 
@@ -708,67 +778,203 @@ export const PeruDniSection: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Action: Sync Avatar with Roblox */}
-                  <div className="p-3.5 rounded-2xl bg-[#090d18] border border-sky-500/30 space-y-2.5">
+                  {/* Action: Sync / Update Avatar on DNI */}
+                  <div className="p-4 rounded-2xl bg-[#090d18] border border-sky-500/30 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
                           <User className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-white">Avatar de Roblox</div>
-                          <div className="text-[10px] text-slate-400">Usuario: @{existingDni.robloxUsername}</div>
+                          <div className="text-xs font-bold text-white">Foto del DNI</div>
+                          <div className="text-[10px] text-slate-400">Roblox: @{existingDni.robloxUsername}</div>
                         </div>
                       </div>
 
                       <button
                         type="button"
-                        onClick={() => handleSyncExistingAvatar()}
-                        disabled={isSyncingAvatar}
-                        className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-md disabled:opacity-60"
+                        onClick={() => {
+                          setShowAvatarSyncModal(!showAvatarSyncModal);
+                          setNewRobloxInput(existingDni.robloxUsername);
+                          setTempPreviewUrl(existingDni.photoUrl);
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-md"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAvatar ? 'animate-spin' : ''}`} />
-                        <span>{isSyncingAvatar ? 'Sincronizando...' : 'Actualizar Foto'}</span>
+                        <RefreshCw className="w-3.5 h-3.5 text-sky-200" />
+                        <span>{showAvatarSyncModal ? 'Ocultar Opciones' : 'Actualizar Foto'}</span>
                       </button>
                     </div>
 
-                    {!showAvatarSyncModal ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowAvatarSyncModal(true)}
-                        className="text-[11px] text-sky-400 hover:text-sky-300 underline cursor-pointer block"
-                      >
-                        ¿Cambiaste de usuario o quieres ingresar tu ID de Roblox? Clic aquí
-                      </button>
-                    ) : (
-                      <div className="pt-2 border-t border-white/10 space-y-2">
-                        <div className="text-[11px] text-slate-300 font-medium">
-                          Ingresa tu nuevo Usuario o ID numérico de Roblox:
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={newRobloxInput}
-                            onChange={(e) => setNewRobloxInput(e.target.value)}
-                            placeholder="ej. TuNuevoUsuario o 3051711533"
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#070912] border border-white/20 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
-                          />
+                    {showAvatarSyncModal && (
+                      <div className="pt-3 border-t border-white/10 space-y-3 animate-in fade-in duration-200">
+                        {/* Tabs */}
+                        <div className="grid grid-cols-3 gap-1.5 bg-[#05070f] p-1 rounded-xl border border-white/10 text-[11px] font-bold">
                           <button
                             type="button"
-                            onClick={() => handleSyncExistingAvatar(newRobloxInput)}
-                            disabled={isSyncingAvatar || !newRobloxInput.trim()}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition-colors disabled:opacity-50"
+                            onClick={() => setPhotoUpdateTab('roblox')}
+                            className={`py-1 rounded-lg transition-colors cursor-pointer ${
+                              photoUpdateTab === 'roblox'
+                                ? 'bg-sky-600 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
                           >
-                            Guardar
+                            Roblox
                           </button>
                           <button
                             type="button"
-                            onClick={() => setShowAvatarSyncModal(false)}
-                            className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs cursor-pointer"
+                            onClick={() => setPhotoUpdateTab('upload')}
+                            className={`py-1 rounded-lg transition-colors cursor-pointer ${
+                              photoUpdateTab === 'upload'
+                                ? 'bg-sky-600 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
                           >
-                            Cancelar
+                            Subir Archivo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPhotoUpdateTab('url')}
+                            className={`py-1 rounded-lg transition-colors cursor-pointer ${
+                              photoUpdateTab === 'url'
+                                ? 'bg-sky-600 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            Enlace URL
                           </button>
                         </div>
+
+                        {/* Tab Content: Roblox */}
+                        {photoUpdateTab === 'roblox' && (
+                          <div className="space-y-2">
+                            <label className="text-[11px] text-slate-300 font-semibold block">
+                              Usuario o ID numérico de Roblox:
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={newRobloxInput}
+                                onChange={(e) => setNewRobloxInput(e.target.value)}
+                                placeholder="ej. MrAlex_Peru o 3051711533"
+                                className="flex-1 px-3 py-1.5 rounded-xl bg-[#060812] border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!newRobloxInput.trim()) return;
+                                  setIsSearchingAvatar(true);
+                                  setErrorMessage('');
+                                  try {
+                                    const res = await fetchRobloxAvatarUrl(newRobloxInput.trim());
+                                    if (res.avatarUrl) {
+                                      setTempPreviewUrl(res.avatarUrl);
+                                      playSuccessSound();
+                                    } else {
+                                      setErrorMessage(res.message || 'No se pudo encontrar el avatar.');
+                                    }
+                                  } catch {
+                                    setErrorMessage('Error al consultar Roblox.');
+                                  } finally {
+                                    setIsSearchingAvatar(false);
+                                  }
+                                }}
+                                disabled={isSearchingAvatar || !newRobloxInput.trim()}
+                                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-sky-500/30 disabled:opacity-50"
+                              >
+                                {isSearchingAvatar ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Search className="w-3.5 h-3.5" />
+                                )}
+                                <span>Buscar</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tab Content: Upload File */}
+                        {photoUpdateTab === 'upload' && (
+                          <div className="space-y-2">
+                            <label className="text-[11px] text-slate-300 font-semibold block">
+                              Selecciona una imagen desde tu PC o celular:
+                            </label>
+                            <input
+                              type="file"
+                              ref={modalFileInputRef}
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    if (typeof reader.result === 'string') {
+                                      setTempPreviewUrl(reader.result);
+                                      playSuccessSound();
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => modalFileInputRef.current?.click()}
+                              className="w-full py-2.5 px-3 rounded-xl bg-[#060812] hover:bg-white/5 border border-dashed border-sky-500/40 text-xs text-sky-300 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                            >
+                              <Upload className="w-4 h-4 text-sky-400" />
+                              <span>Elegir archivo de imagen (PNG / JPG)</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Tab Content: URL */}
+                        {photoUpdateTab === 'url' && (
+                          <div className="space-y-2">
+                            <label className="text-[11px] text-slate-300 font-semibold block">
+                              Pega el enlace directo de tu imagen:
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="url"
+                                value={customPhotoUrlInput}
+                                onChange={(e) => {
+                                  setCustomPhotoUrlInput(e.target.value);
+                                  setTempPreviewUrl(e.target.value);
+                                }}
+                                placeholder="https://ejemplo.com/mi-avatar.png"
+                                className="flex-1 px-3 py-1.5 rounded-xl bg-[#060812] border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Live Preview & Apply Button */}
+                        {tempPreviewUrl && (
+                          <div className="p-2.5 rounded-xl bg-[#05070e] border border-white/10 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={tempPreviewUrl}
+                                alt="Vista previa avatar"
+                                className="w-10 h-12 object-cover rounded-lg border border-sky-400/50 bg-slate-900"
+                              />
+                              <div className="text-[10px] text-slate-300">
+                                <span className="font-bold text-white block">Vista Previa Lista</span>
+                                <span>Lista para guardar en tu DNI</span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSavePhotoDirectly(tempPreviewUrl, newRobloxInput || existingDni.robloxUsername)}
+                              disabled={isSyncingAvatar}
+                              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{isSyncingAvatar ? 'Guardando...' : 'Guardar Foto'}</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -824,7 +1030,7 @@ export const PeruDniSection: React.FC = () => {
                   {/* Field: Roblox Username */}
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-1">
-                      Usuario o ID de Roblox <span className="text-red-400">*</span>
+                      Usuario o ID de Roblox <span className="text-red-400">* (Obligatorio)</span>
                     </label>
                     <div className="flex items-center gap-2">
                       <input
@@ -832,7 +1038,7 @@ export const PeruDniSection: React.FC = () => {
                         required
                         value={robloxUsername}
                         onChange={(e) => setRobloxUsername(e.target.value)}
-                        placeholder="ej. MrAlex_Peru"
+                        placeholder="ej. MrAlex_Peru o 3051711533"
                         className="flex-1 px-3.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
                       />
                       <button
@@ -900,11 +1106,11 @@ export const PeruDniSection: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Fields: First & Second Surname */}
+                  {/* Fields: First & Second Surname (Both Required) */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                        Primer Apellido <span className="text-red-400">*</span>
+                        Primer Apellido <span className="text-red-400">* (Obligatorio)</span>
                       </label>
                       <input
                         type="text"
@@ -917,10 +1123,11 @@ export const PeruDniSection: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                        Segundo Apellido
+                        Segundo Apellido <span className="text-red-400">* (Obligatorio)</span>
                       </label>
                       <input
                         type="text"
+                        required
                         value={secondSurname}
                         onChange={(e) => setSecondSurname(e.target.value)}
                         placeholder="ej. MAMANI"
@@ -929,26 +1136,29 @@ export const PeruDniSection: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Field: Given names */}
+                  {/* Field: Given names (Required) */}
                   <div>
                     <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                      Prenombres <span className="text-red-400">*</span>
+                      Prenombres <span className="text-red-400">* (Obligatorio)</span>
                     </label>
                     <input
                       type="text"
                       required
                       value={givenNames}
                       onChange={(e) => setGivenNames(e.target.value)}
-                      placeholder="ej. CARLOS DANIEL"
+                      placeholder="ej. JUAN DIEGO"
                       className="w-full px-3 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white uppercase text-xs focus:outline-none focus:border-sky-400"
                     />
                   </div>
 
-                  {/* Field: Gender and Birth */}
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Field: Gender and Full Birth Date (All Strictly Required) */}
+                  <div className="space-y-3 pt-1">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">Sexo</label>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Sexo Ciudadano <span className="text-red-400">* (Obligatorio)</span>
+                      </label>
                       <select
+                        required
                         value={gender}
                         onChange={(e) => setGender(e.target.value as 'M' | 'F')}
                         className="w-full px-3 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
@@ -959,16 +1169,46 @@ export const PeruDniSection: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">Año de Nacimiento</label>
-                      <select
-                        value={birthYear}
-                        onChange={(e) => setBirthYear(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
-                      >
-                        {Array.from({ length: 30 }, (_, i) => 2008 - i).map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        Fecha de Nacimiento <span className="text-red-400">* (Obligatorio: Día / Mes / Año)</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {/* Day */}
+                        <select
+                          required
+                          value={birthDay}
+                          onChange={(e) => setBirthDay(e.target.value)}
+                          className="px-2.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
+                        >
+                          {Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0')).map((d) => (
+                            <option key={d} value={d}>Día {d}</option>
+                          ))}
+                        </select>
+
+                        {/* Month */}
+                        <select
+                          required
+                          value={birthMonth}
+                          onChange={(e) => setBirthMonth(e.target.value)}
+                          className="px-2.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
+                        >
+                          {['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SET', 'OCT', 'NOV', 'DIC'].map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+
+                        {/* Year */}
+                        <select
+                          required
+                          value={birthYear}
+                          onChange={(e) => setBirthYear(e.target.value)}
+                          className="px-2.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
+                        >
+                          {Array.from({ length: 45 }, (_, i) => 2010 - i).map((y) => (
+                            <option key={y} value={y.toString()}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
 

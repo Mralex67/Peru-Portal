@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
   FileText,
   Users,
@@ -9,16 +9,71 @@ import {
   Flame,
   Radio,
   Sparkles,
+  Camera,
+  Upload,
+  X,
+  Check,
+  RotateCcw,
 } from 'lucide-react';
 import { InteractiveButton } from './InteractiveButton';
 import { OfficialPeruLogo } from './OfficialPeruLogo';
 import { useServer } from '../context/ServerContext';
+import { playClickSound, playSuccessSound } from '../utils/audio';
 
 export const Hero: React.FC = () => {
-  const { config, setIsWhitelistInfoOpen } = useServer();
+  const { config, updateConfig, setIsWhitelistInfoOpen } = useServer();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenDiscordDirect = () => {
     window.open(config.discordInviteUrl, '_blank');
+  };
+
+  const currentCardImage =
+    config.heroCardImage || '/src/assets/images/roblox_sunset_pier_1792185364963.jpg';
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setPreviewImage(reader.result);
+          playSuccessSound();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveImage = () => {
+    const target = (previewImage || urlInput).trim();
+    if (target) {
+      updateConfig({ heroCardImage: target });
+      setIsSaved(true);
+      playSuccessSound();
+      setTimeout(() => {
+        setIsSaved(false);
+        setShowEditModal(false);
+        setPreviewImage(null);
+        setUrlInput('');
+      }, 1200);
+    }
+  };
+
+  const handleResetDefault = () => {
+    updateConfig({ heroCardImage: '/src/assets/images/roblox_sunset_pier_1792185364963.jpg' });
+    setPreviewImage(null);
+    setUrlInput('');
+    setIsSaved(true);
+    playSuccessSound();
+    setTimeout(() => {
+      setIsSaved(false);
+      setShowEditModal(false);
+    }, 1000);
   };
 
   return (
@@ -73,10 +128,7 @@ export const Hero: React.FC = () => {
               {config.heroDescription}
             </p>
 
-            {/* Action Buttons: 
-                1. EMPEZAR WHITELIST 
-                2. Direct link to https://discord.gg/NBwwDmrFwf
-            */}
+            {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-4 mb-8">
               <InteractiveButton
                 variant="primary"
@@ -128,20 +180,34 @@ export const Hero: React.FC = () => {
             <div className="relative rounded-3xl overflow-hidden border border-red-500/30 p-2 bg-[#0c0e18]/80 backdrop-blur-xl shadow-2xl shadow-red-950/40 group">
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
                 <img
-                  src="/src/assets/images/roblox_sunset_pier_1792185364963.jpg"
-                  alt="Roblox ERLC Atardecer en el Muelle PE:RP"
+                  src={currentCardImage}
+                  alt="Roblox ERLC Comunidad Peruana PE:RP"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#090b12] via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#090b12] via-transparent to-transparent pointer-events-none" />
                 
                 {/* Floating Badge */}
-                <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-red-950/80 border border-red-500/50 text-red-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-red-950/80 border border-red-500/50 text-red-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 pointer-events-none">
                   <Sparkles className="w-3 h-3 text-red-400" />
                   OFICIAL PE:RP
                 </div>
 
-                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-xs text-white">
+                {/* Edit Button trigger on hover */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    setShowEditModal(true);
+                  }}
+                  className="absolute top-4 left-4 z-20 px-2.5 py-1.5 rounded-xl bg-black/80 hover:bg-red-600 text-white text-[11px] font-bold border border-white/20 hover:border-red-400 flex items-center gap-1.5 backdrop-blur-md opacity-90 sm:opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-lg"
+                  title="Cambiar imagen de portada de la comunidad"
+                >
+                  <Camera className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Editar Foto</span>
+                </button>
+
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-xs text-white pointer-events-none">
                   <div>
                     <span className="font-black text-sm block tracking-wide">COMUNIDAD PERUANA</span>
                     <span className="text-[11px] text-slate-300">Roblox ERLC Roleplay Oficial</span>
@@ -157,6 +223,112 @@ export const Hero: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Modal para Editar la Foto de Portada "Comunidad Peruana Activo" */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md p-6 rounded-3xl bg-[#0e111c] border border-red-500/40 shadow-2xl shadow-red-950/80 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5 text-red-500" />
+                <h3 className="text-base font-black uppercase text-white tracking-wide">
+                  Cambiar Foto de Portada
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Esta es la imagen principal que aparece al costado de <strong>Streets Hub</strong> con la etiqueta <em>Comunidad Peruana (Activo)</em>.
+            </p>
+
+            {/* Live Preview */}
+            <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-inner">
+              <img
+                src={previewImage || urlInput || currentCardImage}
+                alt="Vista previa de portada"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-mono text-emerald-400 font-bold">
+                Vista previa
+              </div>
+            </div>
+
+            {/* Upload File Button */}
+            <div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full py-2.5 px-4 rounded-xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/50 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+              >
+                <Upload className="w-4 h-4 text-red-300" />
+                <span>Subir Foto desde tu PC / Celular</span>
+              </button>
+            </div>
+
+            {/* Or Paste URL */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-300 uppercase">
+                O ingresa un enlace / URL de imagen:
+              </label>
+              <input
+                type="text"
+                value={urlInput}
+                onChange={(e) => {
+                  setUrlInput(e.target.value);
+                  setPreviewImage(null);
+                }}
+                placeholder="https://ejemplo.com/mi-foto-peru.jpg"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#070912] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/10 gap-2">
+              <button
+                type="button"
+                onClick={handleResetDefault}
+                className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="Restaurar a la imagen de atardecer original"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                <span>Restaurar Original</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveImage}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950 transition-all"
+                >
+                  {isSaved ? <Check className="w-4 h-4 text-white" /> : <Check className="w-4 h-4 text-emerald-200" />}
+                  <span>{isSaved ? '¡Guardada!' : 'Guardar Imagen'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

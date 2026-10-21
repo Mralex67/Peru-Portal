@@ -56,10 +56,10 @@ export const AdminPasswordModal: React.FC = () => {
             ACCESO RESTRINGIDO AL STAFF
           </span>
           <h3 className="text-xl font-black text-white uppercase font-sans">
-            Panel de Administrador PE:RP
+            Acceso al Sistema Administrativo
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Ingresa la contraseña del Alto Mando para modificar el servidor
+            Ingresa tu contraseña de Staff General (<code className="text-red-400 font-mono">CheilaRamirez</code>) o Base de Datos DNI/Banco (<code className="text-sky-400 font-mono">DEXPERUANOSTREET</code>)
           </p>
         </div>
 

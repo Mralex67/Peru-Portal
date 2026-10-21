@@ -61,11 +61,6 @@ export const Footer: React.FC = () => {
                 </button>
               </li>
               <li>
-                <a href="#facciones" className="hover:text-red-400 transition-colors">
-                  Facciones PNP y Serenazgo
-                </a>
-              </li>
-              <li>
                 <a href="#opiniones" className="hover:text-red-400 transition-colors">
                   Muro de Opinión Ciudadana
                 </a>

@@ -26,7 +26,7 @@ const commands = [
     .addStringOption((option) =>
       option
         .setName('nombres')
-        .setDescription('Tus prenombers (ej. Carlos Daniel)')
+        .setDescription('Tus prenombres (ej. Juan Diego o tus nombres)')
         .setRequired(true)
     )
     .addStringOption((option) =>
@@ -44,14 +44,14 @@ const commands = [
     .addStringOption((option) =>
       option
         .setName('fecha_nacimiento')
-        .setDescription('Fecha de nacimiento en formato AAAA-MM-DD (ej. 2002-05-14)')
-        .setRequired(false)
+        .setDescription('Fecha de nacimiento obligatoria en formato AAAA-MM-DD (ej. 2002-05-14)')
+        .setRequired(true)
     )
     .addStringOption((option) =>
       option
         .setName('sexo')
-        .setDescription('Sexo ciudadano (M o F)')
-        .setRequired(false)
+        .setDescription('Sexo ciudadano obligatorio (M o F)')
+        .setRequired(true)
         .addChoices(
           { name: 'Masculino (M)', value: 'M' },
           { name: 'Femenino (F)', value: 'F' }

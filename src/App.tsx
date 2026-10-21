@@ -6,7 +6,6 @@ import { PeruDniSection } from './components/PeruDniSection';
 import { BankYapoSection } from './components/BankYapoSection';
 import { ServerLiveMonitor } from './components/ServerLiveMonitor';
 import { AdmissionSection } from './components/AdmissionSection';
-import { FactionsSection } from './components/FactionsSection';
 import { CitizenOpinionSection } from './components/CitizenOpinionSection';
 import { AlbumSection } from './components/AlbumSection';
 import { Footer } from './components/Footer';
@@ -32,13 +31,10 @@ function MainApp() {
         {/* 3. Banco & Billetera Móvil Yapo PE:RP */}
         <BankYapoSection />
 
-        {/* 2. Admission Section (Original Peruvian RP admission pathway) */}
+        {/* 4. Admission Section (Original Peruvian RP admission pathway) */}
         <AdmissionSection />
 
-        {/* 3. Factions Section (PNP, Serenazgo, SAMU & Civiles) */}
-        <FactionsSection />
-
-        {/* 4. Estadísticas del Servidor PE:RP (Aforo en vivo & Telemetría ER:LC) */}
+        {/* 5. Estadísticas del Servidor PE:RP (Aforo en vivo & Telemetría ER:LC) */}
         <ServerLiveMonitor />
 
         {/* 5. Álbum Fotográfico Oficial PE:RP */}

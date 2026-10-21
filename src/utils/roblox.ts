@@ -52,9 +52,12 @@ export function generateRandomPeruDniNumber(): { dni: string; digit: string } {
  */
 export async function getRobloxHeadshotByUserId(userId: string | number): Promise<string | null> {
   const uId = userId.toString().trim();
-  if (!uId) return null;
+  if (!uId || !/^\d+$/.test(uId)) return null;
 
-  // Método 1: thumbnails.roblox.com directo (CORS enabled para navegador)
+  // Método 1: Endpoint de redirección directa de Roblox CDN (funciona siempre)
+  const directCdnUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${uId}&width=420&height=420&format=png`;
+
+  // Intentar consultar el CDN de thumbnails a través del backend o thumbnails API
   try {
     const res = await fetch(
       `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
@@ -67,7 +70,6 @@ export async function getRobloxHeadshotByUserId(userId: string | number): Promis
     }
   } catch {}
 
-  // Método 2: thumbnails.roproxy.com
   try {
     const res = await fetch(
       `https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
@@ -80,11 +82,12 @@ export async function getRobloxHeadshotByUserId(userId: string | number): Promis
     }
   } catch {}
 
-  return null;
+  // Fallback 100% garantizado para Roblox User ID
+  return directCdnUrl;
 }
 
 /**
- * Intenta obtener la imagen real del avatar de Roblox mediante username o user ID
+ * Intenta obtener la imagen real del avatar de Roblox mediante username, ID o link de perfil
  */
 export async function fetchRobloxAvatarUrl(username: string): Promise<{
   avatarUrl: string;
@@ -108,19 +111,7 @@ export async function fetchRobloxAvatarUrl(username: string): Promise<{
     };
   }
 
-  // Caso 1: El usuario ingresó un ID numérico de Roblox directamente (ej. 3051711533)
-  if (/^\d+$/.test(cleanInput)) {
-    const headshot = await getRobloxHeadshotByUserId(cleanInput);
-    if (headshot) {
-      return {
-        userId: cleanInput,
-        avatarUrl: headshot,
-        success: true,
-      };
-    }
-  }
-
-  // Caso 2: Intentar con el endpoint de backend de Node.js si está corriendo
+  // Prioridad 1: Backend Express Server Proxy (maneja POST usernames/users, search y thumbnails sin CORS)
   try {
     const backendRes = await fetch(`/api/roblox/avatar/${encodeURIComponent(cleanInput)}`);
     if (backendRes.ok && backendRes.headers.get('content-type')?.includes('application/json')) {
@@ -136,7 +127,19 @@ export async function fetchRobloxAvatarUrl(username: string): Promise<{
     }
   } catch {}
 
-  // Caso 3: RoProxy API para buscar usuario por username
+  // Prioridad 2: Si es un ID numérico de Roblox directamente (ej. 3051711533)
+  if (/^\d+$/.test(cleanInput)) {
+    const headshot = await getRobloxHeadshotByUserId(cleanInput);
+    if (headshot) {
+      return {
+        userId: cleanInput,
+        avatarUrl: headshot,
+        success: true,
+      };
+    }
+  }
+
+  // Prioridad 3: RoProxy API para buscar usuario por username en el cliente
   try {
     const userRes = await fetch('https://users.roproxy.com/v1/usernames/users', {
       method: 'POST',
@@ -168,10 +171,10 @@ export async function fetchRobloxAvatarUrl(username: string): Promise<{
     console.warn('Error en consulta RoProxy:', err);
   }
 
-  // Fallback seguro: Avatar oficial funcional de Roblox
+  // Fallback seguro si no se encontró
   return {
     avatarUrl: DEFAULT_ROBLOX_AVATAR,
     success: false,
-    message: `No se pudo encontrar a "${cleanInput}" en Roblox. Puedes ingresar tu ID numérico de Roblox.`,
+    message: `No se pudo encontrar a "${cleanInput}" en Roblox. Puedes ingresar tu ID numérico de Roblox o subir una foto directamente.`,
   };
 }

@@ -62,46 +62,82 @@ app.post('/api/upload-photo', (req, res) => {
 app.get('/api/roblox/avatar/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const clean = username.trim().replace(/^@/, '');
+    let clean = (username || '').trim().replace(/^@/, '');
+
+    // Extract ID if full profile link was provided
+    const profileMatch = clean.match(/roblox\.com\/users\/(\d+)/i);
+    if (profileMatch) {
+      clean = profileMatch[1];
+    }
 
     let uId = clean;
     let displayName = clean;
 
     if (!/^\d+$/.test(clean)) {
-      const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usernames: [clean], excludeBannedUsers: false }),
-      });
-      if (!userRes.ok) {
-        return res.status(404).json({ error: 'Usuario no encontrado en Roblox' });
+      // 1. Try exact username lookup
+      try {
+        const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usernames: [clean], excludeBannedUsers: false }),
+        });
+        if (userRes.ok) {
+          const userData: any = await userRes.json();
+          if (userData.data && userData.data.length > 0) {
+            uId = userData.data[0].id.toString();
+            displayName = userData.data[0].displayName || userData.data[0].name;
+          }
+        }
+      } catch {}
+
+      // 2. If not resolved, try user search API
+      if (!/^\d+$/.test(uId) || uId === clean) {
+        try {
+          const searchRes = await fetch(
+            `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(clean)}&limit=10`
+          );
+          if (searchRes.ok) {
+            const searchData: any = await searchRes.json();
+            if (searchData.data && searchData.data.length > 0) {
+              const matched = searchData.data.find(
+                (u: any) =>
+                  u.name?.toLowerCase() === clean.toLowerCase() ||
+                  u.displayName?.toLowerCase() === clean.toLowerCase()
+              ) || searchData.data[0];
+              uId = matched.id.toString();
+              displayName = matched.displayName || matched.name;
+            }
+          }
+        } catch {}
       }
-      const userData = await userRes.json();
-      if (!userData.data || userData.data.length === 0) {
-        return res.status(404).json({ error: 'Usuario no encontrado' });
-      }
-      const user = userData.data[0];
-      uId = user.id.toString();
-      displayName = user.displayName || user.name;
     }
 
-    const thumbRes = await fetch(
-      `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
-    );
-    let avatarUrl = 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter';
-    if (thumbRes.ok) {
-      const thumbData = await thumbRes.json();
-      if (thumbData.data && thumbData.data[0]?.imageUrl) {
-        avatarUrl = thumbData.data[0].imageUrl;
-      }
+    if (!/^\d+$/.test(uId)) {
+      return res.status(404).json({ error: `Usuario "${clean}" no encontrado en Roblox.` });
     }
+
+    // Default fallback headshot URL for Roblox
+    let avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${uId}&width=420&height=420&format=png`;
+
+    try {
+      const thumbRes = await fetch(
+        `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
+      );
+      if (thumbRes.ok) {
+        const thumbData: any = await thumbRes.json();
+        if (thumbData.data && thumbData.data[0]?.imageUrl) {
+          avatarUrl = thumbData.data[0].imageUrl;
+        }
+      }
+    } catch {}
+
     res.json({
       userId: uId.toString(),
       displayName,
       avatarUrl,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Error consultando Roblox' });
+    res.status(500).json({ error: err.message || 'Error consultando avatar de Roblox' });
   }
 });
 
@@ -828,6 +864,24 @@ app.get('/api/bot/dni/:identifier', (req, res) => {
   });
 });
 
+// Delete / reset DNI by admin
+app.delete('/api/bot/dni/:identifier', (req, res) => {
+  const { identifier } = req.params;
+  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const data = loadBankSystem();
+
+  const prevLen = data.dnis.length;
+  data.dnis = data.dnis.filter(
+    (d: any) =>
+      d.dniNumber?.toLowerCase() !== clean &&
+      d.discordId?.toLowerCase() !== clean &&
+      d.robloxUsername?.toLowerCase() !== clean
+  );
+  saveBankSystem(data);
+
+  res.json({ success: true, deleted: data.dnis.length < prevLen });
+});
+
 // 3. Lookup Balances (Cash en mano, Bank Banco YA P, Total)
 app.get('/api/bot/bank/balance/:identifier', (req, res) => {
   const { identifier } = req.params;
@@ -1182,7 +1236,11 @@ app.get('/api/bot/download-zip', (req, res) => {
   });
 
   archive.pipe(res);
-  archive.directory(botDir, false);
+  archive.glob('**/*', {
+    cwd: botDir,
+    dot: true,
+    ignore: ['node_modules/**', '.data/**', '.git/**'],
+  });
   archive.finalize();
 });
 
@@ -1191,14 +1249,18 @@ app.get('/api/bot/package-files', (req, res) => {
   try {
     const botDir = path.resolve(__dirname, 'discord-bot');
     const filesToRead = [
+      '.env',
+      'config.env',
+      '.env.example',
       'index.js',
       'deploy-commands.js',
       'package.json',
-      '.env.example',
       'discloud.config',
       'Procfile',
       'Dockerfile',
       'ecosystem.config.cjs',
+      'start.sh',
+      'start.bat',
       'README.md',
     ];
 

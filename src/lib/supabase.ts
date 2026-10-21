@@ -513,6 +513,9 @@ export async function deleteDniByAdmin(identifier: string): Promise<boolean> {
     }
   }
 
+  // Sincronizar eliminación con el backend del bot
+  fetch(`/api/bot/dni/${encodeURIComponent(identifier)}`, { method: 'DELETE' }).catch(() => {});
+
   return true;
 }
 

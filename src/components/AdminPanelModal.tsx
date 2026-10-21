@@ -66,12 +66,18 @@ interface AlbumItem {
 }
 
 export const AdminPanelModal: React.FC = () => {
-  const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin } = useServer();
+  const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin, adminRole } = useServer();
 
   const [formData, setFormData] = useState({ ...config });
   const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot'>('general');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
+
+  useEffect(() => {
+    if (adminRole === 'db_manager') {
+      setActiveTab('supabase');
+    }
+  }, [adminRole]);
 
   // Supabase state
   const [supabaseUrl, setSupabaseUrl] = useState('');
@@ -494,7 +500,7 @@ export const AdminPanelModal: React.FC = () => {
             type: 'saldo',
             account: {
               robloxUsername: target,
-              fullName: 'QUISPE MAMANI CARLOS DANIEL',
+              fullName: 'QUISPE MAMANI JUAN DIEGO',
               dniNumber: '74829104',
               avatarUrl: 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter',
               cashBalance: 45.0,
@@ -519,10 +525,10 @@ export const AdminPanelModal: React.FC = () => {
             dni: {
               dniNumber: '74829104',
               robloxUsername: target,
-              fullName: 'QUISPE MAMANI CARLOS DANIEL',
+              fullName: 'QUISPE MAMANI JUAN DIEGO',
               firstSurname: 'QUISPE',
               secondSurname: 'MAMANI',
-              prenames: 'CARLOS DANIEL',
+              prenames: 'JUAN DIEGO',
               birthDate: '2002-05-14',
               gender: 'M',
               department: 'LIMA',
@@ -575,10 +581,10 @@ export const AdminPanelModal: React.FC = () => {
           dni: {
             dniNumber: `${Math.floor(10000000 + Math.random() * 90000000)}`,
             robloxUsername: cleanUser,
-            fullName: 'QUISPE MAMANI CARLOS DANIEL',
+            fullName: 'QUISPE MAMANI JUAN DIEGO',
             firstSurname: 'QUISPE',
             secondSurname: 'MAMANI',
-            prenames: 'CARLOS DANIEL',
+            prenames: 'JUAN DIEGO',
             birthDate: '2002-05-14',
             gender: 'M',
             district: 'MIRAFLORES',
@@ -613,18 +619,28 @@ export const AdminPanelModal: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/10 pr-10 shrink-0">
           <div className="flex items-center gap-3.5">
-            <div className="p-3 rounded-2xl bg-red-600/20 border border-red-500/40 text-red-500">
+            <div className={`p-3 rounded-2xl border ${
+              adminRole === 'db_manager'
+                ? 'bg-sky-600/20 border-sky-500/40 text-sky-400'
+                : 'bg-red-600/20 border-red-500/40 text-red-500'
+            }`}>
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-950 px-2 py-0.5 rounded border border-red-500/30">
-                  STAFF AUTORIZADO
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${
+                  adminRole === 'db_manager'
+                    ? 'text-sky-300 bg-sky-950 border-sky-500/40'
+                    : 'text-red-500 bg-red-950 border-red-500/30'
+                }`}>
+                  {adminRole === 'db_manager' ? 'OPERADOR DE BASE DE DATOS' : 'STAFF AUTORIZADO'}
                 </span>
-                <span className="text-xs text-slate-400 font-mono">Panel Central</span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {adminRole === 'db_manager' ? 'DNI RENIEC & BANCO YA P' : 'Panel Central'}
+                </span>
               </div>
               <h3 className="text-xl sm:text-2xl font-black text-white uppercase font-sans mt-0.5">
-                Panel de Administración PE:RP
+                {adminRole === 'db_manager' ? 'Panel de Base de Datos y Registro Civil' : 'Panel de Administración PE:RP'}
               </h3>
             </div>
           </div>
@@ -642,94 +658,132 @@ export const AdminPanelModal: React.FC = () => {
 
         {/* Tab switch */}
         <div className="flex border-b border-white/10 mb-5 gap-2 overflow-x-auto shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('general')}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors whitespace-nowrap ${
-              activeTab === 'general' ? 'border-red-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            Información & Textos
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('erlc')}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'erlc' ? 'border-amber-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            API ER:LC (Aforo en Vivo)
-            {isErlcConfigured && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('multimedia')}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'multimedia' ? 'border-red-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            <Camera className="w-3.5 h-3.5 text-red-400" />
-            Fotos: Logo, Camioneta & Álbum
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('discord')}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'discord' ? 'border-[#5865F2] text-white' : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            <Key className="w-3.5 h-3.5 text-[#5865F2]" />
-            Credenciales Discord
-            {isConfigured && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('supabase')}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'supabase' ? 'border-sky-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5 text-sky-400" />
-            Supabase & DNIs
-            {registeredDnis.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-500/40 text-[10px] font-mono">
-                {registeredDnis.length}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('bank')}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'bank' ? 'border-purple-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            <YapoLogo size="sm" withContainer={false} className="w-3.5 h-3.5" />
-            Banco YA P
-            {yapoAccounts.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40 text-[10px] font-mono">
-                {yapoAccounts.length}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('bot')}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'bot' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            <Bot className="w-3.5 h-3.5 text-indigo-400" />
-            Bot de Discord & Comandos
-            <span className="px-1.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono">
-              Slash
-            </span>
-          </button>
+          {adminRole === 'db_manager' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveTab('supabase')}
+                className={`pb-2.5 px-4 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap ${
+                  activeTab === 'supabase' ? 'border-sky-500 text-white bg-sky-950/40 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Database className="w-4 h-4 text-sky-400" />
+                <span>Base de Datos DNI (RENIEC)</span>
+                {registeredDnis.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-500/40 text-[10px] font-mono">
+                    {registeredDnis.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('bank')}
+                className={`pb-2.5 px-4 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap ${
+                  activeTab === 'bank' ? 'border-purple-500 text-white bg-purple-950/40 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
+                <span>Base de Datos Banco YA P</span>
+                {yapoAccounts.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40 text-[10px] font-mono">
+                    {yapoAccounts.length}
+                  </span>
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveTab('general')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors whitespace-nowrap ${
+                  activeTab === 'general' ? 'border-red-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                Información & Textos
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('erlc')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'erlc' ? 'border-amber-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                API ER:LC (Aforo en Vivo)
+                {isErlcConfigured && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('multimedia')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'multimedia' ? 'border-red-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5 text-red-400" />
+                Fotos: Logo, Camioneta & Álbum
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('discord')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'discord' ? 'border-[#5865F2] text-white' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5 text-[#5865F2]" />
+                Credenciales Discord
+                {isConfigured && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('supabase')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'supabase' ? 'border-sky-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Database className="w-3.5 h-3.5 text-sky-400" />
+                Supabase & DNIs
+                {registeredDnis.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-500/40 text-[10px] font-mono">
+                    {registeredDnis.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('bank')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'bank' ? 'border-purple-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <YapoLogo size="sm" withContainer={false} className="w-3.5 h-3.5" />
+                Banco YA P
+                {yapoAccounts.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40 text-[10px] font-mono">
+                    {yapoAccounts.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('bot')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'bot' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Bot className="w-3.5 h-3.5 text-indigo-400" />
+                Bot de Discord & Comandos
+                <span className="px-1.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono">
+                  Slash
+                </span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Admin Form */}
@@ -1141,41 +1195,41 @@ export const AdminPanelModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECTION B: CAMIONETA DE FACCIONES PNP */}
+              {/* SECTION B: FOTO DE PORTADA COMUNIDAD PERUANA */}
               <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-white/10 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
-                      <Car className="w-4 h-4 text-red-500" />
-                      2. Foto de la Camioneta de Patrullaje (105 PNP)
+                      <Camera className="w-4 h-4 text-red-500" />
+                      2. Foto de Portada (Comunidad Peruana - Streets Hub)
                     </h4>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Sube la foto que se exhibirá en la sección de Facciones Oficiales para la Policía Nacional.
+                      Cambia la foto principal que se muestra en el inicio al costado del título Streets Hub con la etiqueta Comunidad Peruana (Activo).
                     </p>
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 self-start sm:self-auto ${
-                    formData.customPatrolTruckUrl
+                    formData.heroCardImage
                       ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
                       : 'bg-white/5 text-slate-400 border border-white/10'
                   }`}>
-                    {formData.customPatrolTruckUrl ? 'Camioneta Personalizada' : 'Patrulla Original 105'}
+                    {formData.heroCardImage ? 'Portada Personalizada' : 'Portada Original'}
                   </span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-5">
-                  {/* Truck Preview */}
-                  <div className="relative w-40 h-24 sm:w-44 sm:h-28 shrink-0 rounded-2xl bg-black/60 border border-white/15 overflow-hidden shadow-lg group">
+                  {/* Preview */}
+                  <div className="relative w-40 h-28 sm:w-48 sm:h-32 shrink-0 rounded-2xl bg-black/60 border border-white/15 overflow-hidden shadow-lg group">
                     <img
-                      src={formData.customPatrolTruckUrl || "/src/assets/images/peru_police_patrol_night_1792084208478.jpg"}
-                      alt="Vista previa Camioneta"
+                      src={formData.heroCardImage || "/src/assets/images/roblox_sunset_pier_1792185364963.jpg"}
+                      alt="Vista previa Portada"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute bottom-1 right-2 bg-black/80 text-[9px] font-mono font-bold text-red-300 px-1.5 py-0.5 rounded">
-                      105 PNP
+                    <div className="absolute bottom-1 right-2 bg-black/80 text-[9px] font-mono font-bold text-emerald-400 px-1.5 py-0.5 rounded">
+                      ACTIVO
                     </div>
                   </div>
 
-                  {/* Truck Controls */}
+                  {/* Controls */}
                   <div className="flex-1 w-full space-y-3">
                     <input
                       type="file"
@@ -1200,21 +1254,21 @@ export const AdminPanelModal: React.FC = () => {
                         ) : (
                           <>
                             <Upload className="w-3.5 h-3.5" />
-                            <span>Subir Foto de la Camioneta</span>
+                            <span>Subir Foto de Portada</span>
                           </>
                         )}
                       </button>
 
-                      {formData.customPatrolTruckUrl && (
+                      {formData.heroCardImage && (
                         <button
                           type="button"
                           onClick={() => {
-                            setFormData((prev) => ({ ...prev, customPatrolTruckUrl: '' }));
+                            setFormData((prev) => ({ ...prev, heroCardImage: '' }));
                             playClickSound();
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
                         >
-                          Restablecer Camioneta Original
+                          Restablecer Original
                         </button>
                       )}
                     </div>
@@ -1232,7 +1286,7 @@ export const AdminPanelModal: React.FC = () => {
                         type="button"
                         onClick={() => {
                           if (!truckUrlInput.trim()) return;
-                          setFormData((prev) => ({ ...prev, customPatrolTruckUrl: truckUrlInput.trim() }));
+                          setFormData((prev) => ({ ...prev, heroCardImage: truckUrlInput.trim() }));
                           setTruckUrlInput('');
                           playSuccessSound();
                         }}

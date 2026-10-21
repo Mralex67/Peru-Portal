@@ -8,7 +8,7 @@ Este bot conecta la economía del servidor de Discord con el **Banco YA P** y el
 
 | Comando | Descripción | Ejemplo |
 |---|---|---|
-| `/crear-dni` | Registra datos ciudadanos y asigna DNI con foto de Roblox | `/crear-dni usuario_roblox:MrAlex_Peru nombres:Carlos Daniel ...` |
+| `/crear-dni` | Registra datos ciudadanos y asigna DNI con foto de Roblox | `/crear-dni usuario_roblox:MrAlex_Peru nombres:Juan Diego ...` |
 | `/dni-ver` | Muestra el DNI con botones interactivos `[Anverso]` y `[Reverso]` | `/dni-ver usuario_o_dni:74829104` |
 | `/saldo` | Ver desglose: En mano, Banco YA P y Total (estilo UnbelievaBoat) | `/saldo` |
 | `/transferir` | Transfiere dinero a otro usuario usando su DNI o usuario de Roblox | `/transferir destino:74829104 monto:50 motivo:Gasolina` |
