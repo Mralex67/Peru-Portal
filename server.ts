@@ -379,6 +379,7 @@ const ERLC_FILE = path.resolve(__dirname, '.erlc-config.json');
 let erlcServerKey = process.env.ERLC_SERVER_KEY || '';
 
 try {
+  fs.mkdirSync(path.dirname(ERLC_FILE), { recursive: true });
   if (fs.existsSync(ERLC_FILE)) {
     const saved = JSON.parse(fs.readFileSync(ERLC_FILE, 'utf-8'));
     if (saved.serverKey) erlcServerKey = saved.serverKey;
@@ -390,12 +391,24 @@ try {
 let erlcCache: { timestamp: number; data: any } | null = null;
 const CACHE_TTL_MS = 15000; // 15 seconds cache to respect PRC rate limits
 
-// Helper function to query ER:LC API across v2 and v1 endpoints
+// Helper function to query ER:LC API across official v2 and v1 endpoints
+// Grounded in official documentation at apidocs.erlc.gg / api.erlc.gg
 async function queryErlcApi(key: string) {
-  const cleanKey = key.trim().replace(/^['"]|['"]$/g, '');
+  let cleanKey = key.trim().replace(/^['"]|['"]$/g, '');
+  if (cleanKey.toLowerCase().startsWith('server-key:')) {
+    cleanKey = cleanKey.slice(11).trim();
+  }
+  if (cleanKey.toLowerCase().startsWith('bearer ')) {
+    cleanKey = cleanKey.slice(7).trim();
+  }
+
+  // Official documentation endpoints:
+  // v2 with ?players=true gives both CurrentPlayers and the full active Players array
   const endpoints = [
+    'https://api.erlc.gg/v2/server?players=true',
     'https://api.erlc.gg/v2/server',
     'https://api.erlc.gg/v1/server',
+    'https://api.erlc.gg/v1/server/players',
   ];
 
   let lastStatus = 0;
@@ -409,45 +422,105 @@ async function queryErlcApi(key: string) {
           'server-key': cleanKey,
           'Server-Key': cleanKey,
           Accept: 'application/json',
-          'User-Agent': 'PERP-Streets-Bot/3.0',
+          'User-Agent': 'PE-RP-Streets-Bot/3.0',
         },
       });
 
       lastStatus = response.status;
       if (response.ok) {
         const data = await response.json();
-        const currentPlayers =
-          typeof data.CurrentPlayers === 'number'
-            ? data.CurrentPlayers
-            : typeof data.currentPlayers === 'number'
-            ? data.currentPlayers
-            : Array.isArray(data.Players)
-            ? data.Players.length
-            : 0;
 
-        const maxPlayers =
-          typeof data.MaxPlayers === 'number'
-            ? data.MaxPlayers
-            : typeof data.maxPlayers === 'number'
-            ? data.maxPlayers
-            : 50;
+        // ER:LC v2 returns an object; v1 /players returns an array
+        let currentPlayers = 0;
+        let maxPlayers = 50;
+        let serverName = 'PE:RP Servidor';
+        let joinKey = '';
+        let accVerifiedReq = '';
+        let teamBalance = true;
+        let playersList: any[] = [];
+
+        if (Array.isArray(data)) {
+          // Array of players from /players endpoint
+          playersList = data;
+          currentPlayers = data.length;
+        } else if (typeof data === 'object' && data !== null) {
+          if (Array.isArray(data.Players)) {
+            playersList = data.Players;
+          } else if (Array.isArray(data.players)) {
+            playersList = data.players;
+          }
+
+          if (typeof data.CurrentPlayers === 'number') {
+            currentPlayers = data.CurrentPlayers;
+          } else if (typeof data.currentPlayers === 'number') {
+            currentPlayers = data.currentPlayers;
+          } else if (typeof data.PlayerCount === 'number') {
+            currentPlayers = data.PlayerCount;
+          } else if (playersList.length > 0) {
+            currentPlayers = playersList.length;
+          }
+
+          if (typeof data.MaxPlayers === 'number') {
+            maxPlayers = data.MaxPlayers;
+          } else if (typeof data.maxPlayers === 'number') {
+            maxPlayers = data.maxPlayers;
+          }
+
+          serverName = data.Name || data.name || serverName;
+          joinKey = data.JoinKey || data.joinKey || '';
+          accVerifiedReq = data.AccVerifiedReq || data.accVerifiedReq || '';
+          teamBalance = Boolean(data.TeamBalance ?? data.teamBalance ?? true);
+        }
 
         return {
           ok: true,
           status: response.status,
           server: {
-            name: data.Name || data.name || 'PE:RP Servidor',
+            name: serverName,
             ownerId: data.OwnerId || data.ownerId,
             currentPlayers,
             maxPlayers,
-            joinKey: data.JoinKey || data.joinKey || '',
-            accVerifiedReq: data.AccVerifiedReq || data.accVerifiedReq || '',
-            teamBalance: Boolean(data.TeamBalance ?? data.teamBalance),
+            joinKey,
+            accVerifiedReq,
+            teamBalance,
+            isOnline: true,
+            playersList,
             updatedAt: new Date().toISOString(),
           },
         };
       } else {
-        lastError = await response.text();
+        const errorText = await response.text();
+        lastError = errorText;
+
+        // Check for specific ER:LC error codes
+        try {
+          const errObj = JSON.parse(errorText);
+          // Code 3002: Server Offline / 0 players in Roblox (instance is sleeping)
+          if (
+            errObj.code === 3002 ||
+            (typeof errObj.message === 'string' && errObj.message.toLowerCase().includes('server offline'))
+          ) {
+            return {
+              ok: true,
+              status: 200,
+              isIdle: true,
+              server: {
+                name: 'PE:RP Servidor (ER:LC)',
+                ownerId: 0,
+                currentPlayers: 0,
+                maxPlayers: 50,
+                joinKey: '',
+                accVerifiedReq: '',
+                teamBalance: true,
+                isOnline: false,
+                isIdle: true,
+                playersList: [],
+                statusNote: 'Servidor sin jugadores activos en este momento (0 conectados)',
+                updatedAt: new Date().toISOString(),
+              },
+            };
+          }
+        } catch {}
       }
     } catch (err: any) {
       lastError = err.message || 'Error de red con ER:LC';
@@ -495,9 +568,18 @@ app.get('/api/erlc/server', async (req, res) => {
       });
     }
 
+    let parsedError = result.error;
+    if (result.error) {
+      try {
+        const j = JSON.parse(result.error);
+        if (j.message) parsedError = j.message;
+      } catch {}
+    }
+
     return res.status(result.status || 500).json({
       configured: true,
       error: `Error al consultar API ER:LC (${result.status || '500'})`,
+      message: parsedError,
       details: result.error,
     });
   } catch (err: any) {
@@ -516,11 +598,19 @@ app.post('/api/erlc/config', async (req, res) => {
     return res.status(400).json({ error: 'Falta serverKey' });
   }
 
-  const cleanKey = serverKey.trim().replace(/^['"]|['"]$/g, '');
+  let cleanKey = serverKey.trim().replace(/^['"]|['"]$/g, '');
+  if (cleanKey.toLowerCase().startsWith('server-key:')) {
+    cleanKey = cleanKey.slice(11).trim();
+  }
+  if (cleanKey.toLowerCase().startsWith('bearer ')) {
+    cleanKey = cleanKey.slice(7).trim();
+  }
+
   erlcServerKey = cleanKey;
   erlcCache = null; // Invalidate cache
 
   try {
+    fs.mkdirSync(path.dirname(ERLC_FILE), { recursive: true });
     fs.writeFileSync(ERLC_FILE, JSON.stringify({ serverKey: erlcServerKey }, null, 2));
   } catch (e) {
     // ignore
@@ -539,10 +629,17 @@ app.post('/api/erlc/config', async (req, res) => {
     const result = await queryErlcApi(cleanKey);
 
     if (result.ok && result.server) {
+      let msg = `¡Conexión Exitosa con ER:LC! Servidor: "${result.server.name}" con ${result.server.currentPlayers}/${result.server.maxPlayers} jugadores en vivo.`;
+      if (result.isIdle || result.server.isOnline === false) {
+        msg = `¡Server-Key de ER:LC validada con éxito! Actualmente el servidor está en espera con 0 jugadores en Roblox. Cuando ingresen jugadores, la web marcará automáticamente la cantidad en vivo.`;
+      }
+
       return res.json({
         success: true,
         configured: true,
         valid: true,
+        isIdle: Boolean(result.isIdle),
+        message: msg,
         server: result.server,
       });
     } else {
@@ -550,7 +647,15 @@ app.post('/api/erlc/config', async (req, res) => {
       if (result.error) {
         try {
           const j = JSON.parse(result.error);
-          if (j.message) parsedError = j.message;
+          if (j.code === 2002) {
+            parsedError = 'Server-Key inválida o expirada. Entra a tu servidor en Roblox > menú M > Settings > Developer/API y copia tu Server-Key.';
+          } else if (j.code === 2000) {
+            parsedError = 'No se proporcionó la Server-Key requerida.';
+          } else if (j.code === 2005) {
+            parsedError = 'Acceso denegado por ER:LC. Verifica que tu servidor tenga el API Pack activo en Roblox.';
+          } else if (j.message) {
+            parsedError = j.message;
+          }
         } catch {}
       }
 

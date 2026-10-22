@@ -157,6 +157,42 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [citizenReviews]);
 
+  // Real-time synchronization with ER:LC Official API (updates Navbar, Hero & whole app)
+  useEffect(() => {
+    let isMounted = true;
+    const syncErlcData = async () => {
+      try {
+        const res = await fetch('/api/erlc/server');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.configured && typeof data.currentPlayers === 'number' && isMounted) {
+          setConfig((prev) => {
+            if (
+              prev.currentPlayers === data.currentPlayers &&
+              prev.maxPlayers === (data.maxPlayers || prev.maxPlayers) &&
+              (!data.joinKey || prev.erlcJoinKey === data.joinKey)
+            ) {
+              return prev;
+            }
+            return {
+              ...prev,
+              currentPlayers: data.currentPlayers,
+              maxPlayers: data.maxPlayers || prev.maxPlayers,
+              ...(data.joinKey ? { erlcJoinKey: data.joinKey } : {}),
+            };
+          });
+        }
+      } catch {}
+    };
+
+    syncErlcData();
+    const interval = setInterval(syncErlcData, 20000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Listen to postMessage from OAuth popup, URL query parameters, or URL hash (Implicit Grant)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {

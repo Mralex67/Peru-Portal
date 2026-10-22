@@ -398,23 +398,6 @@ export const AdminPanelModal: React.FC = () => {
       setIsErlcConfigured(true);
     } catch {}
 
-    const isStatic =
-      typeof window !== 'undefined' &&
-      (window.location.hostname.includes('github.io') ||
-        (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('run.app')));
-
-    if (isStatic) {
-      setIsErlcConfigured(true);
-      setErlcFeedback({
-        success: true,
-        message:
-          '🔑 Server-Key guardada correctamente. Nota: En GitHub Pages (hosting estático sin backend Node.js), la API de ER:LC no permite conexiones directas por CORS. Puedes configurar y mantener los jugadores (ej: 41/50) directamente en la pestaña "Información & Textos" para que todos tus visitantes lo vean actualizado en vivo.',
-      });
-      playSuccessSound();
-      setIsTestingErlc(false);
-      return;
-    }
-
     try {
       const res = await fetch('/api/erlc/config', {
         method: 'POST',
@@ -422,18 +405,13 @@ export const AdminPanelModal: React.FC = () => {
         body: JSON.stringify({ serverKey: cleanKey }),
       });
 
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
-        throw new Error('Respuesta estática sin backend');
-      }
-
       const data = await res.json();
 
       if (data.success && data.valid && data.server) {
         setIsErlcConfigured(true);
         setErlcFeedback({
           success: true,
-          message: `¡Conexión Exitosa con ER:LC! Servidor: "${data.server.name}" con ${data.server.currentPlayers}/${data.server.maxPlayers} jugadores en vivo.`,
+          message: data.message || `¡Conexión Exitosa con ER:LC! Servidor: "${data.server.name}" con ${data.server.currentPlayers}/${data.server.maxPlayers} jugadores en vivo.`,
           serverInfo: data.server,
         });
 
@@ -464,17 +442,15 @@ export const AdminPanelModal: React.FC = () => {
         setIsErlcConfigured(false);
         setErlcFeedback({
           success: false,
-          message: data.message || 'No se pudo validar la clave de ER:LC.',
+          message: data.message || 'No se pudo validar la clave de ER:LC. Verifica que la copiaste de Roblox > Menú M > Settings > Developer / API.',
         });
       }
     } catch (err: any) {
       setIsErlcConfigured(true);
       setErlcFeedback({
-        success: true,
-        message:
-          '🔑 Server-Key guardada localmente. En hosting estático (GitHub Pages), los jugadores se configuran y actualizan directamente desde la pestaña "Información & Textos".',
+        success: false,
+        message: 'No se pudo conectar con el servidor local para verificar la clave de ER:LC.',
       });
-      playSuccessSound();
     } finally {
       setIsTestingErlc(false);
     }
@@ -1034,7 +1010,9 @@ export const AdminPanelModal: React.FC = () => {
                           </div>
                           <div className="bg-black/40 p-2 rounded-lg">
                             <span className="text-slate-400 block">Estado:</span>
-                            <strong className="text-emerald-400">100% Online</strong>
+                            <strong className={erlcFeedback.serverInfo.isOnline === false ? 'text-amber-400' : 'text-emerald-400'}>
+                              {erlcFeedback.serverInfo.isOnline === false ? 'En espera (0 jug.)' : '100% Online'}
+                            </strong>
                           </div>
                         </div>
                       )}
@@ -1088,14 +1066,14 @@ export const AdminPanelModal: React.FC = () => {
                 <div className="p-4 rounded-xl bg-black/40 border border-white/5 space-y-2 text-xs text-slate-300">
                   <h5 className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
                     <Key className="w-3.5 h-3.5 text-amber-400" />
-                    ¿Cómo obtener tu Server-Key de ER:LC?
+                    ¿Cómo obtener y usar tu Server-Key oficial de ER:LC?
                   </h5>
                   <ol className="list-decimal list-inside space-y-1 text-slate-400 text-[11px] leading-relaxed">
-                    <li>Abre Roblox y únete a tu servidor de Emergency Response: Liberty County.</li>
-                    <li>Abre el panel del servidor (tecla <kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-white text-[10px]">M</kbd> &gt; Server Settings).</li>
-                    <li>Ve a la pestaña <strong>Developer / API</strong>.</li>
-                    <li>Genera o copia tu <strong>Server Key</strong> y pégala en esta casilla.</li>
-                    <li>Haz clic en <strong>Guardar y Probar Conexión</strong>. La web sincronizará automáticamente los jugadores (ej. 41/50) cada 30 segundos.</li>
+                    <li>Ingresa a Roblox y entra a tu servidor privado de Emergency Response: Liberty County.</li>
+                    <li>Abre el menú del servidor (tecla <kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-white text-[10px]">M</kbd> &gt; Server Settings).</li>
+                    <li>Ve a la pestaña <strong>Developer / API</strong> (requiere el API Pack activo en tu servidor).</li>
+                    <li>Genera o copia tu <strong>Server Key</strong> y pégala exactamente en esta casilla.</li>
+                    <li>Haz clic en <strong>Guardar y Probar Conexión</strong>. La web conectará con <code>api.erlc.gg/v2/server?players=true</code>. Si tu servidor no tiene jugadores en este momento, marcará 0 jugadores en espera (código 3002). Apenas ingrese un jugador en Roblox, la web actualizará la cifra automáticamente en vivo.</li>
                   </ol>
                 </div>
               </div>
