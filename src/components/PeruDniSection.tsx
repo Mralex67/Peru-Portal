@@ -16,6 +16,8 @@ import {
   Database,
   Upload,
   RefreshCw,
+  Bot,
+  Copy,
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { PeruDni } from '../types/dni';
@@ -24,7 +26,7 @@ import { generateRandomPeruDniNumber, fetchRobloxAvatarUrl, DEFAULT_ROBLOX_AVATA
 import { playClickSound, playSuccessSound } from '../utils/audio';
 
 export const PeruDniSection: React.FC = () => {
-  const { discordUser, setIsDiscordAuthOpen } = useServer();
+  const { config, discordUser, setIsDiscordAuthOpen } = useServer();
 
   const [existingDni, setExistingDni] = useState<PeruDni | null>(null);
   const [loadingCheck, setLoadingCheck] = useState(false);
@@ -994,239 +996,91 @@ export const PeruDniSection: React.FC = () => {
                   <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 text-[11px] text-slate-400 flex items-start gap-2.5">
                     <Lock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
-                      <strong>Control Administrativo Centralizado:</strong> La suspensión o reactivación de DNIs, reinicio de documentos y congelamiento de cuentas bancarias se gestiona exclusivamente por los administradores en el panel central de PE:RP.
+                      <strong>Registro Oficial de Identidad:</strong> La emisión de tu DNI es única y personal. Si requieres actualizar o reiniciar tus datos ciudadanos, consulta con el equipo de soporte oficial de PE:RP.
                     </p>
                   </div>
                 </div>
               ) : (
-                /* Form to generate unique Peruvian DNI */
-                <form onSubmit={handleGenerateDni} className="space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                    <div>
-                      <h3 className="font-bold text-white text-base font-sans flex items-center gap-2">
-                        <User className="w-4 h-4 text-sky-400" />
-                        Formulario de Emisión RENIEC
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        Se registrará a nombre de tu Discord: <strong className="text-white">{discordUser.displayName || discordUser.username}</strong>
-                      </p>
-                    </div>
+                /* State: DNI not yet created. Exclusively issued via Discord Bot /crear-dni */
+                <div className="p-6 sm:p-8 rounded-3xl bg-[#090c18] border border-sky-500/30 text-center space-y-5 animate-in fade-in">
+                  <div className="w-16 h-16 rounded-3xl bg-[#5865F2]/20 border border-[#5865F2]/40 text-[#5865F2] flex items-center justify-center mx-auto shadow-lg shadow-indigo-950/50">
+                    <Bot className="w-8 h-8" />
                   </div>
 
-                  {errorMessage && (
-                    <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/50 text-rose-200 text-xs flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                      <span>{errorMessage}</span>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-sky-400 bg-sky-950/80 px-3 py-1 rounded-full border border-sky-500/30">
+                      TRÁMITE EXCLUSIVO EN DISCORD
+                    </span>
+                    <h3 className="text-xl sm:text-2xl font-black text-white uppercase font-sans">
+                      Emisión de DNI en Discord
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
+                      Hola, <strong className="text-white">{discordUser.displayName || discordUser.username}</strong>. Para verificar tu identidad y avatar de Roblox, la emisión del DNI oficial se realiza <strong>únicamente</strong> mediante nuestro bot en Discord.
+                    </p>
+                  </div>
 
-                  {successMessage && (
-                    <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/50 text-emerald-200 text-xs flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>{successMessage}</span>
-                    </div>
-                  )}
-
-                  {/* Field: Roblox Username */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
-                      Usuario o ID de Roblox <span className="text-red-400">* (Obligatorio)</span>
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        required
-                        value={robloxUsername}
-                        onChange={(e) => setRobloxUsername(e.target.value)}
-                        placeholder="ej. MrAlex_Peru o 3051711533"
-                        className="flex-1 px-3.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
-                      />
+                  {/* Command box */}
+                  <div className="p-4 rounded-2xl bg-black/60 border border-white/10 max-w-md mx-auto text-left space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-300">Comando para emitir tu DNI:</span>
                       <button
                         type="button"
-                        onClick={handleFetchRobloxAvatar}
-                        disabled={isLoadingAvatar}
-                        className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 disabled:opacity-60 shadow-md"
+                        onClick={() => {
+                          navigator.clipboard.writeText('/crear-dni');
+                          playSuccessSound();
+                          alert('¡Comando /crear-dni copiado!');
+                        }}
+                        className="text-[10px] text-sky-400 hover:text-white flex items-center gap-1 cursor-pointer underline"
                       >
-                        {isLoadingAvatar ? (
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Search className="w-3.5 h-3.5" />
-                        )}
-                        <span>{isLoadingAvatar ? 'Cargando...' : 'Obtener Foto'}</span>
+                        <Copy className="w-3 h-3" />
+                        <span>Copiar comando</span>
                       </button>
                     </div>
-                  </div>
 
-                  {/* Photo Preview & Custom Upload Option */}
-                  <div className="p-3 rounded-2xl bg-[#070912] border border-white/10 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-12 h-14 rounded-lg bg-slate-800 border-2 border-sky-400 overflow-hidden shrink-0 shadow-md">
-                        {avatarPreview ? (
-                          <img
-                            src={avatarPreview}
-                            alt="Avatar Roblox"
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = DEFAULT_ROBLOX_AVATAR;
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-500 text-[10px]">
-                            Sin foto
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Foto del Avatar Roblox</span>
-                        </div>
-                        <p className="text-[10px] text-slate-400">
-                          {avatarPreview.includes('rbxcdn') || avatarPreview.includes('roblox.com')
-                            ? 'Avatar oficial de Roblox sincronizado'
-                            : 'Avatar listo para el DNI'}
-                        </p>
-                      </div>
+                    <div className="px-3.5 py-2.5 rounded-xl bg-[#141726] border border-sky-500/30 text-sky-300 font-mono text-sm font-bold flex items-center justify-between">
+                      <span>/crear-dni</span>
+                      <span className="text-[10px] text-emerald-400 font-sans">1 DNI por ciudadano</span>
                     </div>
 
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      Ejecuta <code className="text-sky-300 font-mono">/crear-dni</code> en cualquier canal de comandos de nuestro Discord. El bot registrará tus nombres y tu avatar de Roblox, y te otorgará tu cuenta del Banco YA P.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <a
+                      href={config.discordInviteUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-indigo-950 transition-all cursor-pointer"
+                    >
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                      </svg>
+                      <span>Abrir Discord Oficial</span>
+                    </a>
+
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] text-sky-300 hover:text-white font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                      onClick={() => {
+                        getUserDni(discordUser.id)
+                          .then((dni) => {
+                            if (dni) {
+                              setExistingDni(dni);
+                              if (dni.photoUrl) setAvatarPreview(dni.photoUrl);
+                              playSuccessSound();
+                            } else {
+                              alert('Aún no se ha detectado tu DNI. Ejecuta /crear-dni en el servidor de Discord.');
+                            }
+                          });
+                      }}
+                      className="w-full sm:w-auto px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                     >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Subir Imagen</span>
+                      <RefreshCw className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Ya lo creé, verificar ahora</span>
                     </button>
                   </div>
-
-                  {/* Fields: First & Second Surname (Both Required) */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                        Primer Apellido <span className="text-red-400">* (Obligatorio)</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={firstSurname}
-                        onChange={(e) => setFirstSurname(e.target.value)}
-                        placeholder="ej. QUISPE"
-                        className="w-full px-3 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white uppercase text-xs focus:outline-none focus:border-sky-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                        Segundo Apellido <span className="text-red-400">* (Obligatorio)</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={secondSurname}
-                        onChange={(e) => setSecondSurname(e.target.value)}
-                        placeholder="ej. MAMANI"
-                        className="w-full px-3 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white uppercase text-xs focus:outline-none focus:border-sky-400"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Field: Given names (Required) */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                      Prenombres <span className="text-red-400">* (Obligatorio)</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={givenNames}
-                      onChange={(e) => setGivenNames(e.target.value)}
-                      placeholder="ej. JUAN DIEGO"
-                      className="w-full px-3 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white uppercase text-xs focus:outline-none focus:border-sky-400"
-                    />
-                  </div>
-
-                  {/* Field: Gender and Full Birth Date (All Strictly Required) */}
-                  <div className="space-y-3 pt-1">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                        Sexo Ciudadano <span className="text-red-400">* (Obligatorio)</span>
-                      </label>
-                      <select
-                        required
-                        value={gender}
-                        onChange={(e) => setGender(e.target.value as 'M' | 'F')}
-                        className="w-full px-3 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
-                      >
-                        <option value="M">M - Masculino</option>
-                        <option value="F">F - Femenino</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                        Fecha de Nacimiento <span className="text-red-400">* (Obligatorio: Día / Mes / Año)</span>
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {/* Day */}
-                        <select
-                          required
-                          value={birthDay}
-                          onChange={(e) => setBirthDay(e.target.value)}
-                          className="px-2.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
-                        >
-                          {Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0')).map((d) => (
-                            <option key={d} value={d}>Día {d}</option>
-                          ))}
-                        </select>
-
-                        {/* Month */}
-                        <select
-                          required
-                          value={birthMonth}
-                          onChange={(e) => setBirthMonth(e.target.value)}
-                          className="px-2.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
-                        >
-                          {['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SET', 'OCT', 'NOV', 'DIC'].map((m) => (
-                            <option key={m} value={m}>{m}</option>
-                          ))}
-                        </select>
-
-                        {/* Year */}
-                        <select
-                          required
-                          value={birthYear}
-                          onChange={(e) => setBirthYear(e.target.value)}
-                          className="px-2.5 py-2 rounded-xl bg-[#090b14] border border-white/15 text-white text-xs focus:outline-none focus:border-sky-400"
-                        >
-                          {Array.from({ length: 45 }, (_, i) => 2010 - i).map((y) => (
-                            <option key={y} value={y.toString()}>{y}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-xl shadow-sky-950 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
-                    >
-                      <Sparkles className="w-4 h-4 text-sky-200" />
-                      <span>{isSubmitting ? 'Registrando en Supabase...' : 'Generar y Registrar DNI Único'}</span>
-                    </button>
-                    <span className="block text-[10px] text-center text-slate-400 mt-2">
-                      ⚠️ Atención: Una vez generado, tu DNI quedará registrado de forma permanente.
-                    </span>
-                  </div>
-                </form>
+                </div>
               )}
 
             </div>

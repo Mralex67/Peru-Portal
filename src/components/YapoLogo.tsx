@@ -1,4 +1,5 @@
 import React from 'react';
+import { useServer } from '../context/ServerContext';
 
 interface YapoLogoProps {
   className?: string;
@@ -11,12 +12,26 @@ export const YapoLogo: React.FC<YapoLogoProps> = ({
   size = 'md',
   withContainer = true,
 }) => {
+  const { config } = useServer();
+
   const sizeMap = {
     sm: 'w-8 h-8 text-xs',
     md: 'w-12 h-12 text-sm',
     lg: 'w-20 h-20 text-base',
     xl: 'w-32 h-32 text-xl',
   };
+
+  if (config?.yapoLogoUrl) {
+    return (
+      <div className={`relative flex items-center justify-center shrink-0 ${sizeMap[size]} ${className}`}>
+        <img
+          src={config.yapoLogoUrl}
+          alt="Banco YA P"
+          className={`w-full h-full object-contain ${withContainer ? 'rounded-2xl p-1 bg-[#5b0fa0] border border-purple-400/40' : ''} drop-shadow-md select-none`}
+        />
+      </div>
+    );
+  }
 
   const svgContent = (
     <svg

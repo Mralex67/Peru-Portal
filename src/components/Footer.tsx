@@ -1,7 +1,7 @@
 import React from 'react';
 import { OfficialPeruLogo } from './OfficialPeruLogo';
 import { useServer } from '../context/ServerContext';
-import { Settings, ExternalLink } from 'lucide-react';
+import { Shield, ExternalLink } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { config, requestAdminAccess, setIsWhitelistInfoOpen, setIsDiscordAuthOpen } = useServer();
@@ -68,10 +68,10 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Col 3: Comunidad y Administración */}
+          {/* Col 3: Comunidad y Servidor */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-4">
-              Comunidad & Staff
+              Comunidad & Enlaces
             </h4>
             <ul className="space-y-2.5 text-xs">
               <li>
@@ -92,15 +92,6 @@ export const Footer: React.FC = () => {
                 </button>
               </li>
               <li>
-                <button
-                  onClick={requestAdminAccess}
-                  className="hover:text-red-400 text-red-500 font-bold transition-colors cursor-pointer text-left flex items-center gap-1.5"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  Panel de Administrador
-                </button>
-              </li>
-              <li>
                 <span className="text-slate-500">{config.seasonName}</span>
               </li>
             </ul>
@@ -110,8 +101,16 @@ export const Footer: React.FC = () => {
 
         {/* Disclaimer & Bottom Bar */}
         <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
-          <div>
-            © {new Date().getFullYear()} PE:RP STREETS / PERÚ RP OFICIAL. Todos los derechos reservados.
+          <div className="flex items-center gap-2">
+            <span>© {new Date().getFullYear()} PE:RP STREETS / PERÚ RP OFICIAL. Todos los derechos reservados.</span>
+            <button
+              onClick={requestAdminAccess}
+              title="Portal Seguro"
+              aria-label="Portal de Seguridad"
+              className="p-1 rounded text-slate-700 hover:text-slate-400 transition-colors cursor-pointer"
+            >
+              <Shield className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="text-center md:text-right max-w-xl text-[10px] leading-tight">
             PE:RP es una comunidad independiente creada para fans de Emergency Response: Liberty County en Roblox.

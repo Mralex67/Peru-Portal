@@ -16,6 +16,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   discordInviteUrl: 'https://discord.gg/NBwwDmrFwf',
   patrolAlert: 'Patrullaje Preventivo Nacional',
   customLogoUrl: '',
+  yapoLogoUrl: '',
   customPatrolTruckUrl: '',
   heroCardImage: '/src/assets/images/roblox_sunset_pier_1792185364963.jpg',
   albumUploadsLocked: true,

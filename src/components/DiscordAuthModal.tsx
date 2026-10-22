@@ -36,14 +36,12 @@ export const DiscordAuthModal: React.FC = () => {
     }
     setRedirectUri(currentRedirect);
 
-    // Pre-fill from localStorage if available
-    const savedClientId = localStorage.getItem('perp_discord_client_id');
-    if (savedClientId) {
-      setClientId(savedClientId);
-      setIsConfigured(true);
-    }
+    // Pre-fill from localStorage if available, or use official production Discord Client ID
+    const savedClientId = localStorage.getItem('perp_discord_client_id') || '1560384206612336793';
+    setClientId(savedClientId);
+    setIsConfigured(true);
 
-    // Attempt to query backend config if available (without failing on HTML)
+    // Attempt to query backend config if available
     fetch('/api/auth/discord/config')
       .then(async (res) => {
         const contentType = res.headers.get('content-type') || '';
@@ -54,19 +52,12 @@ export const DiscordAuthModal: React.FC = () => {
       })
       .then((data) => {
         if (data) {
-          setIsConfigured(Boolean(data.configured || savedClientId));
+          setIsConfigured(true);
           if (data.redirectUri && !isStatic) setRedirectUri(data.redirectUri);
           if (data.clientId) setClientId(data.clientId);
-          if (!data.configured && !savedClientId) {
-            setShowConfigInputs(true);
-          }
-        } else if (!savedClientId) {
-          setShowConfigInputs(true);
         }
       })
-      .catch(() => {
-        if (!savedClientId) setShowConfigInputs(true);
-      });
+      .catch(() => {});
 
     const handleAuthMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'DISCORD_OAUTH_ERROR') {
@@ -209,188 +200,55 @@ export const DiscordAuthModal: React.FC = () => {
             </div>
           )}
 
-          {/* Case 1: Configured -> Direct One-Click Launch */}
-          {isConfigured && !showConfigInputs ? (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-[#2b2d31] border border-[#3f4147] flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-white">OAuth2 Configurado y Listo</div>
-                  <div className="text-[11px] text-slate-400">
-                    Client ID guardado: <span className="font-mono text-emerald-400">{clientId}</span>
-                  </div>
-                </div>
+          {/* Direct Official Discord Login */}
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-[#2b2d31] border border-[#3f4147] flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
               </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={handleStartOfficialDiscordOAuth}
-                  className="w-full py-3.5 px-6 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-sm font-bold transition-all shadow-lg shadow-indigo-950 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-75"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Abriendo Discord...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                      </svg>
-                      <span>Abrir Ventana Oficial de Discord</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConfigInputs(true)}
-                  className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer"
-                >
-                  Cambiar o editar Client ID
-                </button>
+              <div>
+                <div className="text-xs font-bold text-white">Servidor Oficial PE:RP Streets</div>
+                <div className="text-[11px] text-slate-400">
+                  Autenticación directa y segura con la API oficial de Discord
+                </div>
               </div>
             </div>
-          ) : (
-            /* Case 2: Enter Client ID from Discord Developer Portal */
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-2xl bg-[#2b2d31] border border-[#3f4147] space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-[#dbdee1] flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5 text-[#5865F2]" />
-                    Paso 1: Copia esta Redirect URI
-                  </span>
-                  <a
-                    href="https://discord.com/developers/applications"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] text-indigo-300 hover:text-white flex items-center gap-1 underline"
-                  >
-                    Abrir Portal Discord <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={redirectUri}
-                    onChange={(e) => setRedirectUri(e.target.value)}
-                    placeholder="https://..."
-                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#1e1f22] border border-[#4e5058] text-[11px] font-mono text-emerald-400 font-bold focus:outline-none focus:border-[#5865F2]"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopyUri}
-                    className="px-3 py-1.5 rounded-lg bg-[#5865F2] hover:bg-[#4752c4] text-white text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? 'Copiado' : 'Copiar'}
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[10px] text-slate-400">Opciones:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const u = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '') + '/';
-                      setRedirectUri(u);
-                    }}
-                    className="text-[10px] px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-indigo-300 border border-white/10 cursor-pointer"
-                  >
-                    URL Principal (/)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const u = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '') + '/api/auth/callback/discord';
-                      setRedirectUri(u);
-                    }}
-                    className="text-[10px] px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-indigo-300 border border-white/10 cursor-pointer"
-                  >
-                    Con /api/auth/callback/discord
-                  </button>
-                </div>
-
-                <p className="text-[10px] text-[#949ba4] leading-relaxed pt-1">
-                  ⚠️ <strong>Asegúrate:</strong> En Discord Developer Portal &gt; OAuth2 &gt; Redirects, la URL debe ser <strong>exactamente idéntica</strong> a la que figura arriba. (Puedes agregar ambas en Discord para asegurar que siempre funcione).
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-[#dbdee1] mb-1">
-                    Paso 2: CLIENT ID de tu Aplicación en Discord
-                  </label>
-                  <input
-                    type="text"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    placeholder="ej. 1560384206612336793"
-                    className="w-full px-3 py-2 rounded-xl bg-[#1e1f22] border border-[#4e5058] text-white text-xs font-mono font-bold focus:outline-none focus:border-[#5865F2]"
-                  />
-                </div>
-
-                {!isStaticHost && (
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#dbdee1] mb-1">
-                      Paso 3: CLIENT SECRET (Opcional)
-                    </label>
-                    <input
-                      type="password"
-                      value={clientSecret}
-                      onChange={(e) => setClientSecret(e.target.value)}
-                      placeholder="Client Secret (Opcional)"
-                      className="w-full px-3 py-2 rounded-xl bg-[#1e1f22] border border-[#4e5058] text-white text-xs font-mono focus:outline-none focus:border-[#5865F2]"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#1e1f22]/70 border border-white/5 text-[11px] text-slate-300 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>En GitHub Pages la autenticación es directa y segura con tu <strong>Client ID</strong>.</span>
-              </div>
-
+            <div className="pt-2">
               <button
                 type="button"
                 disabled={loading}
                 onClick={handleStartOfficialDiscordOAuth}
-                className="w-full py-3 px-6 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
+                className="w-full py-3.5 px-6 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-sm font-bold transition-all shadow-lg shadow-indigo-950 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-75"
               >
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Conectando con Discord...</span>
+                    <span>Abriendo Discord...</span>
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Conectar y Abrir Ventana Oficial de Discord</span>
+                    <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                    </svg>
+                    <span>Abrir Ventana Oficial de Discord</span>
+                    <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
-
-              {isConfigured && (
-                <div className="text-center pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowConfigInputs(false)}
-                    className="text-[11px] text-slate-400 hover:text-white cursor-pointer"
-                  >
-                    Volver al botón de inicio directo
-                  </button>
-                </div>
-              )}
             </div>
-          )}
+
+            <div className="grid grid-cols-2 gap-2 pt-2 text-[11px] text-slate-400">
+              <div className="p-2.5 rounded-xl bg-[#2b2d31] border border-[#3f4147] flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Identidad Oficial</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#2b2d31] border border-[#3f4147] flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Sin contraseñas</span>
+              </div>
+            </div>
+          </div>
 
         </div>
 

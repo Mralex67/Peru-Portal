@@ -4,7 +4,7 @@ import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
 
 export const ServerLiveMonitor: React.FC = () => {
-  const { config, updateConfig, requestAdminAccess } = useServer();
+  const { config, updateConfig } = useServer();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [secondsAgo, setSecondsAgo] = useState(0);
   const [pingMs, setPingMs] = useState(21);
@@ -234,22 +234,14 @@ export const ServerLiveMonitor: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <div className="p-3 rounded-xl bg-[#121422] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                  <div className="flex items-start gap-2">
-                    <Key className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="text-slate-200 font-bold block text-[11px]">Vincular API de ER:LC</span>
-                      <span className="text-[10px] text-slate-400 leading-tight block">
-                        Ingresa tu Server-Key en el Panel de Admin para actualizar jugadores automáticamente (41/50).
-                      </span>
-                    </div>
+                <div className="p-3 rounded-xl bg-[#121422] border border-white/10 flex items-center gap-2.5 text-xs text-slate-300">
+                  <Server className="w-4 h-4 text-slate-400 shrink-0" />
+                  <div>
+                    <span className="text-slate-200 font-bold block text-[11px]">Servidor Oficial PE:RP Streets</span>
+                    <span className="text-[10px] text-slate-400 leading-tight block">
+                      Comunidad roleplay activa en Emergency Response: Liberty County.
+                    </span>
                   </div>
-                  <button
-                    onClick={requestAdminAccess}
-                    className="shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <span>Configurar</span>
-                  </button>
                 </div>
               )}
             </div>

@@ -118,16 +118,19 @@ export const AdminPanelModal: React.FC = () => {
   // File upload refs
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const truckInputRef = useRef<HTMLInputElement | null>(null);
+  const yapoLogoInputRef = useRef<HTMLInputElement | null>(null);
   const albumAdminInputRef = useRef<HTMLInputElement | null>(null);
 
   // Image loading indicators
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingTruck, setIsUploadingTruck] = useState(false);
+  const [isUploadingYapoLogo, setIsUploadingYapoLogo] = useState(false);
   const [isUploadingAlbum, setIsUploadingAlbum] = useState(false);
 
   // Direct URL inputs
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const [truckUrlInput, setTruckUrlInput] = useState('');
+  const [yapoLogoUrlInput, setYapoLogoUrlInput] = useState('');
 
   // Album photos state
   const [albumPhotos, setAlbumPhotos] = useState<AlbumItem[]>([]);
@@ -277,6 +280,24 @@ export const AdminPanelModal: React.FC = () => {
       const finalUrl = await uploadToServer(dataUrl);
       setFormData((prev) => ({ ...prev, customPatrolTruckUrl: finalUrl }));
       setIsUploadingTruck(false);
+      playSuccessSound();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Upload YA P Logo from local file
+  const handleYapoLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingYapoLogo(true);
+    playClickSound();
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const finalUrl = await uploadToServer(dataUrl);
+      setFormData((prev) => ({ ...prev, yapoLogoUrl: finalUrl }));
+      setIsUploadingYapoLogo(false);
       playSuccessSound();
     };
     reader.readAsDataURL(file);
@@ -1026,12 +1047,12 @@ export const AdminPanelModal: React.FC = () => {
                   <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1.5 flex items-center justify-between">
                     <span>Server-Key de Emergency Response: Liberty County</span>
                     <a
-                      href="https://policeroleplay.community"
+                      href="https://apidocs.erlc.gg"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-amber-400 hover:text-amber-300 text-[10px] lowercase flex items-center gap-1 underline"
+                      className="text-amber-400 hover:text-amber-300 text-[10px] flex items-center gap-1 underline"
                     >
-                      policeroleplay.community <ExternalLink className="w-2.5 h-2.5" />
+                      Documentación api.erlc.gg <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                   </label>
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -1299,7 +1320,112 @@ export const AdminPanelModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECTION C: SEGURIDAD Y GESTIÓN DEL ÁLBUM */}
+              {/* SECTION: LOGO OFICIAL DEL BANCO YA P (S/.) */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-purple-500/30 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                  <div>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-purple-300 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                      3. Logo Oficial del Banco YA P (S/.)
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Personaliza o sube una imagen para el logo de YA P. Se actualizará en la billetera virtual, transferencias y barra de navegación.
+                    </p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 self-start sm:self-auto ${
+                    formData.yapoLogoUrl
+                      ? 'bg-purple-950 text-purple-300 border border-purple-500/40'
+                      : 'bg-white/5 text-slate-400 border border-white/10'
+                  }`}>
+                    {formData.yapoLogoUrl ? 'Logo YA P Personalizado' : 'Logo YA P Original'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-5">
+                  {/* Preview */}
+                  <div className="relative w-28 h-28 shrink-0 rounded-2xl bg-[#090b14] border border-purple-500/40 flex items-center justify-center p-2 shadow-lg overflow-hidden">
+                    {formData.yapoLogoUrl ? (
+                      <img
+                        src={formData.yapoLogoUrl}
+                        alt="Logo YA P"
+                        className="w-full h-full object-contain drop-shadow-md select-none rounded-xl"
+                      />
+                    ) : (
+                      <YapoLogo size="lg" />
+                    )}
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex-1 w-full space-y-3">
+                    <input
+                      type="file"
+                      ref={yapoLogoInputRef}
+                      accept="image/*"
+                      onChange={handleYapoLogoFileChange}
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => yapoLogoInputRef.current?.click()}
+                        disabled={isUploadingYapoLogo}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-purple-950"
+                      >
+                        {isUploadingYapoLogo ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Cargando logo...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Subir Logo de YA P</span>
+                          </>
+                        )}
+                      </button>
+
+                      {formData.yapoLogoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, yapoLogoUrl: '' }));
+                            playClickSound();
+                          }}
+                          className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Restablecer Original
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Direct URL input */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        value={yapoLogoUrlInput}
+                        onChange={(e) => setYapoLogoUrlInput(e.target.value)}
+                        placeholder="O pega enlace directo de imagen (https://...)..."
+                        className="flex-1 px-3 py-2 rounded-xl bg-[#0a0c14] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-purple-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!yapoLogoUrlInput.trim()) return;
+                          setFormData((prev) => ({ ...prev, yapoLogoUrl: yapoLogoUrlInput.trim() }));
+                          setYapoLogoUrlInput('');
+                          playSuccessSound();
+                        }}
+                        className="px-3 py-2 rounded-xl bg-[#2a1742] hover:bg-[#39215c] text-purple-200 hover:text-white text-xs font-bold cursor-pointer"
+                      >
+                        Aplicar URL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION D: SEGURIDAD Y GESTIÓN DEL ÁLBUM */}
               <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-white/10 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
                   <div>
@@ -1492,92 +1618,113 @@ export const AdminPanelModal: React.FC = () => {
           {/* TAB 5: SUPABASE & PERU DNIS */}
           {activeTab === 'supabase' && (
             <div className="space-y-5">
-              <div className="p-4 rounded-2xl bg-[#091522] border border-sky-500/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Database className="w-5 h-5 text-sky-400" />
+              {adminRole === 'db_manager' ? (
+                <div className="p-4 rounded-2xl bg-[#091522] border border-sky-500/30 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Database className="w-5 h-5 text-sky-400 shrink-0" />
                     <div>
                       <h4 className="text-xs font-bold uppercase tracking-wider text-sky-300">
-                        Base de Datos Supabase (DNI Peruano & Ciudadanos)
+                        Base de Datos Ciudadana RENIEC (DNI Peruano)
                       </h4>
                       <p className="text-[11px] text-slate-400">
-                        Los DNIs generados por los usuarios se almacenan en Supabase con regla estricta de 1 DNI por Discord.
+                        Padrón oficial de ciudadanos de PE:RP. Consulta de registros, aplicación de medidas cautelares y reinicio administrativo de documentos.
                       </p>
                     </div>
                   </div>
-
-                  <a
-                    href="https://supabase.com/dashboard"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] text-sky-300 hover:text-white flex items-center gap-1 underline shrink-0"
-                  >
-                    Abrir Supabase <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <span className="px-2.5 py-1 rounded-full bg-sky-950 border border-sky-500/40 text-[10px] font-mono text-sky-300 font-bold shrink-0">
+                    MODO OPERADOR DB
+                  </span>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="p-4 rounded-2xl bg-[#091522] border border-sky-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Database className="w-5 h-5 text-sky-400" />
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-sky-300">
+                            Base de Datos Supabase (DNI Peruano & Ciudadanos)
+                          </h4>
+                          <p className="text-[11px] text-slate-400">
+                            Los DNIs generados por los usuarios se almacenan en Supabase con regla estricta de 1 DNI por Discord.
+                          </p>
+                        </div>
+                      </div>
 
-              {/* Supabase inputs */}
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
-                    PROJECT URL DE SUPABASE
-                  </label>
-                  <input
-                    type="text"
-                    value={supabaseUrl}
-                    onChange={(e) => setSupabaseUrl(e.target.value)}
-                    placeholder="https://xyzabcdefghijklm.supabase.co"
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
-                    ANON / PUBLIC API KEY
-                  </label>
-                  <input
-                    type="password"
-                    value={supabaseKey}
-                    onChange={(e) => setSupabaseKey(e.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      saveSupabaseConfig(supabaseUrl, supabaseKey);
-                      setSupabaseSaved(true);
-                      playSuccessSound();
-                      setTimeout(() => setSupabaseSaved(false), 2500);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
-                  >
-                    {supabaseSaved ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>{supabaseSaved ? '¡Credenciales Guardadas!' : 'Guardar Credenciales Supabase'}</span>
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(COMBINED_SUPABASE_SQL);
-                        setCopiedSql(true);
-                        playSuccessSound();
-                        setTimeout(() => setCopiedSql(false), 2500);
-                      }}
-                      className="px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-purple-500/40"
-                      title="Copia el script SQL completo que crea tanto peru_dnis como yapo_accounts y yapo_transactions"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                      <span>{copiedSql ? '¡SQL Completo Copiado!' : 'Copiar SQL Completo (DNI + YA P)'}</span>
-                    </button>
+                      <a
+                        href="https://supabase.com/dashboard"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-sky-300 hover:text-white flex items-center gap-1 underline shrink-0"
+                      >
+                        Abrir Supabase <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   </div>
-                </div>
-              </div>
+
+                  {/* Supabase inputs */}
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                        PROJECT URL DE SUPABASE
+                      </label>
+                      <input
+                        type="text"
+                        value={supabaseUrl}
+                        onChange={(e) => setSupabaseUrl(e.target.value)}
+                        placeholder="https://xyzabcdefghijklm.supabase.co"
+                        className="w-full px-3 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                        ANON / PUBLIC API KEY
+                      </label>
+                      <input
+                        type="password"
+                        value={supabaseKey}
+                        onChange={(e) => setSupabaseKey(e.target.value)}
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        className="w-full px-3 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-sky-400"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveSupabaseConfig(supabaseUrl, supabaseKey);
+                          setSupabaseSaved(true);
+                          playSuccessSound();
+                          setTimeout(() => setSupabaseSaved(false), 2500);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                      >
+                        {supabaseSaved ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Save className="w-3.5 h-3.5" />}
+                        <span>{supabaseSaved ? '¡Credenciales Guardadas!' : 'Guardar Credenciales Supabase'}</span>
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(COMBINED_SUPABASE_SQL);
+                            setCopiedSql(true);
+                            playSuccessSound();
+                            setTimeout(() => setCopiedSql(false), 2500);
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-purple-500/40"
+                          title="Copia el script SQL completo que crea tanto peru_dnis como yapo_accounts y yapo_transactions"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>{copiedSql ? '¡SQL Completo Copiado!' : 'Copiar SQL Completo (DNI + YA P)'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Control Policial & Judicial por Usuario de Roblox */}
               <div className="p-4 rounded-2xl bg-[#0e1424] border border-sky-500/30 space-y-3.5">
@@ -1889,7 +2036,7 @@ export const AdminPanelModal: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                           {dni.status === 'suspended' && (
                             <span className="text-[9px] font-mono text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/40">
                               SUSPENDIDO
@@ -1908,6 +2055,26 @@ export const AdminPanelModal: React.FC = () => {
                           <span className="text-[10px] font-mono text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30">
                             {dni.status === 'suspended' ? 'BLOQUEADO' : 'ACTIVO'}
                           </span>
+
+                          {/* Direct Reiniciar DNI Button on Row */}
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`¿Seguro que deseas reiniciar el DNI de @${dni.robloxUsername}? El ciudadano podrá volver a tramitarlo.`)) {
+                                await deleteDniByAdmin(dni.discordId);
+                                setRegisteredDnis((prev) => prev.filter((d) => d.id !== dni.id));
+                                if (selectedCitizen?.id === dni.id) setSelectedCitizen(null);
+                                playSuccessSound();
+                                setAdminFeedback(`DNI de @${dni.robloxUsername} reiniciado exitosamente.`);
+                              }
+                            }}
+                            className="px-2 py-1 rounded-lg bg-rose-950/70 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-500/40 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                            title="Reiniciar este DNI"
+                          >
+                            <RotateCcw className="w-3 h-3 text-rose-400" />
+                            <span>Reiniciar DNI</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -2151,103 +2318,105 @@ export const AdminPanelModal: React.FC = () => {
                 )}
               </div>
 
-              {/* GENERAL BANK & BOT CONFIGURATION */}
-              <div className="p-4 rounded-2xl bg-[#0b0e1c] border border-white/10 space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Bot className="w-4 h-4 text-sky-400" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-white">
-                      Configuración de Economía & Bot de Discord
-                    </h4>
+              {/* GENERAL BANK & BOT CONFIGURATION (Superadmin Only - Hidden for DB Manager) */}
+              {adminRole !== 'db_manager' && (
+                <div className="p-4 rounded-2xl bg-[#0b0e1c] border border-white/10 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Bot className="w-4 h-4 text-sky-400" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                        Configuración de Economía & Bot de Discord
+                      </h4>
+                    </div>
+                    <span className="text-[10px] text-slate-400">Tipo UnbelievaBoat / Economía Virtual</span>
                   </div>
-                  <span className="text-[10px] text-slate-400">Tipo UnbelievaBoat / Economía Virtual</span>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                        Bono de Bienvenida al Afiliarse (S/.)
+                      </label>
+                      <input
+                        type="number"
+                        value={yapoBankConfig.welcomeBonus}
+                        onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, welcomeBonus: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                        Límite Máximo por Transferencia (S/.)
+                      </label>
+                      <input
+                        type="number"
+                        value={yapoBankConfig.maxTransferPerTx}
+                        onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, maxTransferPerTx: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
-                      Bono de Bienvenida al Afiliarse (S/.)
+                      Webhook URL de Discord (Registro de Transacciones en Vivo)
                     </label>
                     <input
-                      type="number"
-                      value={yapoBankConfig.welcomeBonus}
-                      onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, welcomeBonus: parseFloat(e.target.value) || 0 })}
+                      type="url"
+                      value={yapoBankConfig.discordBotWebhookUrl || ''}
+                      onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, discordBotWebhookUrl: e.target.value })}
+                      placeholder="https://discord.com/api/webhooks/..."
+                      className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Cada vez que un ciudadano haga un Yapeo o retiro en efectivo, se enviará una notificación a tu canal de Discord configurado.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                      Token o Endpoint del Bot de Discord (Opcional - Para vincular economía)
+                    </label>
+                    <input
+                      type="password"
+                      value={yapoBankConfig.discordBotToken || ''}
+                      onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, discordBotToken: e.target.value })}
+                      placeholder="OTkyNz..."
                       className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
-                      Límite Máximo por Transferencia (S/.)
-                    </label>
-                    <input
-                      type="number"
-                      value={yapoBankConfig.maxTransferPerTx}
-                      onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, maxTransferPerTx: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
-                    />
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        saveYapoConfig(yapoBankConfig);
+                        setYapoConfigSaved(true);
+                        playSuccessSound();
+                        setTimeout(() => setYapoConfigSaved(false), 2500);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{yapoConfigSaved ? '¡Configuración Guardada!' : 'Guardar Configuración de Banco'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(YAPO_SUPABASE_SQL);
+                        setCopiedYapoSql(true);
+                        playSuccessSound();
+                        setTimeout(() => setCopiedYapoSql(false), 2500);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-white/10"
+                    >
+                      <FileCode className="w-3.5 h-3.5 text-purple-300" />
+                      <span>{copiedYapoSql ? '¡SQL Copiado!' : 'Copiar SQL Tablas Banco YA P'}</span>
+                    </button>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
-                    Webhook URL de Discord (Registro de Transacciones en Vivo)
-                  </label>
-                  <input
-                    type="url"
-                    value={yapoBankConfig.discordBotWebhookUrl || ''}
-                    onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, discordBotWebhookUrl: e.target.value })}
-                    placeholder="https://discord.com/api/webhooks/..."
-                    className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Cada vez que un ciudadano haga un Yapeo o retiro en efectivo, se enviará una notificación a tu canal de Discord configurado.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
-                    Token o Endpoint del Bot de Discord (Opcional - Para vincular economía)
-                  </label>
-                  <input
-                    type="password"
-                    value={yapoBankConfig.discordBotToken || ''}
-                    onChange={(e) => setYapoBankConfig({ ...yapoBankConfig, discordBotToken: e.target.value })}
-                    placeholder="OTkyNz..."
-                    className="w-full px-3 py-2 rounded-xl bg-[#070912] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      saveYapoConfig(yapoBankConfig);
-                      setYapoConfigSaved(true);
-                      playSuccessSound();
-                      setTimeout(() => setYapoConfigSaved(false), 2500);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>{yapoConfigSaved ? '¡Configuración Guardada!' : 'Guardar Configuración de Banco'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(YAPO_SUPABASE_SQL);
-                      setCopiedYapoSql(true);
-                      playSuccessSound();
-                      setTimeout(() => setCopiedYapoSql(false), 2500);
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-white/10"
-                  >
-                    <FileCode className="w-3.5 h-3.5 text-purple-300" />
-                    <span>{copiedYapoSql ? '¡SQL Copiado!' : 'Copiar SQL Tablas Banco YA P'}</span>
-                  </button>
-                </div>
-              </div>
+              )}
 
               {/* REGISTERED YAPO ACCOUNTS PADRÓN */}
               <div className="space-y-2 pt-1">

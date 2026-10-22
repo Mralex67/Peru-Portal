@@ -100,15 +100,6 @@ export const Navbar: React.FC = () => {
             )}
           </button>
 
-          {/* Admin Panel Button (requires password CheilaRamirez) */}
-          <button
-            onClick={requestAdminAccess}
-            title="Abrir Panel de Administrador de PE:RP"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-950/70 border border-red-500/30 text-red-400 hover:text-white text-xs font-bold transition-all cursor-pointer"
-          >
-            <Settings className="w-3.5 h-3.5 text-red-400" />
-            <span className="hidden sm:inline">Admin Panel</span>
-          </button>
 
           {/* Discord Button or Authenticated Profile Display */}
           {!discordUser ? (
@@ -172,16 +163,6 @@ export const Navbar: React.FC = () => {
                     Mi Cuenta YA P (S/.)
                   </a>
 
-                  <button
-                    onClick={() => {
-                      setUserDropdownOpen(false);
-                      requestAdminAccess();
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-white/5 rounded-lg flex items-center gap-2 cursor-pointer transition-colors"
-                  >
-                    <Settings className="w-3.5 h-3.5 text-red-400" />
-                    Panel de Administración
-                  </button>
 
                   <button
                     onClick={() => {
@@ -251,16 +232,7 @@ export const Navbar: React.FC = () => {
           >
             Muro de Opinión Ciudadana
           </a>
-          <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                requestAdminAccess();
-              }}
-              className="text-xs text-red-400 font-bold underline"
-            >
-              Abrir Panel Admin
-            </button>
+          <div className="pt-2 border-t border-white/10 flex items-center justify-end">
             <span className="text-xs text-emerald-400 font-mono">
               ● {config.currentPlayers}/{config.maxPlayers} Jugadores
             </span>

@@ -390,6 +390,77 @@ try {
 let erlcCache: { timestamp: number; data: any } | null = null;
 const CACHE_TTL_MS = 15000; // 15 seconds cache to respect PRC rate limits
 
+// Helper function to query ER:LC API across v2 and v1 endpoints
+async function queryErlcApi(key: string) {
+  const cleanKey = key.trim().replace(/^['"]|['"]$/g, '');
+  const endpoints = [
+    'https://api.erlc.gg/v2/server',
+    'https://api.erlc.gg/v1/server',
+  ];
+
+  let lastStatus = 0;
+  let lastError = '';
+
+  for (const url of endpoints) {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'server-key': cleanKey,
+          'Server-Key': cleanKey,
+          Accept: 'application/json',
+          'User-Agent': 'PERP-Streets-Bot/3.0',
+        },
+      });
+
+      lastStatus = response.status;
+      if (response.ok) {
+        const data = await response.json();
+        const currentPlayers =
+          typeof data.CurrentPlayers === 'number'
+            ? data.CurrentPlayers
+            : typeof data.currentPlayers === 'number'
+            ? data.currentPlayers
+            : Array.isArray(data.Players)
+            ? data.Players.length
+            : 0;
+
+        const maxPlayers =
+          typeof data.MaxPlayers === 'number'
+            ? data.MaxPlayers
+            : typeof data.maxPlayers === 'number'
+            ? data.maxPlayers
+            : 50;
+
+        return {
+          ok: true,
+          status: response.status,
+          server: {
+            name: data.Name || data.name || 'PE:RP Servidor',
+            ownerId: data.OwnerId || data.ownerId,
+            currentPlayers,
+            maxPlayers,
+            joinKey: data.JoinKey || data.joinKey || '',
+            accVerifiedReq: data.AccVerifiedReq || data.accVerifiedReq || '',
+            teamBalance: Boolean(data.TeamBalance ?? data.teamBalance),
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      } else {
+        lastError = await response.text();
+      }
+    } catch (err: any) {
+      lastError = err.message || 'Error de red con ER:LC';
+    }
+  }
+
+  return {
+    ok: false,
+    status: lastStatus,
+    error: lastError,
+  };
+}
+
 // Get current ER:LC server status & players
 app.get('/api/erlc/server', async (req, res) => {
   if (!erlcServerKey) {
@@ -410,43 +481,24 @@ app.get('/api/erlc/server', async (req, res) => {
   }
 
   try {
-    const response = await fetch('https://api.policeroleplay.community/v1/server', {
-      method: 'GET',
-      headers: {
-        'Server-Key': erlcServerKey,
-        Accept: 'application/json',
-      },
-    });
+    const result = await queryErlcApi(erlcServerKey);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(response.status).json({
+    if (result.ok && result.server) {
+      erlcCache = {
+        timestamp: now,
+        data: result.server,
+      };
+
+      return res.json({
         configured: true,
-        error: `Error al consultar API ER:LC (${response.status})`,
-        details: errText,
+        ...result.server,
       });
     }
 
-    const data = await response.json();
-    const result = {
-      name: data.Name || 'PE:RP Servidor',
-      ownerId: data.OwnerId,
-      currentPlayers: Number(data.CurrentPlayers) || 0,
-      maxPlayers: Number(data.MaxPlayers) || 50,
-      joinKey: data.JoinKey || '',
-      accVerifiedReq: data.AccVerifiedReq || '',
-      teamBalance: Boolean(data.TeamBalance),
-      updatedAt: new Date().toISOString(),
-    };
-
-    erlcCache = {
-      timestamp: now,
-      data: result,
-    };
-
-    return res.json({
+    return res.status(result.status || 500).json({
       configured: true,
-      ...result,
+      error: `Error al consultar API ER:LC (${result.status || '500'})`,
+      details: result.error,
     });
   } catch (err: any) {
     return res.status(500).json({
@@ -464,7 +516,7 @@ app.post('/api/erlc/config', async (req, res) => {
     return res.status(400).json({ error: 'Falta serverKey' });
   }
 
-  const cleanKey = serverKey.trim();
+  const cleanKey = serverKey.trim().replace(/^['"]|['"]$/g, '');
   erlcServerKey = cleanKey;
   erlcCache = null; // Invalidate cache
 
@@ -482,38 +534,33 @@ app.post('/api/erlc/config', async (req, res) => {
     });
   }
 
-  // Test the key against ER:LC API
+  // Test the key against ER:LC API (api.erlc.gg)
   try {
-    const testResp = await fetch('https://api.policeroleplay.community/v1/server', {
-      method: 'GET',
-      headers: {
-        'Server-Key': cleanKey,
-        Accept: 'application/json',
-      },
-    });
+    const result = await queryErlcApi(cleanKey);
 
-    if (testResp.ok) {
-      const data = await testResp.json();
+    if (result.ok && result.server) {
       return res.json({
         success: true,
         configured: true,
         valid: true,
-        server: {
-          name: data.Name,
-          currentPlayers: data.CurrentPlayers,
-          maxPlayers: data.MaxPlayers,
-          joinKey: data.JoinKey,
-        },
+        server: result.server,
       });
     } else {
-      const errText = await testResp.text();
+      let parsedError = result.error;
+      if (result.error) {
+        try {
+          const j = JSON.parse(result.error);
+          if (j.message) parsedError = j.message;
+        } catch {}
+      }
+
       return res.json({
         success: true,
         configured: true,
         valid: false,
-        status: testResp.status,
-        message: 'La key fue guardada, pero ER:LC devolvió un error de autenticación. Verifica que sea correcta en el panel de tu servidor ER:LC.',
-        details: errText,
+        status: result.status,
+        message: `ER:LC respondió: ${parsedError || 'Autenticación fallida. Verifica tu Server Key en ER:LC Settings > API.'}`,
+        details: result.error,
       });
     }
   } catch (err: any) {

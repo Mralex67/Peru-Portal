@@ -975,13 +975,6 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
     }
-          { name: '📥 `/depositar <monto>`', value: 'Deposita efectivo de tu mano a Banco YA P.' },
-          { name: '📜 `/historial [usuario opcional]`', value: 'Muestra los últimos movimientos y comprobantes.' }
-        )
-        .setFooter({ text: 'PE:RP Streets • Sincronización en la Nube con Supabase' });
-
-      await interaction.reply({ embeds: [embed], ephemeral: true });
-    }
   }
 });
 

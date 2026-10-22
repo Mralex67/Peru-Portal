@@ -1174,8 +1174,9 @@ export const BankYapoSection: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-slate-400 bg-white/5 p-3 rounded-xl border border-white/5">
-                    ⚙️ <em>Configuración de Administrador:</em> Todo lo referente a tokens, webhooks, base de datos y comandos se gestiona exclusivamente desde el <strong>Panel de Administración</strong> (no hay comandos administrativos en el bot).
+                  <div className="text-[11px] text-slate-400 bg-white/5 p-3 rounded-xl border border-white/5 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Sincronización en Tiempo Real: Tus fondos, transacciones y DNI se sincronizan automáticamente entre la web y el bot oficial de Discord.</span>
                   </div>
                 </div>
               )}

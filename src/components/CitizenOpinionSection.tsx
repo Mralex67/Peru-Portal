@@ -16,10 +16,50 @@ export const CitizenOpinionSection: React.FC = () => {
   const [message, setMessage] = useState('');
   const [faction, setFaction] = useState('Civil');
   const [justPublished, setJustPublished] = useState(false);
+  const [blockError, setBlockError] = useState('');
+
+  const FORBIDDEN_WORDS = [
+    'mierda', 'basura', 'asco', 'puta', 'puto', 'hdp', 'ptm', 'ctm', 'imbecil', 'imbécil',
+    'idiota', 'estupido', 'estúpido', 'malparido', 'cabron', 'cabrón', 'cojudo', 'marica',
+    'zorra', 'perra', 'chucha', 'pendejo', 'pendeja', 'culiao', 'conchetumadre', 'weon',
+    'porno', 'porn', 'xxx', 'sexo', 'pene', 'vagina', 'tetas', 'pack', 'hentai', 'nudes',
+    'desnudo', 'desnuda', 'cp'
+  ];
+
+  const checkInappropriateContent = (text: string): { blocked: boolean; word?: string } => {
+    const normalized = text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ');
+
+    for (const word of FORBIDDEN_WORDS) {
+      const normWord = word.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const regex = new RegExp(`\\b${normWord}\\b`, 'i');
+      if (regex.test(normalized) || (normWord.length >= 4 && normalized.includes(normWord))) {
+        return { blocked: true, word };
+      }
+    }
+
+    if (normalized.includes('server de mierda') || normalized.includes('servidor de mierda')) {
+      return { blocked: true, word: 'server de mierda' };
+    }
+
+    return { blocked: false };
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setBlockError('');
     if (!message.trim() || !discordUser) return;
+
+    const check = checkInappropriateContent(message.trim());
+    if (check.blocked) {
+      setBlockError(
+        `⚠️ Mensaje Bloqueado: Tu testimonio contiene términos ofensivos o contenido no permitido ("${check.word}"). En PE:RP Streets se prohíbe el lenguaje vulgar, insultos y contenido para adultos.`
+      );
+      return;
+    }
 
     addCitizenReview({
       faction,
@@ -127,6 +167,13 @@ export const CitizenOpinionSection: React.FC = () => {
                   </select>
                 </div>
 
+                {blockError && (
+                  <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-500 text-rose-200 text-xs flex items-start gap-2.5 animate-in fade-in">
+                    <ShieldCheck className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span>{blockError}</span>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
                     Tu Mensaje o Experiencia
@@ -135,7 +182,10 @@ export const CitizenOpinionSection: React.FC = () => {
                     rows={3}
                     required
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      if (blockError) setBlockError('');
+                    }}
                     placeholder="Escribe tu testimonio u opinión sobre el servidor PE:RP..."
                     className="w-full px-4 py-2.5 rounded-xl bg-[#141726] border border-white/10 text-white text-xs leading-relaxed focus:outline-none focus:border-red-500 resize-none"
                   />
@@ -191,16 +241,13 @@ export const CitizenOpinionSection: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Footer */}
+                {/* Footer (View-only, no likes button) */}
                 <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-500">
                   <span>{rev.createdAt}</span>
-                  <button
-                    onClick={() => likeCitizenReview(rev.id)}
-                    className="flex items-center gap-1 text-slate-400 hover:text-red-400 transition-colors cursor-pointer group/like"
-                  >
-                    <Heart className="w-3.5 h-3.5 group-hover/like:fill-red-500 transition-all" />
-                    <span>{rev.likes}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-mono text-[11px]">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Verificado</span>
+                  </div>
                 </div>
               </div>
             ))}

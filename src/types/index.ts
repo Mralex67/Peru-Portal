@@ -11,6 +11,7 @@ export interface ServerConfig {
   discordInviteUrl: string;
   patrolAlert: string;
   customLogoUrl?: string;
+  yapoLogoUrl?: string;
   customPatrolTruckUrl?: string;
   heroCardImage?: string;
   albumUploadsLocked?: boolean;
