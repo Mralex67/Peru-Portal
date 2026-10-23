@@ -208,12 +208,26 @@ export const AdminPanelModal: React.FC = () => {
     setSupabaseKey(sConf.anonKey);
     getAllRegisteredDnis().then(setRegisteredDnis).catch(() => {});
 
+    // Synchronize form with latest server config whenever opening panel
+    setFormData({ ...config });
+
     // Load Yapo banking accounts, transactions and config
     setYapoAccounts(getLocalYapoAccounts());
     setYapoTransactions(getLocalYapoTransactions());
     setYapoBankConfig(getYapoConfig());
 
-    // Check ER:LC API status
+    // Fetch saved ER:LC key from server
+    fetch('/api/erlc/config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.serverKey) {
+          setErlcKeyInput(data.serverKey);
+          setIsErlcConfigured(true);
+        }
+      })
+      .catch(() => {});
+
+    // Check ER:LC API live status
     fetch('/api/erlc/server')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -261,6 +275,7 @@ export const AdminPanelModal: React.FC = () => {
       const dataUrl = reader.result as string;
       const finalUrl = await uploadToServer(dataUrl);
       setFormData((prev) => ({ ...prev, customLogoUrl: finalUrl }));
+      updateConfig({ customLogoUrl: finalUrl });
       setIsUploadingLogo(false);
       playSuccessSound();
     };
@@ -279,6 +294,7 @@ export const AdminPanelModal: React.FC = () => {
       const dataUrl = reader.result as string;
       const finalUrl = await uploadToServer(dataUrl);
       setFormData((prev) => ({ ...prev, customPatrolTruckUrl: finalUrl }));
+      updateConfig({ customPatrolTruckUrl: finalUrl });
       setIsUploadingTruck(false);
       playSuccessSound();
     };
@@ -297,6 +313,7 @@ export const AdminPanelModal: React.FC = () => {
       const dataUrl = reader.result as string;
       const finalUrl = await uploadToServer(dataUrl);
       setFormData((prev) => ({ ...prev, yapoLogoUrl: finalUrl }));
+      updateConfig({ yapoLogoUrl: finalUrl });
       setIsUploadingYapoLogo(false);
       playSuccessSound();
     };
@@ -1159,6 +1176,7 @@ export const AdminPanelModal: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, customLogoUrl: '' }));
+                            updateConfig({ customLogoUrl: '' });
                             playClickSound();
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
@@ -1181,7 +1199,9 @@ export const AdminPanelModal: React.FC = () => {
                         type="button"
                         onClick={() => {
                           if (!logoUrlInput.trim()) return;
-                          setFormData((prev) => ({ ...prev, customLogoUrl: logoUrlInput.trim() }));
+                          const url = logoUrlInput.trim();
+                          setFormData((prev) => ({ ...prev, customLogoUrl: url }));
+                          updateConfig({ customLogoUrl: url });
                           setLogoUrlInput('');
                           playSuccessSound();
                         }}
@@ -1248,7 +1268,7 @@ export const AdminPanelModal: React.FC = () => {
                         {isUploadingTruck ? (
                           <>
                             <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Cargando foto...</span>
+                            <span>Cargando imagen...</span>
                           </>
                         ) : (
                           <>
@@ -1263,6 +1283,7 @@ export const AdminPanelModal: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, heroCardImage: '' }));
+                            updateConfig({ heroCardImage: '' });
                             playClickSound();
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
@@ -1285,7 +1306,9 @@ export const AdminPanelModal: React.FC = () => {
                         type="button"
                         onClick={() => {
                           if (!truckUrlInput.trim()) return;
-                          setFormData((prev) => ({ ...prev, heroCardImage: truckUrlInput.trim() }));
+                          const url = truckUrlInput.trim();
+                          setFormData((prev) => ({ ...prev, heroCardImage: url }));
+                          updateConfig({ heroCardImage: url });
                           setTruckUrlInput('');
                           playSuccessSound();
                         }}
@@ -1368,6 +1391,7 @@ export const AdminPanelModal: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, yapoLogoUrl: '' }));
+                            updateConfig({ yapoLogoUrl: '' });
                             playClickSound();
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
@@ -1390,7 +1414,9 @@ export const AdminPanelModal: React.FC = () => {
                         type="button"
                         onClick={() => {
                           if (!yapoLogoUrlInput.trim()) return;
-                          setFormData((prev) => ({ ...prev, yapoLogoUrl: yapoLogoUrlInput.trim() }));
+                          const url = yapoLogoUrlInput.trim();
+                          setFormData((prev) => ({ ...prev, yapoLogoUrl: url }));
+                          updateConfig({ yapoLogoUrl: url });
                           setYapoLogoUrlInput('');
                           playSuccessSound();
                         }}

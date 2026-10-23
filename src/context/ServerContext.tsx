@@ -128,6 +128,22 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isDiscordAuthOpen, setIsDiscordAuthOpen] = useState(false);
   const [isWhitelistInfoOpen, setIsWhitelistInfoOpen] = useState(false);
 
+  // Fetch persisted server configuration from backend on startup
+  useEffect(() => {
+    fetch('/api/server-config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.success && data.config) {
+          setConfig((prev) => ({
+            ...prev,
+            ...data.config,
+            currentPlayers: prev.currentPlayers > 0 ? prev.currentPlayers : (data.config.currentPlayers || prev.currentPlayers),
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Sync to localStorage
   useEffect(() => {
     try {
@@ -280,11 +296,25 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const updateConfig = (newValues: Partial<ServerConfig>) => {
-    setConfig((prev) => ({ ...prev, ...newValues }));
+    setConfig((prev) => {
+      const updated = { ...prev, ...newValues };
+      // Save permanently to server backend (.data/server_config.json)
+      fetch('/api/server-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {});
+      return updated;
+    });
   };
 
   const resetConfig = () => {
     setConfig(DEFAULT_SERVER_CONFIG);
+    fetch('/api/server-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(DEFAULT_SERVER_CONFIG),
+    }).catch(() => {});
   };
 
   const loginWithDiscord = (user: DiscordUser) => {

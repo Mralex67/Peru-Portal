@@ -31,7 +31,53 @@ app.use((req, res, next) => {
 app.use(expressApp.json({ limit: '50mb' }));
 app.use(expressApp.urlencoded({ limit: '50mb', extended: true }));
 
-// Endpoint to save original uploaded photos directly to disk
+// ==========================================
+// SERVER ASSETS & CONFIGURATION PERSISTENCE
+// ==========================================
+const UPLOADS_DIR = path.resolve(__dirname, 'public/uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+app.use('/uploads', expressApp.static(UPLOADS_DIR));
+
+const CONFIG_FILE = path.resolve(__dirname, '.data/server_config.json');
+
+// Get persisted server configuration (Logos, Texts, Socials, Status)
+app.get('/api/server-config', (req, res) => {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+      return res.json({ success: true, config: data });
+    }
+    return res.json({ success: true, config: null });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Save updated server configuration permanently to disk
+app.post('/api/server-config', (req, res) => {
+  try {
+    const newConfig = req.body;
+    if (!newConfig || typeof newConfig !== 'object') {
+      return res.status(400).json({ error: 'Configuración inválida' });
+    }
+    fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
+    let existing = {};
+    if (fs.existsSync(CONFIG_FILE)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+      } catch {}
+    }
+    const merged = { ...existing, ...newConfig, updatedAt: new Date().toISOString() };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2));
+    return res.json({ success: true, config: merged });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint to save original uploaded photos permanently to public/uploads
 app.post('/api/upload-photo', (req, res) => {
   try {
     const { imageBase64, extension = 'png' } = req.body;
@@ -41,16 +87,23 @@ app.post('/api/upload-photo', (req, res) => {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
     const safeExt = extension.replace(/[^a-zA-Z0-9]/g, '') || 'png';
-    const filename = `foto_original_${Date.now()}.${safeExt}`;
-    const targetDir = path.resolve(__dirname, 'src/assets/images');
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-    const filePath = path.join(targetDir, filename);
-    fs.writeFileSync(filePath, buffer);
+    const filename = `foto_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${safeExt}`;
+    
+    // Save to public/uploads so it is always statically accessible in dev and prod
+    const publicFilePath = path.join(UPLOADS_DIR, filename);
+    fs.writeFileSync(publicFilePath, buffer);
+
+    // Also copy to src/assets/images for backwards compatibility if needed
+    try {
+      const srcImagesDir = path.resolve(__dirname, 'src/assets/images');
+      if (fs.existsSync(srcImagesDir)) {
+        fs.writeFileSync(path.join(srcImagesDir, filename), buffer);
+      }
+    } catch {}
+
     res.json({
       success: true,
-      url: `/src/assets/images/${filename}`,
+      url: `/uploads/${filename}`,
       filename,
     });
   } catch (err: any) {
@@ -420,9 +473,7 @@ async function queryErlcApi(key: string) {
         method: 'GET',
         headers: {
           'server-key': cleanKey,
-          'Server-Key': cleanKey,
           Accept: 'application/json',
-          'User-Agent': 'PE-RP-Streets-Bot/3.0',
         },
       });
 
@@ -589,6 +640,14 @@ app.get('/api/erlc/server', async (req, res) => {
       details: err.message,
     });
   }
+});
+
+// Check ER:LC configuration status & get saved key
+app.get('/api/erlc/config', (req, res) => {
+  return res.json({
+    configured: Boolean(erlcServerKey),
+    serverKey: erlcServerKey,
+  });
 });
 
 // Update or test ER:LC Server Key from Admin Panel
