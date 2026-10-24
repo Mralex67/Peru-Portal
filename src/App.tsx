@@ -7,6 +7,7 @@ import { BankYapoSection } from './components/BankYapoSection';
 import { ServerLiveMonitor } from './components/ServerLiveMonitor';
 import { AdmissionSection } from './components/AdmissionSection';
 import { CitizenOpinionSection } from './components/CitizenOpinionSection';
+import { WorkForumsSection } from './components/WorkForumsSection';
 import { AlbumSection } from './components/AlbumSection';
 import { Footer } from './components/Footer';
 import { AdminPanelModal } from './components/AdminPanelModal';
@@ -37,7 +38,10 @@ function MainApp() {
         {/* 5. Estadísticas del Servidor PE:RP (Aforo en vivo & Telemetría ER:LC) */}
         <ServerLiveMonitor />
 
-        {/* 5. Álbum Fotográfico Oficial PE:RP */}
+        {/* 6. Foros de Trabajo (Bolsa de Empleo PE:RP - Próximamente) */}
+        <WorkForumsSection />
+
+        {/* 7. Álbum Fotográfico Oficial PE:RP */}
         <AlbumSection />
 
         {/* 6. Citizen Opinion Wall (Verified Discord community reports) */}

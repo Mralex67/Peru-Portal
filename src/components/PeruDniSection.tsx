@@ -472,7 +472,7 @@ export const PeruDniSection: React.FC = () => {
             <div className="lg:col-span-7 flex flex-col items-center">
               
               {/* Controls bar */}
-              <div className="w-full max-w-[500px] flex items-center justify-between mb-3 px-1">
+              <div className="w-full max-w-[560px] flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span className="text-xs font-bold text-slate-300">
@@ -483,30 +483,36 @@ export const PeruDniSection: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsFlipped(!isFlipped);
                     playClickSound();
+                    const downloadUrl = `/api/dni/render?dni=${encodeURIComponent(currentDni.dniNumber)}&nombre=${encodeURIComponent(currentDni.fullName)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' ? 'Masculino' : 'Femenino')}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = `DNI-PERP-${currentDni.dniNumber}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    playSuccessSound();
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 hover:bg-white/15 text-xs text-white font-semibold transition-colors cursor-pointer border border-white/10"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors cursor-pointer shadow-md"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
-                  <span>{isFlipped ? 'Ver Anverso' : 'Ver Reverso'}</span>
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Descargar DNI (PNG)</span>
                 </button>
               </div>
 
-              {/* PERUVIAN DNI CARD CONTAINER */}
+              {/* PERUVIAN DNI CARD CONTAINER (Official Template Aesthetic) */}
               <div
                 ref={cardRef}
-                className="relative w-full max-w-[500px] aspect-[1.586/1] rounded-2xl shadow-2xl overflow-hidden border border-sky-400/30 transition-transform duration-500 select-none bg-gradient-to-br from-[#cce5f4] via-[#e2eef7] to-[#b3d4ea] text-slate-900 p-4 sm:p-5 flex flex-col justify-between font-sans shadow-sky-950/60"
-                style={{
-                  backgroundImage: `radial-gradient(circle at 50% 50%, rgba(255,255,255,0.7) 0%, rgba(200,225,242,0.95) 100%)`,
-                }}
+                className="relative w-full max-w-[560px] aspect-[706/422] rounded-2xl shadow-2xl overflow-hidden border border-sky-400/30 select-none shadow-sky-950/60 bg-[#549baa]"
               >
-                {/* Watermark Pattern */}
-                <div className="absolute inset-0 opacity-10 pointer-events-none flex items-center justify-center font-black text-6xl rotate-[-25deg] text-slate-800">
-                  RENIEC PERÚ
-                </div>
+                {/* Official Card Template Background */}
+                <img
+                  src="/assets/dni-template-official.png"
+                  alt="Plantilla Oficial DNI PE:RP"
+                  className="absolute inset-0 w-full h-full object-fill pointer-events-none"
+                />
 
-                {/* Suspension overlay watermark */}
+                {/* Suspension overlay watermark if active */}
                 {currentDni.status === 'suspended' && (
                   <div className="absolute inset-0 z-40 bg-red-950/85 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center border-4 border-red-600 rounded-2xl animate-in fade-in duration-200">
                     <div className="px-4 py-2 rounded-xl bg-red-600 text-white font-black text-xs sm:text-sm uppercase tracking-widest shadow-2xl rotate-[-8deg] border-2 border-white flex items-center gap-2">
@@ -519,173 +525,99 @@ export const PeruDniSection: React.FC = () => {
                   </div>
                 )}
 
-                {!isFlipped ? (
-                  /* FRONT SIDE (ANVERSO DNIe PERUANO) */
-                  <>
-                    {/* Header */}
-                    <div className="relative z-10 flex items-start justify-between border-b border-sky-800/20 pb-2">
-                      <div className="flex items-center gap-2">
-                        {/* Escudo Nacional del Perú */}
-                        <div className="w-9 h-9 rounded-full bg-red-700 border border-amber-300 flex items-center justify-center text-white text-[10px] font-black shadow-md shrink-0">
-                          🇵🇪
-                        </div>
-                        <div>
-                          <div className="text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-900 leading-tight uppercase">
-                            REPÚBLICA DEL PERÚ
-                          </div>
-                          <div className="text-[8px] sm:text-[9px] font-bold text-sky-900 leading-tight">
-                            REGISTRO NACIONAL DE IDENTIFICACIÓN Y ESTADO CIVIL
-                          </div>
-                          <div className="text-[7px] font-bold text-red-700 tracking-wider uppercase">
-                            DOCUMENTO NACIONAL DE IDENTIDAD ELECTRÓNICO
-                          </div>
-                        </div>
-                      </div>
+                {/* Left Photo Box: Avatar Roblox (Coordinates: 20, 100, 161, 161) */}
+                <div
+                  className="absolute bg-white overflow-hidden shadow-inner"
+                  style={{
+                    left: '2.83%',
+                    top: '23.70%',
+                    width: '22.80%',
+                    height: '38.15%',
+                  }}
+                >
+                  <img
+                    src={currentDni.photoUrl || DEFAULT_ROBLOX_AVATAR}
+                    alt="Avatar Roblox DNI"
+                    className="w-full h-full object-cover object-center bg-white"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_ROBLOX_AVATAR;
+                    }}
+                  />
+                </div>
 
-                      {/* DNI Number */}
-                      <div className="text-right">
-                        <span className="text-[8px] font-bold uppercase text-slate-600 block">DNI N°</span>
-                        <span className="font-mono text-base sm:text-lg font-black text-red-700 tracking-wider">
-                          {currentDni.dniNumber} - {currentDni.verifyDigit}
-                        </span>
-                      </div>
-                    </div>
+                {/* Field 1: NÚMERO DE DNI */}
+                <div
+                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  style={{
+                    left: '29.32%',
+                    top: '29.2%',
+                    fontSize: 'clamp(11px, 2.2vw, 15px)',
+                  }}
+                >
+                  {currentDni.dniNumber}
+                </div>
 
-                    {/* Body */}
-                    <div className="relative z-10 grid grid-cols-12 gap-3 my-auto items-center">
-                      
-                      {/* Left: Roblox Avatar Photo */}
-                      <div className="col-span-4 sm:col-span-3 flex flex-col items-center">
-                        <div className="relative w-24 h-28 sm:w-28 sm:h-32 rounded-lg bg-white border-2 border-slate-400 overflow-hidden shadow-md">
-                          <img
-                            src={currentDni.photoUrl}
-                            alt="Avatar Roblox DNI"
-                            className="w-full h-full object-cover object-center bg-slate-100"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = DEFAULT_ROBLOX_AVATAR;
-                            }}
-                          />
-                          {/* Holographic watermark on photo */}
-                          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-sky-300/20 to-white/30 pointer-events-none" />
-                          <div className="absolute bottom-0 inset-x-0 bg-red-600/90 text-white text-[7px] font-mono text-center font-bold py-0.5">
-                            PE:RP OFICIAL
-                          </div>
-                        </div>
-                        <div className="text-[8px] font-mono font-bold text-slate-700 mt-1 truncate max-w-full">
-                          @{currentDni.robloxUsername}
-                        </div>
-                      </div>
+                {/* Field 2: FECHA DE NACIMIENTO */}
+                <div
+                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  style={{
+                    left: '70.82%',
+                    top: '29.2%',
+                    fontSize: 'clamp(11px, 2.2vw, 15px)',
+                  }}
+                >
+                  {currentDni.birthDate}
+                </div>
 
-                      {/* Middle: Identity Data */}
-                      <div className="col-span-8 sm:col-span-9 space-y-1 text-left pl-1">
-                        <div>
-                          <span className="text-[8px] font-bold text-slate-600 uppercase block">1. Primer Apellido:</span>
-                          <span className="text-xs sm:text-sm font-black text-slate-900 font-mono tracking-wide">
-                            {currentDni.firstSurname}
-                          </span>
-                        </div>
+                {/* Field 3: NOMBRE Y APELLIDO */}
+                <div
+                  className="absolute font-mono font-black text-slate-900 tracking-normal truncate"
+                  style={{
+                    left: '29.32%',
+                    top: '42.6%',
+                    maxWidth: '55%',
+                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                  }}
+                >
+                  {currentDni.fullName || `${currentDni.firstSurname} ${currentDni.secondSurname}, ${currentDni.givenNames}`}
+                </div>
 
-                        <div>
-                          <span className="text-[8px] font-bold text-slate-600 uppercase block">2. Segundo Apellido:</span>
-                          <span className="text-xs sm:text-sm font-black text-slate-900 font-mono tracking-wide">
-                            {currentDni.secondSurname}
-                          </span>
-                        </div>
+                {/* Field 4: GÉNERO */}
+                <div
+                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  style={{
+                    left: '29.32%',
+                    top: '53.5%',
+                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                  }}
+                >
+                  {currentDni.gender === 'M' ? 'Masculino' : 'Femenino'}
+                </div>
 
-                        <div>
-                          <span className="text-[8px] font-bold text-slate-600 uppercase block">3. Prenombres:</span>
-                          <span className="text-xs sm:text-sm font-black text-slate-900 font-mono tracking-wide">
-                            {currentDni.givenNames}
-                          </span>
-                        </div>
+                {/* Field 5: NACIONALIDAD */}
+                <div
+                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  style={{
+                    left: '29.32%',
+                    top: '63.0%',
+                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                  }}
+                >
+                  Peruano
+                </div>
 
-                        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-sky-800/20 text-[9px]">
-                          <div>
-                            <span className="text-[7px] font-bold text-slate-600 uppercase block">Nacimiento:</span>
-                            <span className="font-bold text-slate-800 font-mono">{currentDni.birthDate}</span>
-                          </div>
-                          <div>
-                            <span className="text-[7px] font-bold text-slate-600 uppercase block">Sexo / Civil:</span>
-                            <span className="font-bold text-slate-800 font-mono">{currentDni.gender} / {currentDni.civilStatus}</span>
-                          </div>
-                          <div>
-                            <span className="text-[7px] font-bold text-slate-600 uppercase block">Caducidad:</span>
-                            <span className="font-bold text-red-700 font-mono">{currentDni.expiryDate}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {/* Footer Front: Chip & Signature */}
-                    <div className="relative z-10 flex items-center justify-between pt-1 border-t border-sky-800/20 text-[9px]">
-                      {/* Golden Smartchip */}
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-6 rounded bg-gradient-to-br from-amber-300 via-amber-400 to-amber-600 border border-amber-700 shadow-inner flex items-center justify-center text-[7px] font-mono font-bold text-amber-950">
-                          💳
-                        </div>
-                        <span className="text-[8px] font-bold text-slate-700">CHIP RENIEC DNIe</span>
-                      </div>
-
-                      {/* Citizen Signature */}
-                      <div className="text-right">
-                        <span className="text-[7px] font-bold text-slate-500 uppercase block">Firma del Titular</span>
-                        <span className="font-serif italic font-bold text-xs text-slate-900 tracking-wider">
-                          {currentDni.signatureText}
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  /* REVERSE SIDE (REVERSO DNIe PERUANO) */
-                  <>
-                    <div className="relative z-10 flex items-center justify-between border-b border-sky-800/20 pb-1.5">
-                      <div className="text-[9px] font-bold text-slate-800 uppercase">
-                        REVERSO DE IDENTIFICACIÓN POLICIAL & CIUDADANA
-                      </div>
-                      <div className="text-[8px] font-mono text-slate-600">
-                        UBIGEO: <span className="font-bold text-slate-900">{currentDni.ubigeo}</span>
-                      </div>
-                    </div>
-
-                    <div className="relative z-10 grid grid-cols-12 gap-3 my-auto items-center">
-                      {/* Left: Biometric Fingerprint & QR */}
-                      <div className="col-span-4 flex items-center gap-2">
-                        <div className="w-14 h-16 rounded bg-white/80 border border-slate-400 flex flex-col items-center justify-center p-1">
-                          <Fingerprint className="w-8 h-8 text-slate-800" />
-                          <span className="text-[6px] font-bold text-slate-600">HUELLA</span>
-                        </div>
-                        <div className="w-14 h-16 rounded bg-white/80 border border-slate-400 flex flex-col items-center justify-center p-1">
-                          <QrCode className="w-8 h-8 text-slate-800" />
-                          <span className="text-[6px] font-bold text-slate-600">QR OFICIAL</span>
-                        </div>
-                      </div>
-
-                      {/* Right: Server details */}
-                      <div className="col-span-8 text-[9px] space-y-1 text-slate-800">
-                        <div>
-                          <strong>Discord ID:</strong> <span className="font-mono">{currentDni.discordId}</span>
-                        </div>
-                        <div>
-                          <strong>Usuario Roblox:</strong> <span className="font-mono text-red-800 font-bold">{currentDni.robloxUsername}</span>
-                        </div>
-                        <div>
-                          <strong>Estado de Emisión:</strong> <span className="text-emerald-800 font-bold">Activo en Base de Datos Supabase</span>
-                        </div>
-                        <div className="text-[8px] text-slate-600">
-                          Este documento es intransferible y certifica la ciudadanía oficial en el servidor PE:RP Streets en Roblox ERLC.
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* MRZ Optical Zone */}
-                    <div className="relative z-10 bg-white/60 p-1.5 rounded font-mono text-[8px] tracking-widest text-slate-900 leading-tight text-center font-bold">
-                      IDPER{currentDni.dniNumber}&lt;{currentDni.verifyDigit}&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;<br />
-                      0205148M3410185PER&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;8<br />
-                      {currentDni.firstSurname}&lt;&lt;{currentDni.givenNames}&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
-                    </div>
-                  </>
-                )}
+                {/* Field 6: USUARIO DE ROBLOX */}
+                <div
+                  className="absolute font-mono font-black text-slate-900 tracking-wide truncate"
+                  style={{
+                    left: '29.32%',
+                    top: '73.4%',
+                    maxWidth: '35%',
+                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                  }}
+                >
+                  {currentDni.robloxUsername}
+                </div>
               </div>
 
               {/* Status Badge below Card */}

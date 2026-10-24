@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Menu, X, Settings, LogOut, Camera, CreditCard } from 'lucide-react';
+import { Volume2, VolumeX, Menu, X, Settings, LogOut, Camera, CreditCard, Briefcase } from 'lucide-react';
 import { OfficialPeruLogo } from './OfficialPeruLogo';
 import { YapoLogo } from './YapoLogo';
 import { InteractiveButton } from './InteractiveButton';
@@ -67,6 +67,14 @@ export const Navbar: React.FC = () => {
           >
             <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
             <span>Banco YA P</span>
+          </a>
+          <a
+            href="#trabajos"
+            className="hover:text-emerald-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 text-emerald-400 font-bold"
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            <span>Foros de Trabajo</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-950/80 text-[9px] text-emerald-300 border border-emerald-500/40 uppercase">Pronto</span>
           </a>
           <a
             href="#album"
@@ -216,6 +224,17 @@ export const Navbar: React.FC = () => {
           >
             <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
             <span>Banco YA P (S/.)</span>
+          </a>
+          <a
+            href="#trabajos"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-emerald-400 hover:text-emerald-300 font-semibold py-1 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-emerald-400" />
+              <span>Foros de Trabajo</span>
+            </div>
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-950/80 text-[9px] text-emerald-300 border border-emerald-500/40 uppercase">Pronto</span>
           </a>
           <a
             href="#album"

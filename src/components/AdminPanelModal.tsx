@@ -114,6 +114,11 @@ export const AdminPanelModal: React.FC = () => {
   const [simResult, setSimResult] = useState<any>(null);
   const [simLoading, setSimLoading] = useState(false);
   const [copiedBotEnv, setCopiedBotEnv] = useState(false);
+  const [botFiles, setBotFiles] = useState<{ [filename: string]: string } | null>(null);
+  const [selectedBotFile, setSelectedBotFile] = useState<string>('index.js');
+  const [showBotFilesModal, setShowBotFilesModal] = useState(false);
+  const [isLoadingBotFiles, setIsLoadingBotFiles] = useState(false);
+  const [copiedFileKey, setCopiedFileKey] = useState<string | null>(null);
 
   // File upload refs
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -401,6 +406,26 @@ export const AdminPanelModal: React.FC = () => {
       window.open('/perp-discord-bot-24-7.zip', '_blank');
     } finally {
       setIsDownloadingBot(false);
+    }
+  };
+
+  // Open interactive bot files viewer
+  const handleOpenBotFiles = async () => {
+    setShowBotFilesModal(true);
+    playClickSound();
+    if (!botFiles) {
+      setIsLoadingBotFiles(true);
+      try {
+        const res = await fetch('/api/bot/package-files');
+        const data = await res.json();
+        if (data && data.files) {
+          setBotFiles(data.files);
+        }
+      } catch (err) {
+        console.error('Error fetching bot files:', err);
+      } finally {
+        setIsLoadingBotFiles(false);
+      }
     }
   };
 
@@ -2820,6 +2845,15 @@ export const AdminPanelModal: React.FC = () => {
                     </a>
                     <button
                       type="button"
+                      onClick={handleOpenBotFiles}
+                      className="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      title="Ver y copiar todos los archivos del bot directamente en pantalla sin necesidad de descargar ZIP"
+                    >
+                      <FileCode className="w-3 h-3" />
+                      <span>{showBotFilesModal ? 'Ocultar Archivos' : 'Ver Código de Archivos'}</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => {
                         const envText = `DISCORD_TOKEN=${yapoBankConfig.discordBotToken || 'tu_token_aqui'}\nCLIENT_ID=${clientId || 'tu_client_id_aqui'}\nGUILD_ID=id_de_tu_servidor\nAPI_BASE_URL=http://localhost:3000`;
                         navigator.clipboard.writeText(envText);
@@ -2834,6 +2868,85 @@ export const AdminPanelModal: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                {/* INTERACTIVE IN-BROWSER BOT FILE EXPLORER */}
+                {showBotFilesModal && (
+                  <div className="p-4 rounded-2xl bg-[#070810] border border-purple-500/40 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <FileCode className="w-4 h-4 text-purple-400" />
+                        <h6 className="text-xs font-bold text-white uppercase tracking-wider">
+                          Explorador de Archivos del Bot (Copiar y Pegar Directo)
+                        </h6>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {botFiles && botFiles[selectedBotFile] && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(botFiles[selectedBotFile]);
+                              setCopiedFileKey(selectedBotFile);
+                              playSuccessSound();
+                              setTimeout(() => setCopiedFileKey(null), 2500);
+                            }}
+                            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>{copiedFileKey === selectedBotFile ? '¡Copiado al Portapapeles!' : `Copiar ${selectedBotFile}`}</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setShowBotFilesModal(false)}
+                          className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white text-xs cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isLoadingBotFiles ? (
+                      <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                        <span>Cargando archivos del bot...</span>
+                      </div>
+                    ) : botFiles ? (
+                      <div className="space-y-3">
+                        {/* File Tabs */}
+                        <div className="flex flex-wrap gap-1.5 pb-1 border-b border-white/5">
+                          {Object.keys(botFiles).sort().map((fname) => (
+                            <button
+                              key={fname}
+                              type="button"
+                              onClick={() => {
+                                setSelectedBotFile(fname);
+                                playClickSound();
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                                selectedBotFile === fname
+                                  ? 'bg-purple-600 text-white shadow'
+                                  : 'bg-black/40 text-slate-400 hover:text-white border border-white/5 hover:border-white/20'
+                              }`}
+                            >
+                              {fname}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* File Code Display */}
+                        <div className="relative">
+                          <pre className="p-3.5 rounded-xl bg-black/80 border border-white/10 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-80 select-all leading-relaxed whitespace-pre-wrap">
+                            {botFiles[selectedBotFile] || '// Archivo vacío'}
+                          </pre>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-400 py-3 text-center">
+                        No se pudieron cargar los archivos. Usa el botón de Descargar ZIP o Enlace Directo.
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-3 text-xs text-slate-300">
                   <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5">

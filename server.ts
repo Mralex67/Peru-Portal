@@ -8,6 +8,7 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 
 dotenv.config();
 
@@ -1085,6 +1086,158 @@ app.get('/api/bot/dni/:identifier', (req, res) => {
     found: true,
     dni: found,
   });
+});
+
+// Helper: Render official DNI PNG with template and Roblox avatar
+async function generateDniImageBuffer(dniData: {
+  dniNumber: string;
+  fullName?: string;
+  firstSurname?: string;
+  secondSurname?: string;
+  givenNames?: string;
+  birthDate?: string;
+  gender?: string;
+  robloxUsername?: string;
+  photoUrl?: string;
+}) {
+  const templatePath = path.resolve(__dirname, 'public/assets/dni-template-official.png');
+  let tpl: any;
+  if (fs.existsSync(templatePath)) {
+    tpl = await loadImage(templatePath);
+  } else {
+    throw new Error('Plantilla DNI oficial no encontrada');
+  }
+
+  const canvas = createCanvas(tpl.width, tpl.height);
+  const ctx = canvas.getContext('2d');
+
+  // 1. Draw template background
+  ctx.drawImage(tpl, 0, 0);
+
+  // 2. White avatar frame box at (20, 100, 161, 161)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(20, 100, 161, 161);
+
+  // 3. Draw avatar photo
+  const photoUrl = (dniData.photoUrl || '').trim();
+  if (photoUrl) {
+    try {
+      if (photoUrl.startsWith('data:image/')) {
+        const base64Data = photoUrl.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+        const avatarBuf = Buffer.from(base64Data, 'base64');
+        const avatarImg = await loadImage(avatarBuf);
+        ctx.drawImage(avatarImg, 20, 100, 161, 161);
+      } else {
+        const resp = await fetch(photoUrl);
+        if (resp.ok) {
+          const arrBuf = await resp.arrayBuffer();
+          const avatarBuf = Buffer.from(arrBuf);
+          const avatarImg = await loadImage(avatarBuf);
+          ctx.drawImage(avatarImg, 20, 100, 161, 161);
+        }
+      }
+    } catch (e) {
+      console.error('Error drawing avatar on DNI canvas:', e);
+    }
+  }
+
+  // 4. Draw texts matching sample template
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 15px "Courier New", monospace, sans-serif';
+
+  // DNI Number
+  const dniText = dniData.dniNumber || '00000000';
+  ctx.fillText(dniText, 207, 140);
+
+  // Fecha Nacimiento
+  let birthText = dniData.birthDate || '16/08/1999';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(birthText)) {
+    const [y, m, d] = birthText.split('-');
+    birthText = `${d}/${m}/${y}`;
+  }
+  ctx.fillText(birthText, 500, 140);
+
+  // Nombre y Apellido
+  let nameText = dniData.fullName || '';
+  if (!nameText && (dniData.givenNames || dniData.firstSurname)) {
+    nameText = `${dniData.givenNames || ''} ${dniData.firstSurname || ''} ${dniData.secondSurname || ''}`.trim();
+  }
+  ctx.fillText(nameText || 'CIUDADANO PERUANO', 207, 195);
+
+  // Género
+  const rawGender = (dniData.gender || 'M').toUpperCase();
+  const genderText = rawGender.startsWith('M') ? 'Masculino' : rawGender.startsWith('F') ? 'Femenino' : rawGender;
+  ctx.fillText(genderText, 207, 240);
+
+  // Nacionalidad
+  ctx.fillText('Peruano', 207, 280);
+
+  // Usuario Roblox
+  const robloxUser = dniData.robloxUsername || 'UsuarioRoblox';
+  ctx.fillText(robloxUser, 207, 323);
+
+  return canvas.toBuffer('image/png');
+}
+
+// Endpoint to render DNI image by identifier (DNI number, Roblox username, Discord ID)
+app.get('/api/dni/image/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+    const data = loadBankSystem();
+
+    const found = data.dnis.find(
+      (d: any) =>
+        d.dniNumber?.toLowerCase() === clean ||
+        d.discordId?.toLowerCase() === clean ||
+        d.robloxUsername?.toLowerCase() === clean
+    );
+
+    if (!found) {
+      return res.status(404).send('DNI no encontrado para este identificador');
+    }
+
+    const imgBuffer = await generateDniImageBuffer({
+      dniNumber: found.dniNumber,
+      fullName: found.fullName,
+      firstSurname: found.firstSurname,
+      secondSurname: found.secondSurname,
+      givenNames: found.givenNames,
+      birthDate: found.birthDate,
+      gender: found.gender,
+      robloxUsername: found.robloxUsername,
+      photoUrl: found.photoUrl,
+    });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    return res.send(imgBuffer);
+  } catch (err: any) {
+    console.error('Error generating DNI image:', err);
+    return res.status(500).send(err.message || 'Error generando imagen de DNI');
+  }
+});
+
+// Endpoint to render custom DNI image on-the-fly via query parameters
+app.get('/api/dni/render', async (req, res) => {
+  try {
+    const { dni, nombre, nacimiento, genero, usuario, foto } = req.query;
+
+    const imgBuffer = await generateDniImageBuffer({
+      dniNumber: (dni as string) || '45435156',
+      fullName: (nombre as string) || 'Christian Santiago Infante Dominguez',
+      birthDate: (nacimiento as string) || '16/08/1999',
+      gender: (genero as string) || 'Masculino',
+      robloxUsername: (usuario as string) || 'xGekkoo',
+      photoUrl: (foto as string) || '',
+    });
+
+    res.setHeader('Content-Type', 'image/png');
+    return res.send(imgBuffer);
+  } catch (err: any) {
+    console.error('Error in /api/dni/render:', err);
+    return res.status(500).send(err.message || 'Error en generador de imagen DNI');
+  }
 });
 
 // Delete / reset DNI by admin

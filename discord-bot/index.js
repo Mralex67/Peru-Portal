@@ -2,6 +2,7 @@ import {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
+  AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -14,6 +15,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 
 dotenv.config();
 
@@ -264,78 +266,100 @@ function getDniFirstSurname(dni) {
   return 'QUISPE';
 }
 
-// Helper: Build DNI Front Embed
-function buildDniFrontEmbed(dni) {
-  const prenames = getDniPrenames(dni);
-  const firstSurname = getDniFirstSurname(dni);
-  const secondSurname = dni.secondSurname || dni.second_surname || dni.apellido_materno || 'MAMANI';
+// Helper: Render official DNI Image using template and Roblox avatar
+async function renderDniCardImage(dniData) {
+  try {
+    const templatePaths = [
+      path.resolve('assets/dni-template-official.png'),
+      path.resolve('../public/assets/dni-template-official.png'),
+      path.resolve('public/assets/dni-template-official.png'),
+    ];
+    const templatePath = templatePaths.find((p) => fs.existsSync(p));
 
-  return new EmbedBuilder()
-    .setColor(0x0284c7)
-    .setTitle('🇵🇪 REPÚBLICA DEL PERÚ — DOCUMENTO NACIONAL DE IDENTIDAD')
-    .setDescription('**REGISTRO NACIONAL DE IDENTIFICACIÓN Y ESTADO CIVIL (RENIEC)**\n*DNI Electrónico Ciudadano Oficial PE:RP*')
-    .setThumbnail(dni.photoUrl || dni.photo_url || 'https://tr.rbxcdn.com/30DAY-AvatarHeadshot-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarHeadshot/Png/noFilter')
-    .addFields(
-      { name: '🆔 CÚI / N° DE DNI', value: `\`${dni.dniNumber || dni.dni_number}\``, inline: true },
-      { name: '👤 CIUDADANO (ROBLOX)', value: `**@${dni.robloxUsername || dni.roblox_username}**`, inline: true },
-      { name: '⚧️ SEXO', value: dni.gender === 'F' ? 'FEMENINO' : 'MASCULINO', inline: true },
-      { name: '📝 PRIMER APELLIDO', value: firstSurname, inline: true },
-      { name: '📝 SEGUNDO APELLIDO', value: secondSurname, inline: true },
-      { name: '📝 PRENOMBRES', value: prenames, inline: true },
-      { name: '🎂 FECHA DE NACIMIENTO', value: dni.birthDate || dni.birth_date || '2000-01-01', inline: true },
-      { name: '🏛️ ESTADO RENIEC', value: '🟢 **EMITIDO Y VIGENTE**', inline: true }
-    )
-    .setFooter({
-      text: 'PE:RP Streets • Vista: [ANVERSO FRONTAL] • Usa los botones para girar',
-      iconURL: 'https://cdn-icons-png.flaticon.com/512/197/197563.png',
-    })
-    .setTimestamp();
-}
+    if (templatePath) {
+      const tpl = await loadImage(templatePath);
+      const canvas = createCanvas(tpl.width, tpl.height);
+      const ctx = canvas.getContext('2d');
 
-// Helper: Build DNI Back Embed
-function buildDniBackEmbed(dni) {
-  const cleanDni = (dni.dniNumber || dni.dni_number || '00000000').padStart(8, '0');
-  const cleanSurname = getDniFirstSurname(dni).replace(/[^A-Z]/g, '');
-  const cleanPrenames = getDniPrenames(dni).replace(/[^A-Z]/g, '<');
-  const mrzLine1 = `IDPER${cleanDni}<7<<<<<<<<<<<<<<<`;
-  const mrzLine2 = `0205148M3010195PER<<<<<<<<<<<0`;
-  const mrzLine3 = `${cleanSurname}<<${cleanPrenames}<<<<<<<<<<<<<<<`.substring(0, 30);
+      // 1. Draw template background
+      ctx.drawImage(tpl, 0, 0);
 
-  return new EmbedBuilder()
-    .setColor(0x0369a1)
-    .setTitle('🇵🇪 DOCUMENTO NACIONAL DE IDENTIDAD — [REVERSO]')
-    .setDescription('**DATOS COMPLEMENTARIOS Y ZONA DE LECTURA MECÁNICA (MRZ)**')
-    .addFields(
-      { name: '🗳️ GRUPO DE VOTACIÓN', value: '849201', inline: true },
-      { name: '🩸 GRUPO SANGUÍNEO', value: 'O +', inline: true },
-      { name: '🔏 HUELLA DIGITAL & FIRMA', value: 'Digitally Registered & Encrypted', inline: false },
-      {
-        name: '📟 ZONA MRZ (Lector Óptico Policial PNP)',
-        value: `\`\`\`text\n${mrzLine1}\n${mrzLine2}\n${mrzLine3}\n\`\`\``,
-        inline: false,
+      // 2. White avatar frame (20, 100, 161, 161)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(20, 100, 161, 161);
+
+      // 3. Avatar photo
+      const photo = (dniData.photoUrl || dniData.photo_url || '').trim();
+      if (photo) {
+        try {
+          const resp = await fetch(photo);
+          if (resp.ok) {
+            const arr = await resp.arrayBuffer();
+            const avatarImg = await loadImage(Buffer.from(arr));
+            ctx.drawImage(avatarImg, 20, 100, 161, 161);
+          }
+        } catch (e) {
+          console.error('Error drawing avatar on bot DNI:', e);
+        }
       }
-    )
-    .setFooter({
-      text: 'PE:RP Streets • Vista: [REVERSO POSTERIOR] • Usa los botones para girar',
-      iconURL: 'https://cdn-icons-png.flaticon.com/512/197/197563.png',
-    })
-    .setTimestamp();
-}
 
-// Botones interactivos Anverso / Reverso
-function buildDniButtonRow(currentSide = 'front') {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('btn_dni_front')
-      .setLabel('📄 Ver Anverso')
-      .setStyle(currentSide === 'front' ? ButtonStyle.Primary : ButtonStyle.Secondary)
-      .setDisabled(currentSide === 'front'),
-    new ButtonBuilder()
-      .setCustomId('btn_dni_back')
-      .setLabel('🔄 Ver Reverso')
-      .setStyle(currentSide === 'back' ? ButtonStyle.Primary : ButtonStyle.Secondary)
-      .setDisabled(currentSide === 'back')
-  );
+      // 4. Texts matching sample template
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 15px monospace, sans-serif';
+
+      // DNI
+      ctx.fillText(dniData.dniNumber || dniData.dni_number || '00000000', 207, 140);
+
+      // Fecha Nacimiento
+      let bDate = dniData.birthDate || dniData.birth_date || '16/08/1999';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(bDate)) {
+        const [y, m, d] = bDate.split('-');
+        bDate = `${d}/${m}/${y}`;
+      }
+      ctx.fillText(bDate, 500, 140);
+
+      // Nombre y Apellido
+      const fullName = dniData.fullName || dniData.full_name || `${dniData.prenames || dniData.given_names || ''} ${dniData.firstSurname || dniData.first_surname || ''} ${dniData.secondSurname || dniData.second_surname || ''}`.trim() || 'CIUDADANO';
+      ctx.fillText(fullName, 207, 195);
+
+      // Género
+      const rawGen = (dniData.gender || dniData.sex || 'M').toUpperCase();
+      const genderText = rawGen.startsWith('M') ? 'Masculino' : 'Femenino';
+      ctx.fillText(genderText, 207, 240);
+
+      // Nacionalidad
+      ctx.fillText('Peruano', 207, 280);
+
+      // Usuario Roblox
+      ctx.fillText(dniData.robloxUsername || dniData.roblox_username || 'UsuarioRoblox', 207, 323);
+
+      return canvas.toBuffer('image/png');
+    }
+  } catch (err) {
+    console.error('Error in local canvas DNI renderer:', err);
+  }
+
+  // Fallback: API render
+  try {
+    const baseUrl = process.env.API_BASE_URL || 'https://ais-pre-iydhue5qk4b7wusoszmqp2-732238089491.us-east1.run.app';
+    const params = new URLSearchParams({
+      dni: dniData.dniNumber || dniData.dni_number || '',
+      nombre: dniData.fullName || dniData.full_name || '',
+      nacimiento: dniData.birthDate || dniData.birth_date || '',
+      genero: (dniData.gender || dniData.sex || 'M').toUpperCase().startsWith('M') ? 'Masculino' : 'Femenino',
+      usuario: dniData.robloxUsername || dniData.roblox_username || '',
+      foto: dniData.photoUrl || dniData.photo_url || '',
+    });
+    const res = await fetch(`${baseUrl}/api/dni/render?${params.toString()}`);
+    if (res.ok) {
+      const arr = await res.arrayBuffer();
+      return Buffer.from(arr);
+    }
+  } catch (apiErr) {
+    console.error('Error in API DNI render fallback:', apiErr);
+  }
+
+  return null;
 }
 
 // ==========================================
@@ -510,27 +534,27 @@ client.on('interactionCreate', async (interaction) => {
         saveLocalDb(db);
       }
 
-      const embed = buildDniFrontEmbed(dni);
-      const row = buildDniButtonRow('front');
+      const imgBuffer = await renderDniCardImage(dni);
+      if (imgBuffer) {
+        const attachment = new AttachmentBuilder(imgBuffer, { name: `dni-${dni.dniNumber}.png` });
+        const embed = new EmbedBuilder()
+          .setColor(0x0ea5e9)
+          .setTitle(`🇵🇪 DNI ELECTRÓNICO EMITIDO — ${dni.dniNumber}`)
+          .setDescription(`¡Felicidades, **${dni.fullName}**! Tu DNI oficial ha sido emitido con tu avatar de Roblox (@${dni.robloxUsername}) y registrado en RENIEC y Banco YA P.`)
+          .setImage(`attachment://dni-${dni.dniNumber}.png`)
+          .setFooter({ text: 'RENIEC PE:RP • Banco YA P Oficial' })
+          .setTimestamp();
 
-      const reply = await interaction.editReply({
-        content: `🎉 **¡DNI tramitado con éxito!** Se te ha asignado el DNI **${dni.dniNumber}** con tu avatar oficial de Roblox (@${dni.robloxUsername}) y se habilitó tu cuenta en **Banco YA P**.`,
-        embeds: [embed],
-        components: [row],
-      });
-
-      const collector = reply.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: 120000,
-      });
-
-      collector.on('collect', async (i) => {
-        if (i.customId === 'btn_dni_front') {
-          await i.update({ embeds: [buildDniFrontEmbed(dni)], components: [buildDniButtonRow('front')] });
-        } else if (i.customId === 'btn_dni_back') {
-          await i.update({ embeds: [buildDniBackEmbed(dni)], components: [buildDniButtonRow('back')] });
-        }
-      });
+        await interaction.editReply({
+          content: `🎉 **¡DNI tramitado con éxito!** N° **${dni.dniNumber}** (@${dni.robloxUsername}) • Bono de S/. 1,000 habilitado en Banco YA P.`,
+          embeds: [embed],
+          files: [attachment],
+        });
+      } else {
+        await interaction.editReply({
+          content: `🎉 **¡DNI tramitado con éxito!** N° **${dni.dniNumber}** (@${dni.robloxUsername}) con avatar oficial.`,
+        });
+      }
     }
 
     // 2. /dni-ver
@@ -593,22 +617,26 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      const embed = buildDniFrontEmbed(dni);
-      const row = buildDniButtonRow('front');
+      const imgBuffer = await renderDniCardImage(dni);
+      if (imgBuffer) {
+        const attachment = new AttachmentBuilder(imgBuffer, { name: `dni-${dni.dniNumber}.png` });
+        const embed = new EmbedBuilder()
+          .setColor(0x0284c7)
+          .setTitle(`🇵🇪 DOCUMENTO NACIONAL DE IDENTIDAD ELECTRÓNICO — ${dni.dniNumber}`)
+          .setDescription(`**Titular:** ${dni.fullName} (@${dni.robloxUsername})\n**Estado:** 🟢 EMITIDO Y VIGENTE EN RENIEC`)
+          .setImage(`attachment://dni-${dni.dniNumber}.png`)
+          .setFooter({ text: 'Registro Nacional de Identificación y Estado Civil • PE:RP Streets' })
+          .setTimestamp();
 
-      const reply = await interaction.editReply({ embeds: [embed], components: [row] });
-      const collector = reply.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: 120000,
-      });
-
-      collector.on('collect', async (i) => {
-        if (i.customId === 'btn_dni_front') {
-          await i.update({ embeds: [buildDniFrontEmbed(dni)], components: [buildDniButtonRow('front')] });
-        } else if (i.customId === 'btn_dni_back') {
-          await i.update({ embeds: [buildDniBackEmbed(dni)], components: [buildDniButtonRow('back')] });
-        }
-      });
+        await interaction.editReply({
+          embeds: [embed],
+          files: [attachment],
+        });
+      } else {
+        await interaction.editReply({
+          content: `📄 **DNI N° ${dni.dniNumber}** • Ciudadano: ${dni.fullName} (@${dni.robloxUsername})`,
+        });
+      }
     }
 
     // 3. /saldo
@@ -700,6 +728,10 @@ client.on('interactionCreate', async (interaction) => {
 
       const embed = new EmbedBuilder()
         .setColor(0x8b5cf6)
+        .setAuthor({
+          name: `Banco YA P • @${acc.robloxUsername}`,
+          iconURL: acc.avatarUrl,
+        })
         .setTitle(`🏦 Estado de Cuenta Bancaria — @${acc.robloxUsername}`)
         .setDescription(`**Banco YA P & Billetera Móvil Oficial PE:RP**\nTitular: **${acc.fullName}** | DNI: \`${acc.dniNumber}\``)
         .setThumbnail(acc.avatarUrl)
@@ -708,7 +740,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: '🏦 Dinero en Banco (Banco YA P)', value: `\`S/. ${Number(acc.bankBalance).toFixed(2)}\``, inline: false },
           { name: '💰 Dinero Total (Patrimonio)', value: `**\`S/. ${Number(totalBalance).toFixed(2)}\`**`, inline: false }
         )
-        .setFooter({ text: 'Banco YA P PE:RP • Retira con /retirar o deposita con /depositar' })
+        .setFooter({ text: 'Banco YA P PE:RP • Retira con /retirar o deposita con /depositar', iconURL: acc.avatarUrl })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
