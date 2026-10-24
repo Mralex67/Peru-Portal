@@ -3,7 +3,8 @@
   "currentPlayers": 42,
   "maxPlayers": 50,
   "customLogoUrl": "",
-  "heroCardImage": "/uploads/foto_1792779353582_pfpg3.png",
-  "customPatrolTruckUrl": "/uploads/foto_1792779353582_pfpg3.png",
-  "updatedAt": "2026-10-24T16:35:29.442Z"
+  "heroCardImage": "/src/assets/images/roblox_sunset_pier_1792185364963.jpg",
+  "customPatrolTruckUrl": "",
+  "updatedAt": "2026-10-24T16:51:14.157Z",
+  "yapoLogoUrl": ""
 }

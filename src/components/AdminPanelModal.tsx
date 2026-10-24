@@ -214,6 +214,10 @@ export const AdminPanelModal: React.FC = () => {
 
     // Synchronize form with latest server config whenever opening panel
     setFormData({ ...config });
+    setLogoUrlInput(config.customLogoUrl || '');
+    setHeroCardUrlInput(config.heroCardImage || '');
+    setTruckUrlInput(config.customPatrolTruckUrl || '');
+    setYapoLogoUrlInput(config.yapoLogoUrl || '');
 
     // Load Yapo banking accounts, transactions and config
     setYapoAccounts(getLocalYapoAccounts());
@@ -251,6 +255,45 @@ export const AdminPanelModal: React.FC = () => {
 
   if (!isAdminOpen) return null;
 
+  // Compress image to standard dimensions before upload to keep loads fast and avoid quota limits
+  const optimizeImageFile = (file: File, maxDim = 1280): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const src = e.target?.result as string;
+        if (!src) return resolve('');
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.88));
+          } else {
+            resolve(src);
+          }
+        };
+        img.onerror = () => resolve(src);
+        img.src = src;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Upload helper using server API
   const uploadToServer = async (dataUrl: string): Promise<string> => {
     try {
@@ -259,8 +302,10 @@ export const AdminPanelModal: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: dataUrl }),
       });
-      const data = await res.json();
-      if (data && data.url) return data.url;
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.url) return data.url;
+      }
     } catch (err) {
       console.warn('Fallback to direct data URL for image upload:', err);
     }
@@ -274,16 +319,18 @@ export const AdminPanelModal: React.FC = () => {
     setIsUploadingLogo(true);
     playClickSound();
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
+    try {
+      const dataUrl = await optimizeImageFile(file, 1280);
       const finalUrl = await uploadToServer(dataUrl);
+      setLogoUrlInput(finalUrl);
       setFormData((prev) => ({ ...prev, customLogoUrl: finalUrl }));
       updateConfig({ customLogoUrl: finalUrl });
-      setIsUploadingLogo(false);
       playSuccessSound();
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error al subir logo:', err);
+    } finally {
+      setIsUploadingLogo(false);
+    }
   };
 
   // Upload Hero Card Image from local file
@@ -293,16 +340,18 @@ export const AdminPanelModal: React.FC = () => {
     setIsUploadingHeroCard(true);
     playClickSound();
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
+    try {
+      const dataUrl = await optimizeImageFile(file, 1280);
       const finalUrl = await uploadToServer(dataUrl);
+      setHeroCardUrlInput(finalUrl);
       setFormData((prev) => ({ ...prev, heroCardImage: finalUrl }));
       updateConfig({ heroCardImage: finalUrl });
-      setIsUploadingHeroCard(false);
       playSuccessSound();
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error al subir portada:', err);
+    } finally {
+      setIsUploadingHeroCard(false);
+    }
   };
 
   // Upload Truck from local file
@@ -312,16 +361,18 @@ export const AdminPanelModal: React.FC = () => {
     setIsUploadingTruck(true);
     playClickSound();
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
+    try {
+      const dataUrl = await optimizeImageFile(file, 1280);
       const finalUrl = await uploadToServer(dataUrl);
+      setTruckUrlInput(finalUrl);
       setFormData((prev) => ({ ...prev, customPatrolTruckUrl: finalUrl }));
       updateConfig({ customPatrolTruckUrl: finalUrl });
-      setIsUploadingTruck(false);
       playSuccessSound();
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error al subir camioneta:', err);
+    } finally {
+      setIsUploadingTruck(false);
+    }
   };
 
   // Download Discord Bot 24/7 package cleanly as binary blob
@@ -329,7 +380,8 @@ export const AdminPanelModal: React.FC = () => {
     setIsDownloadingBot(true);
     playClickSound();
     try {
-      const res = await fetch('/api/bot/download-zip');
+      // First try direct prebuilt endpoint
+      const res = await fetch('/perp-discord-bot-24-7.zip');
       if (!res.ok) throw new Error('Error al descargar ZIP');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -338,12 +390,15 @@ export const AdminPanelModal: React.FC = () => {
       a.download = 'perp-discord-bot-24-7.zip';
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Keep blob URL alive for 45s to avoid aborting download in Windows / Chrome
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        if (document.body.contains(a)) document.body.removeChild(a);
+      }, 45000);
       playSuccessSound();
     } catch (err) {
       console.error('Error downloading bot zip:', err);
-      window.open('/api/bot/download-zip', '_blank');
+      window.open('/perp-discord-bot-24-7.zip', '_blank');
     } finally {
       setIsDownloadingBot(false);
     }
@@ -356,16 +411,18 @@ export const AdminPanelModal: React.FC = () => {
     setIsUploadingYapoLogo(true);
     playClickSound();
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
+    try {
+      const dataUrl = await optimizeImageFile(file, 800);
       const finalUrl = await uploadToServer(dataUrl);
+      setYapoLogoUrlInput(finalUrl);
       setFormData((prev) => ({ ...prev, yapoLogoUrl: finalUrl }));
       updateConfig({ yapoLogoUrl: finalUrl });
-      setIsUploadingYapoLogo(false);
       playSuccessSound();
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error al subir logo yapo:', err);
+    } finally {
+      setIsUploadingYapoLogo(false);
+    }
   };
 
   // 3. Admin adds photo directly to Album
@@ -416,7 +473,14 @@ export const AdminPanelModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateConfig(formData);
+    const finalData = {
+      ...formData,
+      customLogoUrl: logoUrlInput.trim() !== '' ? logoUrlInput.trim() : formData.customLogoUrl,
+      heroCardImage: heroCardUrlInput.trim() !== '' ? heroCardUrlInput.trim() : formData.heroCardImage,
+      customPatrolTruckUrl: truckUrlInput.trim() !== '' ? truckUrlInput.trim() : formData.customPatrolTruckUrl,
+      yapoLogoUrl: yapoLogoUrlInput.trim() !== '' ? yapoLogoUrlInput.trim() : formData.yapoLogoUrl,
+    };
+    updateConfig(finalData);
 
     // Save Discord credentials
     if (clientId.trim()) {
@@ -1224,6 +1288,7 @@ export const AdminPanelModal: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, customLogoUrl: '' }));
+                            setLogoUrlInput('');
                             updateConfig({ customLogoUrl: '' });
                             playClickSound();
                           }}
@@ -1239,18 +1304,20 @@ export const AdminPanelModal: React.FC = () => {
                       <input
                         type="url"
                         value={logoUrlInput}
-                        onChange={(e) => setLogoUrlInput(e.target.value)}
-                        placeholder="O pega enlace directo de imagen (Discord/Imgur)..."
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLogoUrlInput(val);
+                          setFormData((prev) => ({ ...prev, customLogoUrl: val }));
+                        }}
+                        placeholder="Pega enlace de imagen (Discord/Imgur/https://...)..."
                         className="flex-1 px-3 py-2 rounded-xl bg-[#0a0c14] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          if (!logoUrlInput.trim()) return;
                           const url = logoUrlInput.trim();
                           setFormData((prev) => ({ ...prev, customLogoUrl: url }));
                           updateConfig({ customLogoUrl: url });
-                          setLogoUrlInput('');
                           playSuccessSound();
                         }}
                         className="px-3 py-2 rounded-xl bg-[#1b1f33] hover:bg-[#232942] text-slate-200 hover:text-white text-xs font-bold cursor-pointer"
@@ -1331,7 +1398,8 @@ export const AdminPanelModal: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, heroCardImage: '' }));
-                            updateConfig({ heroCardImage: '' });
+                            setHeroCardUrlInput('');
+                            updateConfig({ heroCardImage: '/src/assets/images/roblox_sunset_pier_1792185364963.jpg' });
                             playClickSound();
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
@@ -1346,18 +1414,20 @@ export const AdminPanelModal: React.FC = () => {
                       <input
                         type="url"
                         value={heroCardUrlInput}
-                        onChange={(e) => setHeroCardUrlInput(e.target.value)}
-                        placeholder="O pega enlace directo de imagen..."
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setHeroCardUrlInput(val);
+                          setFormData((prev) => ({ ...prev, heroCardImage: val }));
+                        }}
+                        placeholder="Pega enlace de imagen (Discord/Imgur/https://...)..."
                         className="flex-1 px-3 py-2 rounded-xl bg-[#0a0c14] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          if (!heroCardUrlInput.trim()) return;
                           const url = heroCardUrlInput.trim();
                           setFormData((prev) => ({ ...prev, heroCardImage: url }));
                           updateConfig({ heroCardImage: url });
-                          setHeroCardUrlInput('');
                           playSuccessSound();
                         }}
                         className="px-3 py-2 rounded-xl bg-[#1b1f33] hover:bg-[#232942] text-slate-200 hover:text-white text-xs font-bold cursor-pointer"
@@ -1438,6 +1508,7 @@ export const AdminPanelModal: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, customPatrolTruckUrl: '' }));
+                            setTruckUrlInput('');
                             updateConfig({ customPatrolTruckUrl: '' });
                             playClickSound();
                           }}
@@ -1453,18 +1524,20 @@ export const AdminPanelModal: React.FC = () => {
                       <input
                         type="url"
                         value={truckUrlInput}
-                        onChange={(e) => setTruckUrlInput(e.target.value)}
-                        placeholder="O pega enlace directo de imagen de patrulla..."
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTruckUrlInput(val);
+                          setFormData((prev) => ({ ...prev, customPatrolTruckUrl: val }));
+                        }}
+                        placeholder="Pega enlace de imagen de patrulla (Discord/Imgur/https://...)..."
                         className="flex-1 px-3 py-2 rounded-xl bg-[#0a0c14] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-blue-500"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          if (!truckUrlInput.trim()) return;
                           const url = truckUrlInput.trim();
                           setFormData((prev) => ({ ...prev, customPatrolTruckUrl: url }));
                           updateConfig({ customPatrolTruckUrl: url });
-                          setTruckUrlInput('');
                           playSuccessSound();
                         }}
                         className="px-3 py-2 rounded-xl bg-[#14233e] hover:bg-[#1a3055] text-blue-200 hover:text-white text-xs font-bold cursor-pointer"
@@ -1546,6 +1619,7 @@ export const AdminPanelModal: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, yapoLogoUrl: '' }));
+                            setYapoLogoUrlInput('');
                             updateConfig({ yapoLogoUrl: '' });
                             playClickSound();
                           }}
@@ -1561,18 +1635,20 @@ export const AdminPanelModal: React.FC = () => {
                       <input
                         type="url"
                         value={yapoLogoUrlInput}
-                        onChange={(e) => setYapoLogoUrlInput(e.target.value)}
-                        placeholder="O pega enlace directo de imagen (https://...)..."
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setYapoLogoUrlInput(val);
+                          setFormData((prev) => ({ ...prev, yapoLogoUrl: val }));
+                        }}
+                        placeholder="Pega enlace directo de imagen (Discord/Imgur/https://...)..."
                         className="flex-1 px-3 py-2 rounded-xl bg-[#0a0c14] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-purple-500"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          if (!yapoLogoUrlInput.trim()) return;
                           const url = yapoLogoUrlInput.trim();
                           setFormData((prev) => ({ ...prev, yapoLogoUrl: url }));
                           updateConfig({ yapoLogoUrl: url });
-                          setYapoLogoUrlInput('');
                           playSuccessSound();
                         }}
                         className="px-3 py-2 rounded-xl bg-[#2a1742] hover:bg-[#39215c] text-purple-200 hover:text-white text-xs font-bold cursor-pointer"
@@ -2711,7 +2787,7 @@ export const AdminPanelModal: React.FC = () => {
                       Guía Paso a Paso: ¿Qué se debe hacer para configurar el Bot?
                     </h5>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={handleDownloadBotZip}
@@ -2731,6 +2807,17 @@ export const AdminPanelModal: React.FC = () => {
                         </>
                       )}
                     </button>
+                    <a
+                      href="/perp-discord-bot-24-7.zip"
+                      download="perp-discord-bot-24-7.zip"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-teal-600/30 hover:bg-teal-600/50 text-teal-300 border border-teal-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      title="Descarga directa directa sin bloqueos de navegador"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Enlace Directo</span>
+                    </a>
                     <button
                       type="button"
                       onClick={() => {

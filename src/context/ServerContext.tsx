@@ -137,11 +137,21 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const rawCfg = (data.config.config && typeof data.config.config === 'object') ? data.config.config : data.config;
           const { updatedAt, activeDistrict, ...cfg } = rawCfg;
           setConfig((prev) => {
-            const merged = {
-              ...prev,
-              ...cfg,
-              currentPlayers: prev.currentPlayers > 0 ? prev.currentPlayers : (cfg.currentPlayers || prev.currentPlayers),
-            };
+            const merged = { ...prev };
+            for (const key of Object.keys(cfg)) {
+              const val = (cfg as any)[key];
+              if (val !== undefined && val !== null) {
+                const isPhoto = key === 'customLogoUrl' || key === 'heroCardImage' || key === 'customPatrolTruckUrl' || key === 'yapoLogoUrl';
+                // If local state already has a custom photo and incoming is empty string, keep local photo
+                if (isPhoto && val === '' && (prev as any)[key]) {
+                  continue;
+                }
+                (merged as any)[key] = val;
+              }
+            }
+            if (prev.currentPlayers > 0) {
+              merged.currentPlayers = prev.currentPlayers;
+            }
             try {
               localStorage.setItem('perp_server_config', JSON.stringify(merged));
             } catch {}

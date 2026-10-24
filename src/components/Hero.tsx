@@ -220,6 +220,8 @@ export const Hero: React.FC = () => {
                   type="button"
                   onClick={() => {
                     playClickSound();
+                    setUrlInput(config.heroCardImage || '');
+                    setPreviewImage(null);
                     setShowEditModal(true);
                   }}
                   className="absolute top-4 left-4 z-20 px-2.5 py-1.5 rounded-xl bg-black/80 hover:bg-red-600 text-white text-[11px] font-bold border border-white/20 hover:border-red-400 flex items-center gap-1.5 backdrop-blur-md opacity-90 sm:opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-lg"
