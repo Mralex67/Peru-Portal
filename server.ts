@@ -58,18 +58,25 @@ app.get('/api/server-config', (req, res) => {
 // Save updated server configuration permanently to disk
 app.post('/api/server-config', (req, res) => {
   try {
-    const newConfig = req.body;
+    let newConfig = req.body;
     if (!newConfig || typeof newConfig !== 'object') {
       return res.status(400).json({ error: 'Configuración inválida' });
     }
+    if (newConfig.config && typeof newConfig.config === 'object') {
+      newConfig = newConfig.config;
+    }
     fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
-    let existing = {};
+    let existing: any = {};
     if (fs.existsSync(CONFIG_FILE)) {
       try {
         existing = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+        if (existing.config && typeof existing.config === 'object') {
+          existing = existing.config;
+        }
       } catch {}
     }
     const merged = { ...existing, ...newConfig, updatedAt: new Date().toISOString() };
+    delete (merged as any).config; // prevent nested config property
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2));
     return res.json({ success: true, config: merged });
   } catch (err: any) {
@@ -84,10 +91,15 @@ app.post('/api/upload-photo', (req, res) => {
     if (!imageBase64) {
       return res.status(400).json({ error: 'Falta imagen' });
     }
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const mimeMatch = imageBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,/);
+    const base64Data = imageBase64.replace(/^data:[^;]+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
-    const safeExt = extension.replace(/[^a-zA-Z0-9]/g, '') || 'png';
-    const filename = `foto_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${safeExt}`;
+    let safeExt = extension;
+    if (mimeMatch && mimeMatch[1]) {
+      safeExt = mimeMatch[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+    }
+    safeExt = (safeExt || 'png').replace(/[^a-zA-Z0-9]/g, '');
+    const filename = `foto_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${safeExt || 'png'}`;
     
     // Save to public/uploads so it is always statically accessible in dev and prod
     const publicFilePath = path.join(UPLOADS_DIR, filename);
@@ -1428,7 +1440,12 @@ app.get('/api/bot/bank/history/:identifier', (req, res) => {
 app.get('/api/bot/download-zip', (req, res) => {
   const prebuiltZip = path.resolve(__dirname, 'public/perp-discord-bot-24-7.zip');
   if (fs.existsSync(prebuiltZip)) {
-    return res.download(prebuiltZip, 'perp-discord-bot-24-7.zip');
+    const stat = fs.statSync(prebuiltZip);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Content-Disposition', 'attachment; filename="perp-discord-bot-24-7.zip"');
+    const stream = fs.createReadStream(prebuiltZip);
+    return stream.pipe(res);
   }
 
   const botDir = path.resolve(__dirname, 'discord-bot');

@@ -26,6 +26,7 @@ export const Hero: React.FC = () => {
   const [urlInput, setUrlInput] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenDiscordDirect = () => {
@@ -34,6 +35,21 @@ export const Hero: React.FC = () => {
 
   const currentCardImage =
     config.heroCardImage || '/src/assets/images/roblox_sunset_pier_1792185364963.jpg';
+
+  const uploadHeroPhoto = async (dataUrl: string): Promise<string> => {
+    try {
+      const res = await fetch('/api/upload-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: dataUrl }),
+      });
+      const data = await res.json();
+      if (data && data.url) return data.url;
+    } catch (err) {
+      console.warn('Fallback to direct data URL for hero photo:', err);
+    }
+    return dataUrl;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,18 +65,24 @@ export const Hero: React.FC = () => {
     }
   };
 
-  const handleSaveImage = () => {
-    const target = (previewImage || urlInput).trim();
-    if (target) {
-      updateConfig({ heroCardImage: target });
+  const handleSaveImage = async () => {
+    const rawTarget = (previewImage || urlInput).trim();
+    if (rawTarget) {
+      setIsSaving(true);
+      let finalTarget = rawTarget;
+      if (rawTarget.startsWith('data:')) {
+        finalTarget = await uploadHeroPhoto(rawTarget);
+      }
+      updateConfig({ heroCardImage: finalTarget });
       setIsSaved(true);
+      setIsSaving(false);
       playSuccessSound();
       setTimeout(() => {
         setIsSaved(false);
         setShowEditModal(false);
         setPreviewImage(null);
         setUrlInput('');
-      }, 1200);
+      }, 1000);
     }
   };
 
@@ -319,10 +341,25 @@ export const Hero: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveImage}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950 transition-all"
+                  disabled={isSaving}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950 transition-all disabled:opacity-50"
                 >
-                  {isSaved ? <Check className="w-4 h-4 text-white" /> : <Check className="w-4 h-4 text-emerald-200" />}
-                  <span>{isSaved ? '¡Guardada!' : 'Guardar Imagen'}</span>
+                  {isSaving ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : isSaved ? (
+                    <>
+                      <Check className="w-4 h-4 text-white" />
+                      <span>¡Guardada!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-200" />
+                      <span>Guardar Imagen</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

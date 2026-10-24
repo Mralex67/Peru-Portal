@@ -117,18 +117,22 @@ export const AdminPanelModal: React.FC = () => {
 
   // File upload refs
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const heroCardInputRef = useRef<HTMLInputElement | null>(null);
   const truckInputRef = useRef<HTMLInputElement | null>(null);
   const yapoLogoInputRef = useRef<HTMLInputElement | null>(null);
   const albumAdminInputRef = useRef<HTMLInputElement | null>(null);
 
   // Image loading indicators
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingHeroCard, setIsUploadingHeroCard] = useState(false);
   const [isUploadingTruck, setIsUploadingTruck] = useState(false);
   const [isUploadingYapoLogo, setIsUploadingYapoLogo] = useState(false);
   const [isUploadingAlbum, setIsUploadingAlbum] = useState(false);
+  const [isDownloadingBot, setIsDownloadingBot] = useState(false);
 
   // Direct URL inputs
   const [logoUrlInput, setLogoUrlInput] = useState('');
+  const [heroCardUrlInput, setHeroCardUrlInput] = useState('');
   const [truckUrlInput, setTruckUrlInput] = useState('');
   const [yapoLogoUrlInput, setYapoLogoUrlInput] = useState('');
 
@@ -243,7 +247,7 @@ export const AdminPanelModal: React.FC = () => {
         }
       })
       .catch(() => {});
-  }, [isAdminOpen, config]);
+  }, [isAdminOpen]);
 
   if (!isAdminOpen) return null;
 
@@ -282,7 +286,26 @@ export const AdminPanelModal: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // 2. Upload Truck from local file
+  // Upload Hero Card Image from local file
+  const handleHeroCardFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingHeroCard(true);
+    playClickSound();
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const finalUrl = await uploadToServer(dataUrl);
+      setFormData((prev) => ({ ...prev, heroCardImage: finalUrl }));
+      updateConfig({ heroCardImage: finalUrl });
+      setIsUploadingHeroCard(false);
+      playSuccessSound();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Upload Truck from local file
   const handleTruckFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -299,6 +322,31 @@ export const AdminPanelModal: React.FC = () => {
       playSuccessSound();
     };
     reader.readAsDataURL(file);
+  };
+
+  // Download Discord Bot 24/7 package cleanly as binary blob
+  const handleDownloadBotZip = async () => {
+    setIsDownloadingBot(true);
+    playClickSound();
+    try {
+      const res = await fetch('/api/bot/download-zip');
+      if (!res.ok) throw new Error('Error al descargar ZIP');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'perp-discord-bot-24-7.zip';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      playSuccessSound();
+    } catch (err) {
+      console.error('Error downloading bot zip:', err);
+      window.open('/api/bot/download-zip', '_blank');
+    } finally {
+      setIsDownloadingBot(false);
+    }
   };
 
   // Upload YA P Logo from local file
@@ -1214,7 +1262,7 @@ export const AdminPanelModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECTION B: FOTO DE PORTADA COMUNIDAD PERUANA */}
+              {/* SECTION 2: FOTO DE PORTADA COMUNIDAD PERUANA */}
               <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-white/10 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                   <div>
@@ -1252,23 +1300,23 @@ export const AdminPanelModal: React.FC = () => {
                   <div className="flex-1 w-full space-y-3">
                     <input
                       type="file"
-                      ref={truckInputRef}
+                      ref={heroCardInputRef}
                       accept="image/*"
-                      onChange={handleTruckFileChange}
+                      onChange={handleHeroCardFileChange}
                       className="hidden"
                     />
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => truckInputRef.current?.click()}
-                        disabled={isUploadingTruck}
+                        onClick={() => heroCardInputRef.current?.click()}
+                        disabled={isUploadingHeroCard}
                         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-red-950"
                       >
-                        {isUploadingTruck ? (
+                        {isUploadingHeroCard ? (
                           <>
                             <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Cargando imagen...</span>
+                            <span>Cargando portada...</span>
                           </>
                         ) : (
                           <>
@@ -1288,7 +1336,7 @@ export const AdminPanelModal: React.FC = () => {
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
                         >
-                          Restablecer Original
+                          Restablecer Portada Original
                         </button>
                       )}
                     </div>
@@ -1297,19 +1345,19 @@ export const AdminPanelModal: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <input
                         type="url"
-                        value={truckUrlInput}
-                        onChange={(e) => setTruckUrlInput(e.target.value)}
+                        value={heroCardUrlInput}
+                        onChange={(e) => setHeroCardUrlInput(e.target.value)}
                         placeholder="O pega enlace directo de imagen..."
                         className="flex-1 px-3 py-2 rounded-xl bg-[#0a0c14] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          if (!truckUrlInput.trim()) return;
-                          const url = truckUrlInput.trim();
+                          if (!heroCardUrlInput.trim()) return;
+                          const url = heroCardUrlInput.trim();
                           setFormData((prev) => ({ ...prev, heroCardImage: url }));
                           updateConfig({ heroCardImage: url });
-                          setTruckUrlInput('');
+                          setHeroCardUrlInput('');
                           playSuccessSound();
                         }}
                         className="px-3 py-2 rounded-xl bg-[#1b1f33] hover:bg-[#232942] text-slate-200 hover:text-white text-xs font-bold cursor-pointer"
@@ -1321,13 +1369,120 @@ export const AdminPanelModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECTION: LOGO OFICIAL DEL BANCO YA P (S/.) */}
+              {/* SECTION 3: FOTO DE CAMIONETA DE PATRULLAJE PNP / SERENAZGO */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-white/10 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                  <div>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                      <Car className="w-4 h-4 text-blue-400" />
+                      3. Foto de Camioneta de Patrullaje Oficial (PNP / Serenazgo)
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Cambia la foto de la patrulla oficial en la sección de Facciones Oficiales (Policía Nacional del Perú - 105 PNP).
+                    </p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 self-start sm:self-auto ${
+                    formData.customPatrolTruckUrl
+                      ? 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
+                      : 'bg-white/5 text-slate-400 border border-white/10'
+                  }`}>
+                    {formData.customPatrolTruckUrl ? 'Patrulla Personalizada' : 'Patrulla Original'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-5">
+                  {/* Preview */}
+                  <div className="relative w-40 h-28 sm:w-48 sm:h-32 shrink-0 rounded-2xl bg-black/60 border border-white/15 overflow-hidden shadow-lg group">
+                    <img
+                      src={formData.customPatrolTruckUrl || "/src/assets/images/peru_police_patrol_night_1792084208478.jpg"}
+                      alt="Vista previa Patrulla PNP"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-1 right-2 bg-black/80 text-[9px] font-mono font-bold text-blue-400 px-1.5 py-0.5 rounded">
+                      105 PNP
+                    </div>
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex-1 w-full space-y-3">
+                    <input
+                      type="file"
+                      ref={truckInputRef}
+                      accept="image/*"
+                      onChange={handleTruckFileChange}
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => truckInputRef.current?.click()}
+                        disabled={isUploadingTruck}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-blue-950"
+                      >
+                        {isUploadingTruck ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Cargando patrulla...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Subir Foto de Patrulla PNP</span>
+                          </>
+                        )}
+                      </button>
+
+                      {formData.customPatrolTruckUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, customPatrolTruckUrl: '' }));
+                            updateConfig({ customPatrolTruckUrl: '' });
+                            playClickSound();
+                          }}
+                          className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Restablecer Patrulla Original
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Direct URL input */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        value={truckUrlInput}
+                        onChange={(e) => setTruckUrlInput(e.target.value)}
+                        placeholder="O pega enlace directo de imagen de patrulla..."
+                        className="flex-1 px-3 py-2 rounded-xl bg-[#0a0c14] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!truckUrlInput.trim()) return;
+                          const url = truckUrlInput.trim();
+                          setFormData((prev) => ({ ...prev, customPatrolTruckUrl: url }));
+                          updateConfig({ customPatrolTruckUrl: url });
+                          setTruckUrlInput('');
+                          playSuccessSound();
+                        }}
+                        className="px-3 py-2 rounded-xl bg-[#14233e] hover:bg-[#1a3055] text-blue-200 hover:text-white text-xs font-bold cursor-pointer"
+                      >
+                        Aplicar URL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: LOGO OFICIAL DEL BANCO YA P (S/.) */}
               <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-purple-500/30 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-wider text-purple-300 flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-purple-400" />
-                      3. Logo Oficial del Banco YA P (S/.)
+                      4. Logo Oficial del Banco YA P (S/.)
                     </h4>
                     <p className="text-xs text-slate-400 mt-0.5">
                       Personaliza o sube una imagen para el logo de YA P. Se actualizará en la billetera virtual, transferencias y barra de navegación.
@@ -1429,13 +1584,13 @@ export const AdminPanelModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECTION D: SEGURIDAD Y GESTIÓN DEL ÁLBUM */}
+              {/* SECTION 5: SEGURIDAD Y GESTIÓN DEL ÁLBUM */}
               <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-white/10 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
                       <Camera className="w-4 h-4 text-red-500" />
-                      3. Seguridad y Gestión del Álbum Comunitario
+                      5. Seguridad y Gestión del Álbum Comunitario
                     </h4>
                     <p className="text-xs text-slate-400 mt-0.5">
                       Controla quién puede subir fotos y gestiona la galería actual.
@@ -2557,15 +2712,25 @@ export const AdminPanelModal: React.FC = () => {
                     </h5>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a
-                      href="/api/bot/download-zip"
-                      download="perp-discord-bot-24-7.zip"
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    <button
+                      type="button"
+                      onClick={handleDownloadBotZip}
+                      disabled={isDownloadingBot}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
                       title="Descargar paquete completo en .ZIP para subir a Discloud, Bot-Hosting o VPS"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Descargar Bot (.ZIP 24/7)</span>
-                    </a>
+                      {isDownloadingBot ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                          <span>Descargando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Descargar Bot (.ZIP 24/7)</span>
+                        </>
+                      )}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {

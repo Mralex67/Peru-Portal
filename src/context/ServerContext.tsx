@@ -134,11 +134,19 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.success && data.config) {
-          setConfig((prev) => ({
-            ...prev,
-            ...data.config,
-            currentPlayers: prev.currentPlayers > 0 ? prev.currentPlayers : (data.config.currentPlayers || prev.currentPlayers),
-          }));
+          const rawCfg = (data.config.config && typeof data.config.config === 'object') ? data.config.config : data.config;
+          const { updatedAt, activeDistrict, ...cfg } = rawCfg;
+          setConfig((prev) => {
+            const merged = {
+              ...prev,
+              ...cfg,
+              currentPlayers: prev.currentPlayers > 0 ? prev.currentPlayers : (cfg.currentPlayers || prev.currentPlayers),
+            };
+            try {
+              localStorage.setItem('perp_server_config', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
         }
       })
       .catch(() => {});
