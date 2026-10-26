@@ -8,7 +8,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   heroHeadline: 'PERÚ ROLEPLAY',
   heroDescription:
     'La comunidad líder y oficial de simulación urbana en Roblox Emergency Response: Liberty County. Patrulla las calles peruanas con la Policía Nacional del Perú (PNP), Serenazgo y SAMU con economía en Soles y rol serio.',
-  discordMembers: '18.450',
+  discordMembers: '115',
   currentPlayers: 4,
   maxPlayers: 50,
   serverStatus: 'online',
@@ -18,7 +18,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   customLogoUrl: '',
   yapoLogoUrl: '',
   customPatrolTruckUrl: '',
-  heroCardImage: '/src/assets/images/roblox_sunset_pier_1792185364963.jpg',
+  heroCardImage: 'https://cdn.discordapp.com/attachments/1105356730516377694/1564349033819148409/xd3.webp?ex=6ae0f111&is=6adf9f91&hm=727126d693148c2dccdf5c33c08e22ea09dbd3ef935156b90c78d4802777316f',
   albumUploadsLocked: true,
   erlcServerKey: '',
   erlcAutoSync: true,
