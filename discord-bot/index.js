@@ -297,7 +297,9 @@ function getDniFirstSurname(dni) {
 async function renderDniCardImage(dniData) {
   try {
     const templatePaths = [
+      path.resolve(__dirname, 'assets/dni-template-official.png'),
       path.resolve('assets/dni-template-official.png'),
+      path.resolve(__dirname, '../public/assets/dni-template-official.png'),
       path.resolve('../public/assets/dni-template-official.png'),
       path.resolve('public/assets/dni-template-official.png'),
     ];

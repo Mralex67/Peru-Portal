@@ -1116,9 +1116,16 @@ async function generateDniImageBuffer(dniData: {
   robloxUsername?: string;
   photoUrl?: string;
 }) {
-  const templatePath = path.resolve(__dirname, 'public/assets/dni-template-official.png');
+  const templatePaths = [
+    path.resolve(__dirname, 'public/assets/dni-template-official.png'),
+    path.resolve(__dirname, 'public/dni-template-official.png'),
+    path.resolve(__dirname, 'src/assets/dni-template-official.png'),
+    path.resolve(__dirname, 'discord-bot/assets/dni-template-official.png'),
+    path.resolve(__dirname, 'public/assets/aistudio/image_a4325e74.png'),
+  ];
+  const templatePath = templatePaths.find((p) => fs.existsSync(p));
   let tpl: any;
-  if (fs.existsSync(templatePath)) {
+  if (templatePath) {
     tpl = await loadImage(templatePath);
   } else {
     throw new Error('Plantilla DNI oficial no encontrada');
@@ -1396,6 +1403,49 @@ app.get('/api/dni/render', async (req, res) => {
   } catch (err: any) {
     console.error('Error in /api/dni/render:', err);
     return res.status(500).send(err.message || 'Error en generador de imagen DNI');
+  }
+});
+
+// Endpoint to update official or custom DNI template image
+app.post('/api/admin/template', async (req, res) => {
+  try {
+    const { imageBase64, imageUrl } = req.body;
+    let imgBuf: Buffer | null = null;
+    if (imageBase64) {
+      const clean = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+      imgBuf = Buffer.from(clean, 'base64');
+    } else if (imageUrl) {
+      const resp = await fetch(imageUrl);
+      if (resp.ok) {
+        const arr = await resp.arrayBuffer();
+        imgBuf = Buffer.from(arr);
+      }
+    }
+    if (!imgBuf || imgBuf.length < 100) {
+      return res.status(400).json({ success: false, error: 'Imagen no válida o vacía' });
+    }
+
+    const targetPaths = [
+      path.resolve(__dirname, 'public/assets/dni-template-official.png'),
+      path.resolve(__dirname, 'public/dni-template-official.png'),
+      path.resolve(__dirname, 'discord-bot/assets/dni-template-official.png'),
+      path.resolve(__dirname, 'src/assets/dni-template-official.png'),
+    ];
+
+    for (const p of targetPaths) {
+      try {
+        const dir = path.dirname(p);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(p, imgBuf);
+      } catch (err) {
+        console.error('Error saving template to', p, err);
+      }
+    }
+
+    return res.json({ success: true, message: 'Plantilla de DNI actualizada correctamente en el sistema y bot' });
+  } catch (err: any) {
+    console.error('Error updating template:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
