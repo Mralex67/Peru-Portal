@@ -30,10 +30,12 @@ import {
   Zap,
   Coins,
   Bot,
-  Download
+  Download,
+  Palette
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
+import { OFFICIAL_DNI_TEMPLATE_BASE64 } from '../assets/dniTemplateBase64';
 import {
   getSupabaseConfig,
   saveSupabaseConfig,
@@ -69,9 +71,18 @@ export const AdminPanelModal: React.FC = () => {
   const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin, adminRole } = useServer();
 
   const [formData, setFormData] = useState({ ...config });
-  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot' | 'template'>('general');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
+
+  // DNI Template customization state in Admin Panel
+  const [adminTemplateSrc, setAdminTemplateSrc] = useState<string>(() => {
+    return localStorage.getItem('perp_custom_dni_template') || OFFICIAL_DNI_TEMPLATE_BASE64;
+  });
+  const [adminCanvaUrlInput, setAdminCanvaUrlInput] = useState('');
+  const [adminTemplateMessage, setAdminTemplateMessage] = useState('');
+  const [isAdminSavingTemplate, setIsAdminSavingTemplate] = useState(false);
+  const adminTemplateFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (adminRole === 'db_manager') {
@@ -126,6 +137,70 @@ export const AdminPanelModal: React.FC = () => {
   const truckInputRef = useRef<HTMLInputElement | null>(null);
   const yapoLogoInputRef = useRef<HTMLInputElement | null>(null);
   const albumAdminInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleAdminUploadTemplate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      if (typeof reader.result === 'string') {
+        const base64Data = reader.result;
+        setAdminTemplateSrc(base64Data);
+        localStorage.setItem('perp_custom_dni_template', base64Data);
+        window.dispatchEvent(new Event('perp_dni_template_updated'));
+        setAdminTemplateMessage('¡Plantilla de DNI actualizada y guardada con éxito!');
+        playSuccessSound();
+
+        try {
+          await fetch('/api/admin/template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: base64Data }),
+          });
+        } catch {}
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAdminApplyCanvaUrl = async () => {
+    if (!adminCanvaUrlInput.trim()) return;
+    setIsAdminSavingTemplate(true);
+    playClickSound();
+    try {
+      setAdminTemplateSrc(adminCanvaUrlInput.trim());
+      localStorage.setItem('perp_custom_dni_template', adminCanvaUrlInput.trim());
+      window.dispatchEvent(new Event('perp_dni_template_updated'));
+      await fetch('/api/admin/template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: adminCanvaUrlInput.trim() }),
+      });
+      setAdminTemplateMessage('¡Enlace de plantilla / Canva aplicado correctamente!');
+      playSuccessSound();
+      setAdminCanvaUrlInput('');
+    } catch {
+      setAdminTemplateMessage('Plantilla guardada en navegador.');
+    } finally {
+      setIsAdminSavingTemplate(false);
+    }
+  };
+
+  const handleAdminResetTemplate = async () => {
+    playClickSound();
+    setAdminTemplateSrc(OFFICIAL_DNI_TEMPLATE_BASE64);
+    localStorage.removeItem('perp_custom_dni_template');
+    window.dispatchEvent(new Event('perp_dni_template_updated'));
+    try {
+      await fetch('/api/admin/template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: OFFICIAL_DNI_TEMPLATE_BASE64 }),
+      });
+    } catch {}
+    setAdminTemplateMessage('Restablecida a la plantilla oficial de RENIEC PE:RP.');
+    playSuccessSound();
+  };
 
   // Image loading indicators
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -932,6 +1007,20 @@ export const AdminPanelModal: React.FC = () => {
                 <span className="px-1.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono">
                   Slash
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setActiveTab('template');
+                  setAdminTemplateMessage('');
+                }}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'template' ? 'border-sky-400 text-white bg-sky-950/30 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Palette className="w-3.5 h-3.5 text-sky-400" />
+                Plantilla DNI (Canva)
               </button>
             </>
           )}
@@ -3454,6 +3543,141 @@ export const AdminPanelModal: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 8: DNI TEMPLATE MANAGEMENT (CANVA / CUSTOM PNG / OFFICIAL) */}
+          {activeTab === 'template' && (
+            <div className="space-y-6">
+              
+              {/* Header Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-950/80 via-[#0e1628] to-black border border-sky-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center">
+                      <Palette className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white font-sans uppercase">
+                        Gestión de Plantilla de DNI Oficial (Panel de Administración)
+                      </h3>
+                      <p className="text-[11px] text-slate-300">
+                        Esta sección es de acceso exclusivo de administradores. La plantilla que configures aquí se aplicará en vivo a toda la web y al generador del bot de Discord.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feedback Alert */}
+              {adminTemplateMessage && (
+                <div className="p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2.5 animate-in fade-in">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{adminTemplateMessage}</span>
+                </div>
+              )}
+
+              {/* Live Preview Box */}
+              <div className="p-5 rounded-2xl bg-[#0a0d18] border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-sky-400" />
+                    Vista Previa de la Plantilla Activa (1119 x 669 px):
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                    Sincronizada con Web & Bot
+                  </span>
+                </div>
+
+                <div className="max-w-[500px] mx-auto aspect-[1119/669] rounded-2xl overflow-hidden border border-sky-400/30 bg-[#e7edf5] shadow-2xl relative">
+                  <img
+                    src={adminTemplateSrc || OFFICIAL_DNI_TEMPLATE_BASE64}
+                    alt="Plantilla DNI Admin"
+                    className="w-full h-full object-fill pointer-events-none"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = OFFICIAL_DNI_TEMPLATE_BASE64;
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Upload & Link Controls */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Method 1: Upload file */}
+                <div className="p-4 rounded-2xl bg-[#0d1222] border border-sky-500/20 space-y-3">
+                  <div className="flex items-center gap-2 text-white font-bold text-xs">
+                    <Upload className="w-4 h-4 text-sky-400" />
+                    <span>Opción A: Subir archivo PNG/JPG (Canva)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Sube directamente tu plantilla exportada de Canva o diseño local. Se procesará y guardará en el sistema.
+                  </p>
+                  <input
+                    ref={adminTemplateFileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handleAdminUploadTemplate}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adminTemplateFileInputRef.current?.click()}
+                    className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Seleccionar imagen de plantilla</span>
+                  </button>
+                </div>
+
+                {/* Method 2: Canva or Direct URL */}
+                <div className="p-4 rounded-2xl bg-[#0d1222] border border-sky-500/20 space-y-3">
+                  <div className="flex items-center gap-2 text-white font-bold text-xs">
+                    <LinkIcon className="w-4 h-4 text-purple-400" />
+                    <span>Opción B: Enlace directo o Canva</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Pega una URL directa de tu plantilla (enlace de imagen Canva, Discord o hosting externo).
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://ejemplo.com/plantilla.png"
+                      value={adminCanvaUrlInput}
+                      onChange={(e) => setAdminCanvaUrlInput(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAdminApplyCanvaUrl}
+                      disabled={isAdminSavingTemplate || !adminCanvaUrlInput.trim()}
+                      className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs cursor-pointer shadow-md"
+                    >
+                      {isAdminSavingTemplate ? 'Cargando...' : 'Aplicar'}
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Reset to official template */}
+              <div className="p-4 rounded-2xl bg-slate-900/40 border border-white/5 flex items-center justify-between">
+                <div>
+                  <strong className="block text-white text-xs">Plantilla Oficial de RENIEC PE:RP</strong>
+                  <span className="text-[11px] text-slate-400">
+                    Si modificaste la plantilla y deseas volver a la versión original por defecto, haz clic en restaurar.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAdminResetTemplate}
+                  className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 text-rose-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restaurar Oficial</span>
+                </button>
               </div>
 
             </div>

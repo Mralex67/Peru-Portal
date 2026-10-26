@@ -1210,23 +1210,23 @@ async function generateDniImageBuffer(dniData: {
     }
   }
 
-  // Draw avatar on right side
+  // Draw avatar on right side (bust from hair down)
   if (avatarImg) {
     try {
-      ctx.drawImage(avatarImg, 680, 140, 400, 420);
+      ctx.drawImage(avatarImg, 670, 95, 410, 520);
     } catch (e) {
       console.error('Error drawing avatar image on canvas:', e);
     }
   }
 
-  // 3. Text setup - exact alignment matching official reference
+  // 3. Text setup - exact alignment matching official reference below labels
   ctx.fillStyle = '#080808';
   ctx.textBaseline = 'middle';
 
   // Format DNI / CUI
   const dniNum = (dniData.dniNumber || '00000000').padStart(8, '0');
   ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
-  ctx.fillText(dniNum, 145, 149);
+  ctx.fillText(dniNum, 147, 148);
 
   // Names decomposition
   let pSurname = dniData.firstSurname || '';
@@ -1247,28 +1247,28 @@ async function generateDniImageBuffer(dniData: {
     }
   }
 
-  // Primer Apellido
+  // Primer Apellido (positioned cleanly below label)
   ctx.font = 'bold 24px Arial, Helvetica, sans-serif';
-  ctx.fillText((pSurname || 'QUISPE').toUpperCase(), 350, 180);
+  ctx.fillText((pSurname || 'QUISPE').toUpperCase(), 348, 177);
 
-  // Segundo Apellido
-  ctx.fillText((mSurname || 'MAMANI').toUpperCase(), 350, 255);
+  // Segundo Apellido (positioned cleanly below label)
+  ctx.fillText((mSurname || 'MAMANI').toUpperCase(), 348, 256);
 
-  // Pronombre / Nombres
-  ctx.fillText((names || 'JUAN CARLOS').toUpperCase(), 350, 328);
+  // Pronombre / Nombres (positioned cleanly below label)
+  ctx.fillText((names || 'JUAN CARLOS').toUpperCase(), 348, 325);
 
-  // Sexo
+  // Sexo (positioned cleanly below label)
   const rawGender = (dniData.gender || 'M').toUpperCase();
   const genderText = rawGender.startsWith('M') ? 'Masculino' : rawGender.startsWith('F') ? 'Femenino' : rawGender;
   ctx.font = 'bold 21px Arial, Helvetica, sans-serif';
-  ctx.fillText(genderText, 345, 395);
+  ctx.fillText(genderText, 346, 382);
 
-  // Estado Civil
+  // Estado Civil (positioned cleanly below label)
   const rawCivil = (dniData.civilStatus || 'SOLTERO').toUpperCase();
   const civilText = rawCivil.startsWith('C') ? 'CASADO' : rawCivil.startsWith('D') ? 'DIVORCIADO' : rawCivil.startsWith('V') ? 'VIUDO' : 'SOLTERO';
-  ctx.fillText(civilText, 570, 395);
+  ctx.fillText(civilText, 567, 393);
 
-  // Fecha de Nacimiento
+  // Fecha de Nacimiento (positioned cleanly below label)
   let bDate = dniData.birthDate || '07/08/1986';
   if (/^\d{4}-\d{2}-\d{2}$/.test(bDate)) {
     const [y, m, d] = bDate.split('-');
@@ -1276,32 +1276,32 @@ async function generateDniImageBuffer(dniData: {
   } else if (/^\d{2}-\d{2}-\d{4}$/.test(bDate)) {
     bDate = bDate.replace(/-/g, '/');
   }
-  ctx.fillText(bDate, 340, 458);
+  ctx.fillText(bDate, 344, 443);
 
   // Serial code beside Peru map (12 digits)
   const serial = dniData.serialCode || `000000000${dniNum.slice(-3)}`;
   ctx.font = 'bold 19px Arial, Helvetica, sans-serif';
-  ctx.fillText(serial, 145, 468);
+  ctx.fillText(serial, 146, 457);
 
-  // Fecha de Emisión
+  // Fecha de Emisión (positioned cleanly below label)
   const today = new Date();
   const emisionDefault = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
   const emisionText = dniData.issueDate || emisionDefault;
   ctx.font = 'bold 21px Arial, Helvetica, sans-serif';
-  ctx.fillText(emisionText, 340, 510);
+  ctx.fillText(emisionText, 344, 500);
 
-  // Fecha de Caducidad (+8 years)
+  // Fecha de Caducidad (+8 years, positioned cleanly below label)
   const caducidadDefault = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear() + 8}`;
   const caducidadText = dniData.expiryDate || caducidadDefault;
-  ctx.fillText(caducidadText, 570, 510);
+  ctx.fillText(caducidadText, 574, 508);
 
-  // Grupo de Votación (6 digits)
+  // Grupo de Votación (6 digits, positioned cleanly below label)
   const voteGroup = dniData.votingGroup || dniNum.slice(0, 6);
-  ctx.fillText(voteGroup, 345, 570);
+  ctx.fillText(voteGroup, 350, 558);
 
-  // Donación de Órganos
+  // Donación de Órganos (positioned cleanly below label)
   const organText = (dniData.organDonation || 'NO').toUpperCase().includes('S') ? 'SI' : 'NO';
-  ctx.fillText(organText, 570, 570);
+  ctx.fillText(organText, 588, 562);
 
   // Fingerprint date overlay (DD MM YYYY)
   const dateDigits = bDate.replace(/\//g, ' ').replace(/-/g, ' ');

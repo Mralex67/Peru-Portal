@@ -72,11 +72,6 @@ export const PeruDniSection: React.FC = () => {
   const [templateSrc, setTemplateSrc] = useState<string>(() => {
     return localStorage.getItem('perp_custom_dni_template') || OFFICIAL_DNI_TEMPLATE_BASE64;
   });
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [canvaUrlInput, setCanvaUrlInput] = useState('');
-  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-  const [templateUploadSuccess, setTemplateUploadSuccess] = useState('');
-
   const formatCivilStatus = (status?: string) => {
     if (!status) return 'SOLTERO';
     const upper = status.toUpperCase().trim();
@@ -87,67 +82,19 @@ export const PeruDniSection: React.FC = () => {
     return upper;
   };
 
-  const handleUploadTemplateFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      if (typeof reader.result === 'string') {
-        const base64Data = reader.result;
-        setTemplateSrc(base64Data);
-        localStorage.setItem('perp_custom_dni_template', base64Data);
-        setTemplateUploadSuccess('¡Plantilla actualizada y guardada con éxito!');
-        playSuccessSound();
-
-        // Sync with backend so server render and discord bot also use it
-        try {
-          await fetch('/api/admin/template', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64: base64Data }),
-          });
-        } catch {}
-      }
+  // Sync template when updated from Admin Panel
+  useEffect(() => {
+    const handleTemplateChange = () => {
+      const saved = localStorage.getItem('perp_custom_dni_template');
+      setTemplateSrc(saved || OFFICIAL_DNI_TEMPLATE_BASE64);
     };
-    reader.readAsDataURL(file);
-  };
-
-  const handleApplyCanvaUrl = async () => {
-    if (!canvaUrlInput.trim()) return;
-    setIsSavingTemplate(true);
-    playClickSound();
-    try {
-      setTemplateSrc(canvaUrlInput.trim());
-      localStorage.setItem('perp_custom_dni_template', canvaUrlInput.trim());
-      await fetch('/api/admin/template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: canvaUrlInput.trim() }),
-      });
-      setTemplateUploadSuccess('¡Enlace de imagen / Canva aplicado correctamente!');
-      playSuccessSound();
-      setCanvaUrlInput('');
-    } catch {
-      setTemplateUploadSuccess('Plantilla aplicada en la vista.');
-    } finally {
-      setIsSavingTemplate(false);
-    }
-  };
-
-  const handleResetToOfficialTemplate = async () => {
-    playClickSound();
-    setTemplateSrc(OFFICIAL_DNI_TEMPLATE_BASE64);
-    localStorage.removeItem('perp_custom_dni_template');
-    try {
-      await fetch('/api/admin/template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: OFFICIAL_DNI_TEMPLATE_BASE64 }),
-      });
-    } catch {}
-    setTemplateUploadSuccess('Restablecido a la plantilla oficial de RENIEC PE:RP.');
-    playSuccessSound();
-  };
+    window.addEventListener('storage', handleTemplateChange);
+    window.addEventListener('perp_dni_template_updated', handleTemplateChange);
+    return () => {
+      window.removeEventListener('storage', handleTemplateChange);
+      window.removeEventListener('perp_dni_template_updated', handleTemplateChange);
+    };
+  }, []);
 
   // Auto-sync any existing local DNIs to backend server & Discord Bot
   useEffect(() => {
@@ -570,40 +517,24 @@ export const PeruDniSection: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playClickSound();
-                      setShowTemplateModal(true);
-                      setTemplateUploadSuccess('');
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white font-bold text-xs transition-colors cursor-pointer border border-sky-500/30 shadow-md"
-                    title="Subir plantilla de fondo o pegar enlace de Canva"
-                  >
-                    <Palette className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Plantilla / Canva</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playClickSound();
-                      const downloadUrl = `/api/dni/render?cui=${encodeURIComponent(currentDni.dniNumber)}&primer_apellido=${encodeURIComponent(currentDni.firstSurname)}&segundo_apellido=${encodeURIComponent(currentDni.secondSurname)}&nombres=${encodeURIComponent(currentDni.givenNames)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' || currentDni.gender === 'Masculino' ? 'Masculino' : 'Femenino')}&estado_civil=${encodeURIComponent(formatCivilStatus(currentDni.civilStatus))}&donacion_organos=${encodeURIComponent(currentDni.organDonation || 'NO')}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
-                      const a = document.createElement('a');
-                      a.href = downloadUrl;
-                      a.download = `DNI-PERP-${currentDni.dniNumber}.png`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      playSuccessSound();
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors cursor-pointer shadow-md"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Descargar DNI (PNG)</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    const downloadUrl = `/api/dni/render?cui=${encodeURIComponent(currentDni.dniNumber)}&primer_apellido=${encodeURIComponent(currentDni.firstSurname)}&segundo_apellido=${encodeURIComponent(currentDni.secondSurname)}&nombres=${encodeURIComponent(currentDni.givenNames)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' || currentDni.gender === 'Masculino' ? 'Masculino' : 'Femenino')}&estado_civil=${encodeURIComponent(formatCivilStatus(currentDni.civilStatus))}&donacion_organos=${encodeURIComponent(currentDni.organDonation || 'NO')}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = `DNI-PERP-${currentDni.dniNumber}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    playSuccessSound();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors cursor-pointer shadow-md"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Descargar DNI (PNG)</span>
+                </button>
               </div>
 
               {/* PERUVIAN DNI CARD CONTAINER (Official Template Aesthetic - 1119x669) */}
@@ -638,10 +569,10 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute pointer-events-none overflow-hidden flex items-end justify-center"
                   style={{
-                    right: '1.2%',
-                    top: '21.0%',
-                    width: '36.5%',
-                    height: '62.0%',
+                    right: '1.0%',
+                    top: '12.5%',
+                    width: '39.0%',
+                    height: '76.0%',
                   }}
                 >
                   <img
@@ -658,8 +589,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '13.0%',
-                    top: '22.2%',
+                    left: '13.1%',
+                    top: '21.4%',
                     fontSize: 'clamp(10px, 2.0vw, 15px)',
                   }}
                 >
@@ -670,8 +601,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal truncate"
                   style={{
-                    left: '31.2%',
-                    top: '26.8%',
+                    left: '31.1%',
+                    top: '25.6%',
                     maxWidth: '36%',
                     fontSize: 'clamp(10px, 2.1vw, 16px)',
                   }}
@@ -683,8 +614,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal truncate"
                   style={{
-                    left: '31.2%',
-                    top: '38.0%',
+                    left: '31.1%',
+                    top: '37.2%',
                     maxWidth: '36%',
                     fontSize: 'clamp(10px, 2.1vw, 16px)',
                   }}
@@ -696,8 +627,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal truncate"
                   style={{
-                    left: '31.2%',
-                    top: '49.0%',
+                    left: '31.1%',
+                    top: '47.5%',
                     maxWidth: '36%',
                     fontSize: 'clamp(10px, 2.1vw, 16px)',
                   }}
@@ -710,7 +641,7 @@ export const PeruDniSection: React.FC = () => {
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
                     left: '30.8%',
-                    top: '59.0%',
+                    top: '56.3%',
                     fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
@@ -721,8 +652,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal"
                   style={{
-                    left: '50.9%',
-                    top: '59.0%',
+                    left: '50.7%',
+                    top: '58.0%',
                     fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
@@ -733,8 +664,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '30.4%',
-                    top: '68.5%',
+                    left: '30.8%',
+                    top: '65.3%',
                     fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
@@ -746,7 +677,7 @@ export const PeruDniSection: React.FC = () => {
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
                     left: '13.0%',
-                    top: '69.8%',
+                    top: '67.5%',
                     fontSize: 'clamp(9px, 1.6vw, 13px)',
                   }}
                 >
@@ -757,8 +688,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '30.4%',
-                    top: '76.2%',
+                    left: '30.8%',
+                    top: '73.8%',
                     fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
@@ -770,7 +701,7 @@ export const PeruDniSection: React.FC = () => {
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
                     left: '50.9%',
-                    top: '76.2%',
+                    top: '74.1%',
                     fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
@@ -781,8 +712,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '30.8%',
-                    top: '85.2%',
+                    left: '31.3%',
+                    top: '82.6%',
                     fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
@@ -793,8 +724,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '50.9%',
-                    top: '85.2%',
+                    left: '52.5%',
+                    top: '83.1%',
                     fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
@@ -805,8 +736,8 @@ export const PeruDniSection: React.FC = () => {
                 <div
                   className="absolute font-sans font-black text-blue-900 tracking-wider pointer-events-none"
                   style={{
-                    left: '8.2%',
-                    top: '85.2%',
+                    left: '7.8%',
+                    top: '82.8%',
                     fontSize: 'clamp(11px, 2.3vw, 17px)',
                   }}
                 >
@@ -1213,123 +1144,6 @@ export const PeruDniSection: React.FC = () => {
 
           </div>
         )}
-
-      {/* Modal: Gestión y Personalización de Plantilla DNI / Canva */}
-      {showTemplateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0e1222] border border-sky-500/40 rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl relative space-y-5">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-400 flex items-center justify-center">
-                  <Palette className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-white font-sans uppercase">
-                    Plantilla DNI • Canva / Archivo
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Sube tu plantilla personalizada o usa la oficial de RENIEC
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTemplateModal(false)}
-                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Notification message */}
-            {templateUploadSuccess && (
-              <div className="p-3 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>{templateUploadSuccess}</span>
-              </div>
-            )}
-
-            {/* Current template preview */}
-            <div className="p-3 rounded-2xl bg-black/50 border border-white/10 space-y-2">
-              <span className="text-[11px] font-bold text-slate-300 block">Vista actual de la plantilla:</span>
-              <div className="aspect-[1119/669] w-full rounded-xl overflow-hidden border border-sky-400/30 bg-[#e7edf5] relative">
-                <img
-                  src={templateSrc || OFFICIAL_DNI_TEMPLATE_BASE64}
-                  alt="Vista previa de plantilla"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            {/* Method 1: Upload file */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-white flex items-center justify-between">
-                <span>1. Subir imagen desde tu PC (PNG / JPG / Canva)</span>
-              </label>
-              <input
-                ref={templateFileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handleUploadTemplateFile}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => templateFileInputRef.current?.click()}
-                className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Seleccionar imagen de plantilla</span>
-              </button>
-            </div>
-
-            {/* Method 2: Canva or direct Image URL */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-white block">
-                2. O pegar enlace directo de imagen (Canva / Web)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  placeholder="https://ejemplo.com/plantilla.png"
-                  value={canvaUrlInput}
-                  onChange={(e) => setCanvaUrlInput(e.target.value)}
-                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyCanvaUrl}
-                  disabled={isSavingTemplate || !canvaUrlInput.trim()}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-bold text-xs cursor-pointer border border-white/10"
-                >
-                  {isSavingTemplate ? 'Cargando...' : 'Aplicar'}
-                </button>
-              </div>
-            </div>
-
-            {/* Method 3: Reset to Official Template */}
-            <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleResetToOfficialTemplate}
-                className="text-xs text-rose-300 hover:text-rose-100 flex items-center gap-1.5 cursor-pointer underline transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Restaurar plantilla oficial PE:RP</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowTemplateModal(false)}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer transition-colors"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       </div>
     </section>
