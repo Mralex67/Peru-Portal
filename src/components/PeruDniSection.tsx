@@ -82,6 +82,15 @@ export const PeruDniSection: React.FC = () => {
     return upper;
   };
 
+  const formatSerialCode = (serial?: string, dniNum?: string) => {
+    if (serial && serial.startsWith('0000') && serial.length <= 8) {
+      return serial;
+    }
+    const cleanDni = (dniNum || '112').replace(/\D/g, '');
+    const suffix = cleanDni.slice(-3) || '112';
+    return `0000${suffix}`;
+  };
+
   // Sync template when updated from Admin Panel
   useEffect(() => {
     const handleTemplateChange = () => {
@@ -521,7 +530,7 @@ export const PeruDniSection: React.FC = () => {
                   type="button"
                   onClick={() => {
                     playClickSound();
-                    const downloadUrl = `/api/dni/render?cui=${encodeURIComponent(currentDni.dniNumber)}&primer_apellido=${encodeURIComponent(currentDni.firstSurname)}&segundo_apellido=${encodeURIComponent(currentDni.secondSurname)}&nombres=${encodeURIComponent(currentDni.givenNames)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' || currentDni.gender === 'Masculino' ? 'Masculino' : 'Femenino')}&estado_civil=${encodeURIComponent(formatCivilStatus(currentDni.civilStatus))}&donacion_organos=${encodeURIComponent(currentDni.organDonation || 'NO')}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
+                    const downloadUrl = `/api/dni/render?cui=${encodeURIComponent(currentDni.dniNumber)}&primer_apellido=${encodeURIComponent(currentDni.firstSurname)}&segundo_apellido=${encodeURIComponent(currentDni.secondSurname)}&nombres=${encodeURIComponent(currentDni.givenNames)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' || currentDni.gender === 'Masculino' ? 'Masculino' : 'Femenino')}&estado_civil=${encodeURIComponent(formatCivilStatus(currentDni.civilStatus))}&donacion_organos=${encodeURIComponent(currentDni.organDonation || 'NO')}&serial=${encodeURIComponent(formatSerialCode(currentDni.serialCode, currentDni.dniNumber))}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
                     const a = document.createElement('a');
                     a.href = downloadUrl;
                     a.download = `DNI-PERP-${currentDni.dniNumber}.png`;
@@ -565,14 +574,14 @@ export const PeruDniSection: React.FC = () => {
                   </div>
                 )}
 
-                {/* Right Side Avatar Bust (Roblox) */}
+                {/* Right Side Avatar Bust (Roblox) - Scaled to upper right so it never covers labels or blood group */}
                 <div
                   className="absolute pointer-events-none overflow-hidden flex items-end justify-center"
                   style={{
-                    right: '1.0%',
-                    top: '12.5%',
-                    width: '39.0%',
-                    height: '76.0%',
+                    right: '1.5%',
+                    top: '16.0%',
+                    width: '28.0%',
+                    height: '46.0%',
                   }}
                 >
                   <img
@@ -672,16 +681,17 @@ export const PeruDniSection: React.FC = () => {
                   {currentDni.birthDate}
                 </div>
 
-                {/* Field 8: SERIAL NUMBER (beside Peru map) */}
+                {/* Field 8: SERIAL NUMBER (beside Peru map - min 4 zeros, compact to never overlap) */}
                 <div
-                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal select-none pointer-events-none truncate"
                   style={{
                     left: '13.0%',
                     top: '67.5%',
-                    fontSize: 'clamp(9px, 1.6vw, 13px)',
+                    maxWidth: '16%',
+                    fontSize: 'clamp(8px, 1.4vw, 12px)',
                   }}
                 >
-                  {currentDni.serialCode || `000000000${(currentDni.dniNumber || '').slice(-3)}`}
+                  {formatSerialCode(currentDni.serialCode, currentDni.dniNumber)}
                 </div>
 
                 {/* Field 9: FECHA DE EMISIÓN */}

@@ -348,10 +348,10 @@ async function renderDniCardImage(dniData) {
         } catch (e) {}
       }
 
-      // Draw avatar bust on the right side
+      // Draw avatar bust on the right side (upper right quadrant, so it doesn't cover Ubigeo, blood group, or signature)
       if (avatarImg) {
         try {
-          ctx.drawImage(avatarImg, 670, 95, 410, 520);
+          ctx.drawImage(avatarImg, 780, 115, 315, 315);
         } catch (e) {}
       }
 
@@ -414,8 +414,14 @@ async function renderDniCardImage(dniData) {
       }
       ctx.fillText(bDate, 344, 443);
 
-      // Serial code beside Peru map (12 digits)
-      const serial = dniData.serialCode || dniData.serial_code || `000000000${dniNum.slice(-3)}`;
+      // Serial code beside Peru map (minimum 4 zeros, compact 7 digits e.g. 0000314 to never overlap)
+      const rawSerial = (dniData.serialCode || dniData.serial_code || '').toString().trim();
+      let serial = '';
+      if (rawSerial && rawSerial.startsWith('0000') && rawSerial.length <= 8) {
+        serial = rawSerial;
+      } else {
+        serial = `0000${dniNum.slice(-3)}`;
+      }
       ctx.font = 'bold 19px Arial, Helvetica, sans-serif';
       ctx.fillText(serial, 146, 457);
 
