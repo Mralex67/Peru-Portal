@@ -10,9 +10,9 @@ export interface FactionItem {
 }
 
 export const SERVER_STATS = {
-  currentPlayers: 4,
+  currentPlayers: 0,
   maxPlayers: 50,
-  discordMembers: '18.450',
+  discordMembers: '115',
   serverName: 'PE:RP STREETS | PERÚ RP V3',
   joinCode: 'PERP-PERU-2026',
   robloxPlaceId: '2534724415',
