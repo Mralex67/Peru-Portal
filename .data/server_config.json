@@ -2,9 +2,10 @@
   "serverName": "PERU REAL LIFE V3 - ROLEPLAY OFICIAL",
   "currentPlayers": 42,
   "maxPlayers": 50,
-  "customLogoUrl": "",
+  "customLogoUrl": "/src/assets/images/peru_street_logo.svg",
   "heroCardImage": "/src/assets/images/roblox_sunset_pier_1792185364963.jpg",
   "customPatrolTruckUrl": "",
-  "updatedAt": "2026-10-24T16:51:14.157Z",
-  "yapoLogoUrl": ""
+  "updatedAt": "2026-10-26T19:40:00.000Z",
+  "yapoLogoUrl": "",
+  "discordMembers": "115"
 }
