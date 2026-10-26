@@ -121,14 +121,22 @@ async function fetchRobloxUserAvatar(username) {
   }
 
   if (uId) {
-    // URL directa y garantizada de CDN de Roblox Headshot
+    // Prioritize avatar-bust (head, shoulders, torso with suit) matching official DNI aesthetic
     let avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${uId}&width=420&height=420&format=png`;
     try {
-      const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
-      if (thumbRes.ok) {
-        const thumbData = await thumbRes.json();
-        if (thumbData.data && thumbData.data[0]?.imageUrl) {
-          avatarUrl = thumbData.data[0].imageUrl;
+      const bustRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-bust?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
+      if (bustRes.ok) {
+        const bustData = await bustRes.json();
+        if (bustData.data && bustData.data[0]?.imageUrl) {
+          avatarUrl = bustData.data[0].imageUrl;
+        }
+      } else {
+        const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
+        if (thumbRes.ok) {
+          const thumbData = await thumbRes.json();
+          if (thumbData.data && thumbData.data[0]?.imageUrl) {
+            avatarUrl = thumbData.data[0].imageUrl;
+          }
         }
       }
     } catch {}
@@ -142,15 +150,34 @@ async function fetchRobloxUserAvatar(username) {
 const slashCommandsData = [
   new SlashCommandBuilder()
     .setName('crear-dni')
-    .setDescription('Registra tus datos ciudadanos y genera tu DNI peruano con tu avatar de Roblox')
+    .setDescription('Registra tus datos ciudadanos y genera tu DNI peruano oficial con tu avatar de Roblox')
     .addStringOption((o) => o.setName('usuario_roblox').setDescription('Tu nombre de usuario o ID en Roblox').setRequired(true))
-    .addStringOption((o) => o.setName('nombres').setDescription('Tus prenombres (ej. Juan Diego o tus nombres)').setRequired(true))
-    .addStringOption((o) => o.setName('apellido_paterno').setDescription('Tu primer apellido (ej. Quispe)').setRequired(true))
-    .addStringOption((o) => o.setName('apellido_materno').setDescription('Tu segundo apellido (ej. Mamani)').setRequired(true))
-    .addStringOption((o) => o.setName('fecha_nacimiento').setDescription('Fecha de nacimiento obligatoria AAAA-MM-DD (ej. 2002-05-14)').setRequired(true))
+    .addStringOption((o) => o.setName('primer_apellido').setDescription('Tu primer apellido (ej. Arriola)').setRequired(true))
+    .addStringOption((o) => o.setName('segundo_apellido').setDescription('Tu segundo apellido (ej. López)').setRequired(true))
+    .addStringOption((o) => o.setName('prenombres').setDescription('Tus prenombres / nombres (ej. Augusto Fernando)').setRequired(true))
     .addStringOption((o) =>
-      o.setName('sexo').setDescription('Sexo ciudadano obligatorio (M o F)').setRequired(true)
-        .addChoices({ name: 'Masculino (M)', value: 'M' }, { name: 'Femenino (F)', value: 'F' })
+      o.setName('sexo').setDescription('Sexo ciudadano').setRequired(true)
+        .addChoices(
+          { name: 'Masculino', value: 'Masculino' },
+          { name: 'Femenino', value: 'Femenino' }
+        )
+    )
+    .addStringOption((o) =>
+      o.setName('estado_civil').setDescription('Estado civil').setRequired(true)
+        .addChoices(
+          { name: 'Soltero(a)', value: 'SOLTERO' },
+          { name: 'Casado(a)', value: 'CASADO' },
+          { name: 'Divorciado(a)', value: 'DIVORCIADO' },
+          { name: 'Viudo(a)', value: 'VIUDO' }
+        )
+    )
+    .addStringOption((o) => o.setName('fecha_nacimiento').setDescription('Fecha de nacimiento DD/MM/AAAA (ej. 07/08/1986 o 1986-08-07)').setRequired(true))
+    .addStringOption((o) =>
+      o.setName('donacion_organos').setDescription('¿Donación de órganos?').setRequired(true)
+        .addChoices(
+          { name: 'NO', value: 'NO' },
+          { name: 'SÍ', value: 'SI' }
+        )
     ),
   new SlashCommandBuilder()
     .setName('dni-ver')
@@ -284,54 +311,137 @@ async function renderDniCardImage(dniData) {
       // 1. Draw template background
       ctx.drawImage(tpl, 0, 0);
 
-      // 2. White avatar frame (20, 100, 161, 161)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(20, 100, 161, 161);
-
-      // 3. Avatar photo
+      // 2. Fetch and draw avatar on the right side
+      let avatarImg = null;
       const photo = (dniData.photoUrl || dniData.photo_url || '').trim();
+      const robloxUser = (dniData.robloxUsername || dniData.roblox_username || '').trim();
+
       if (photo) {
         try {
-          const resp = await fetch(photo);
-          if (resp.ok) {
-            const arr = await resp.arrayBuffer();
-            const avatarImg = await loadImage(Buffer.from(arr));
-            ctx.drawImage(avatarImg, 20, 100, 161, 161);
+          if (photo.startsWith('data:image/')) {
+            const b64 = photo.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+            avatarImg = await loadImage(Buffer.from(b64, 'base64'));
+          } else {
+            const resp = await fetch(photo);
+            if (resp.ok) {
+              const arr = await resp.arrayBuffer();
+              avatarImg = await loadImage(Buffer.from(arr));
+            }
           }
         } catch (e) {
-          console.error('Error drawing avatar on bot DNI:', e);
+          console.error('Error drawing photo on bot DNI:', e);
         }
       }
 
-      // 4. Texts matching sample template
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 15px monospace, sans-serif';
+      if (!avatarImg && robloxUser) {
+        try {
+          const rInfo = await fetchRobloxUserAvatar(robloxUser);
+          if (rInfo.avatarUrl) {
+            const resp = await fetch(rInfo.avatarUrl);
+            if (resp.ok) {
+              const arr = await resp.arrayBuffer();
+              avatarImg = await loadImage(Buffer.from(arr));
+            }
+          }
+        } catch (e) {}
+      }
 
-      // DNI
-      ctx.fillText(dniData.dniNumber || dniData.dni_number || '00000000', 207, 140);
+      // Draw avatar bust on the right side
+      if (avatarImg) {
+        try {
+          ctx.drawImage(avatarImg, 680, 140, 400, 420);
+        } catch (e) {}
+      }
 
-      // Fecha Nacimiento
-      let bDate = dniData.birthDate || dniData.birth_date || '16/08/1999';
+      // 3. Texts matching official reference
+      ctx.fillStyle = '#080808';
+      ctx.textBaseline = 'middle';
+
+      // CUI / DNI Number
+      const dniNum = (dniData.dniNumber || dniData.dni_number || '00000000').toString().padStart(8, '0');
+      ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
+      ctx.fillText(dniNum, 145, 149);
+
+      // Names
+      let pSurname = dniData.firstSurname || dniData.first_surname || '';
+      let mSurname = dniData.secondSurname || dniData.second_surname || '';
+      let names = dniData.givenNames || dniData.given_names || dniData.prenames || '';
+
+      if (!pSurname && !mSurname && !names && (dniData.fullName || dniData.full_name)) {
+        const parts = (dniData.fullName || dniData.full_name).trim().split(/\s+/);
+        if (parts.length >= 3) {
+          pSurname = parts[0];
+          mSurname = parts[1];
+          names = parts.slice(2).join(' ');
+        } else if (parts.length === 2) {
+          pSurname = parts[0];
+          names = parts[1];
+        } else {
+          names = parts[0] || 'CIUDADANO';
+        }
+      }
+
+      // Primer Apellido
+      ctx.font = 'bold 24px Arial, Helvetica, sans-serif';
+      ctx.fillText((pSurname || 'QUISPE').toUpperCase(), 350, 180);
+
+      // Segundo Apellido
+      ctx.fillText((mSurname || 'MAMANI').toUpperCase(), 350, 255);
+
+      // Pronombre / Nombres
+      ctx.fillText((names || 'JUAN').toUpperCase(), 350, 328);
+
+      // Sexo
+      const rawGen = (dniData.gender || dniData.sex || 'M').toUpperCase();
+      const genderText = rawGen.startsWith('M') ? 'Masculino' : rawGen.startsWith('F') ? 'Femenino' : rawGen;
+      ctx.font = 'bold 21px Arial, Helvetica, sans-serif';
+      ctx.fillText(genderText, 345, 395);
+
+      // Estado Civil
+      const rawCivil = (dniData.civilStatus || dniData.civil_status || 'SOLTERO').toUpperCase();
+      const civilText = rawCivil.startsWith('C') ? 'CASADO' : rawCivil.startsWith('D') ? 'DIVORCIADO' : rawCivil.startsWith('V') ? 'VIUDO' : 'SOLTERO';
+      ctx.fillText(civilText, 570, 395);
+
+      // Fecha de Nacimiento
+      let bDate = dniData.birthDate || dniData.birth_date || '07/08/1986';
       if (/^\d{4}-\d{2}-\d{2}$/.test(bDate)) {
         const [y, m, d] = bDate.split('-');
         bDate = `${d}/${m}/${y}`;
+      } else if (/^\d{2}-\d{2}-\d{4}$/.test(bDate)) {
+        bDate = bDate.replace(/-/g, '/');
       }
-      ctx.fillText(bDate, 500, 140);
+      ctx.fillText(bDate, 340, 458);
 
-      // Nombre y Apellido
-      const fullName = dniData.fullName || dniData.full_name || `${dniData.prenames || dniData.given_names || ''} ${dniData.firstSurname || dniData.first_surname || ''} ${dniData.secondSurname || dniData.second_surname || ''}`.trim() || 'CIUDADANO';
-      ctx.fillText(fullName, 207, 195);
+      // Serial code beside Peru map (12 digits)
+      const serial = dniData.serialCode || dniData.serial_code || `000000000${dniNum.slice(-3)}`;
+      ctx.font = 'bold 19px Arial, Helvetica, sans-serif';
+      ctx.fillText(serial, 145, 468);
 
-      // Género
-      const rawGen = (dniData.gender || dniData.sex || 'M').toUpperCase();
-      const genderText = rawGen.startsWith('M') ? 'Masculino' : 'Femenino';
-      ctx.fillText(genderText, 207, 240);
+      // Fecha de Emisión
+      const today = new Date();
+      const emisionDefault = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+      const emisionText = dniData.issueDate || dniData.issue_date || emisionDefault;
+      ctx.font = 'bold 21px Arial, Helvetica, sans-serif';
+      ctx.fillText(emisionText, 340, 510);
 
-      // Nacionalidad
-      ctx.fillText('Peruano', 207, 280);
+      // Fecha de Caducidad (+8 years)
+      const caducidadDefault = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear() + 8}`;
+      const caducidadText = dniData.expiryDate || dniData.expiry_date || caducidadDefault;
+      ctx.fillText(caducidadText, 570, 510);
 
-      // Usuario Roblox
-      ctx.fillText(dniData.robloxUsername || dniData.roblox_username || 'UsuarioRoblox', 207, 323);
+      // Grupo de Votación (6 digits)
+      const voteGroup = dniData.votingGroup || dniData.voting_group || dniNum.slice(0, 6);
+      ctx.fillText(voteGroup, 345, 570);
+
+      // Donación de Órganos
+      const organText = (dniData.organDonation || dniData.organ_donation || 'NO').toUpperCase().includes('S') ? 'SI' : 'NO';
+      ctx.fillText(organText, 570, 570);
+
+      // Fingerprint date overlay (DD MM YYYY)
+      const dateDigits = bDate.replace(/\//g, ' ').replace(/-/g, ' ');
+      ctx.fillStyle = '#1e3a8a';
+      ctx.font = 'bold 28px Arial, Helvetica, sans-serif';
+      ctx.fillText(dateDigits, 92, 570);
 
       return canvas.toBuffer('image/png');
     }
@@ -344,9 +454,13 @@ async function renderDniCardImage(dniData) {
     const baseUrl = process.env.API_BASE_URL || 'https://ais-pre-iydhue5qk4b7wusoszmqp2-732238089491.us-east1.run.app';
     const params = new URLSearchParams({
       dni: dniData.dniNumber || dniData.dni_number || '',
-      nombre: dniData.fullName || dniData.full_name || '',
+      primer_apellido: dniData.firstSurname || dniData.first_surname || '',
+      segundo_apellido: dniData.secondSurname || dniData.second_surname || '',
+      nombres: dniData.givenNames || dniData.given_names || dniData.prenames || '',
       nacimiento: dniData.birthDate || dniData.birth_date || '',
       genero: (dniData.gender || dniData.sex || 'M').toUpperCase().startsWith('M') ? 'Masculino' : 'Femenino',
+      estado_civil: dniData.civilStatus || dniData.civil_status || 'SOLTERO',
+      donacion_organos: dniData.organDonation || dniData.organ_donation || 'NO',
       usuario: dniData.robloxUsername || dniData.roblox_username || '',
       foto: dniData.photoUrl || dniData.photo_url || '',
     });
@@ -375,16 +489,26 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply();
 
       const robloxUsername = interaction.options.getString('usuario_roblox')?.trim() || '';
-      const prenames = interaction.options.getString('nombres')?.trim() || '';
-      const firstSurname = interaction.options.getString('apellido_paterno')?.trim() || '';
-      const secondSurname = interaction.options.getString('apellido_materno')?.trim() || '';
-      const birthDate = interaction.options.getString('fecha_nacimiento')?.trim() || '';
-      const gender = (interaction.options.getString('sexo') || '').toUpperCase().trim();
+      const prenames = (interaction.options.getString('prenombres') || interaction.options.getString('nombres'))?.trim() || '';
+      const firstSurname = (interaction.options.getString('primer_apellido') || interaction.options.getString('apellido_paterno'))?.trim() || '';
+      const secondSurname = (interaction.options.getString('segundo_apellido') || interaction.options.getString('apellido_materno'))?.trim() || '';
+      let birthDate = interaction.options.getString('fecha_nacimiento')?.trim() || '';
+      const gender = (interaction.options.getString('sexo') || 'Masculino').trim();
+      const civilStatus = (interaction.options.getString('estado_civil') || 'SOLTERO').trim();
+      const organDonation = (interaction.options.getString('donacion_organos') || 'NO').trim();
 
-      if (!robloxUsername || !prenames || !firstSurname || !secondSurname || !birthDate || !gender) {
+      if (!robloxUsername || !prenames || !firstSurname || !secondSurname || !birthDate) {
         return interaction.editReply({
-          content: '❌ **Todos los campos son obligatorios para emitir tu DNI:**\n• Usuario o ID de Roblox\n• Prenombres\n• Primer Apellido\n• Segundo Apellido\n• Fecha de Nacimiento (AAAA-MM-DD)\n• Sexo (M o F)',
+          content: '❌ **Todos los campos son obligatorios para emitir tu DNI:**\n• Usuario o ID de Roblox\n• Primer Apellido\n• Segundo Apellido\n• Prenombres / Nombres\n• Sexo (Masculino o Femenino)\n• Estado Civil\n• Fecha de Nacimiento (DD/MM/AAAA)\n• Donación de Órganos (SÍ o NO)',
         });
+      }
+
+      // Normalizar fecha de nacimiento a DD/MM/AAAA
+      if (/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+        const [y, m, d] = birthDate.split('-');
+        birthDate = `${d}/${m}/${y}`;
+      } else if (/^\d{2}-\d{2}-\d{4}$/.test(birthDate)) {
+        birthDate = birthDate.replace(/-/g, '/');
       }
 
       let dni;
@@ -421,7 +545,9 @@ client.on('interactionCreate', async (interaction) => {
             second_surname: secondSurname.toUpperCase(),
             given_names: prenames.toUpperCase(),
             birth_date: birthDate,
-            gender,
+            gender: gender.startsWith('M') ? 'M' : 'F',
+            civil_status: civilStatus,
+            organ_donation: organDonation,
             photo_url: robloxInfo.avatarUrl,
             status: 'active',
           };
@@ -465,9 +591,11 @@ client.on('interactionCreate', async (interaction) => {
             fullName,
             firstSurname: firstSurname.toUpperCase(),
             secondSurname: secondSurname.toUpperCase(),
-            prenames: prenames.toUpperCase(),
+            givenNames: prenames.toUpperCase(),
             birthDate,
-            gender,
+            gender: gender.startsWith('M') ? 'Masculino' : 'Femenino',
+            civilStatus,
+            organDonation,
             photoUrl: robloxInfo.avatarUrl,
             department: 'LIMA',
             province: 'LIMA',
@@ -501,9 +629,11 @@ client.on('interactionCreate', async (interaction) => {
           fullName,
           firstSurname: firstSurname.toUpperCase(),
           secondSurname: secondSurname.toUpperCase(),
-          prenames: prenames.toUpperCase(),
+          givenNames: prenames.toUpperCase(),
           birthDate,
-          gender,
+          gender: gender.startsWith('M') ? 'Masculino' : 'Femenino',
+          civilStatus,
+          organDonation,
           photoUrl: robloxInfo.avatarUrl,
           department: 'LIMA',
           province: 'LIMA',

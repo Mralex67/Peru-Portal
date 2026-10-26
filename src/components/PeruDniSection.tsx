@@ -398,20 +398,23 @@ export const PeruDniSection: React.FC = () => {
     discordId: discordUser?.id || '00000',
     discordUsername: discordUser?.username || 'Ciudadano',
     robloxUsername: robloxUsername.trim() || 'UsuarioRoblox',
-    dniNumber: '74291850',
-    verifyDigit: '6',
-    fullName: `${firstSurname.toUpperCase() || 'QUISPE'} ${secondSurname.toUpperCase() || 'MAMANI'}, ${givenNames.toUpperCase() || 'ALEX'}`,
-    firstSurname: firstSurname.toUpperCase() || 'QUISPE',
-    secondSurname: secondSurname.toUpperCase() || 'MAMANI',
-    givenNames: givenNames.toUpperCase() || 'ALEX',
-    birthDate: `${birthDay} ${birthMonth} ${birthYear}`,
-    issueDate: '18 OCT 2026',
-    expiryDate: '18 OCT 2034',
-    gender,
-    civilStatus: 'S',
+    dniNumber: '28641982',
+    verifyDigit: '2',
+    fullName: `${firstSurname.toUpperCase() || 'ARRIOLA'} ${secondSurname.toUpperCase() || 'LÓPEZ'}, ${givenNames.toUpperCase() || 'AUGUSTO FERNANDO'}`,
+    firstSurname: firstSurname.toUpperCase() || 'ARRIOLA',
+    secondSurname: secondSurname.toUpperCase() || 'LÓPEZ',
+    givenNames: givenNames.toUpperCase() || 'AUGUSTO FERNANDO',
+    birthDate: '07/08/1986',
+    issueDate: '26/10/2026',
+    expiryDate: '26/10/2034',
+    gender: 'Masculino',
+    civilStatus: 'CASADO',
+    organDonation: 'NO',
+    votingGroup: '041186',
+    serialCode: '000000000112',
     ubigeo: '150101',
-    photoUrl: avatarPreview || `https://www.roblox.com/headshot-thumbnail/image?userId=1&width=420&height=420&format=png`,
-    signatureText: `${givenNames.charAt(0) || 'A'}.${firstSurname || 'Quispe'}`,
+    photoUrl: avatarPreview || `https://tr.rbxcdn.com/30DAY-AvatarBust-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarBust/Png/noFilter`,
+    signatureText: 'A.Arriola',
     createdAt: new Date().toISOString(),
   };
 
@@ -484,7 +487,7 @@ export const PeruDniSection: React.FC = () => {
                   type="button"
                   onClick={() => {
                     playClickSound();
-                    const downloadUrl = `/api/dni/render?dni=${encodeURIComponent(currentDni.dniNumber)}&nombre=${encodeURIComponent(currentDni.fullName)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' ? 'Masculino' : 'Femenino')}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
+                    const downloadUrl = `/api/dni/render?cui=${encodeURIComponent(currentDni.dniNumber)}&primer_apellido=${encodeURIComponent(currentDni.firstSurname)}&segundo_apellido=${encodeURIComponent(currentDni.secondSurname)}&nombres=${encodeURIComponent(currentDni.givenNames)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' || currentDni.gender === 'Masculino' ? 'Masculino' : 'Femenino')}&estado_civil=${encodeURIComponent(currentDni.civilStatus || 'SOLTERO')}&donacion_organos=${encodeURIComponent(currentDni.organDonation || 'NO')}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
                     const a = document.createElement('a');
                     a.href = downloadUrl;
                     a.download = `DNI-PERP-${currentDni.dniNumber}.png`;
@@ -500,10 +503,10 @@ export const PeruDniSection: React.FC = () => {
                 </button>
               </div>
 
-              {/* PERUVIAN DNI CARD CONTAINER (Official Template Aesthetic) */}
+              {/* PERUVIAN DNI CARD CONTAINER (Official Template Aesthetic - 1119x669) */}
               <div
                 ref={cardRef}
-                className="relative w-full max-w-[560px] aspect-[706/422] rounded-2xl shadow-2xl overflow-hidden border border-sky-400/30 select-none shadow-sky-950/60 bg-[#549baa]"
+                className="relative w-full max-w-[580px] aspect-[1119/669] rounded-2xl shadow-2xl overflow-hidden border border-sky-400/30 select-none shadow-sky-950/60 bg-[#e7edf5]"
               >
                 {/* Official Card Template Background */}
                 <img
@@ -525,98 +528,183 @@ export const PeruDniSection: React.FC = () => {
                   </div>
                 )}
 
-                {/* Left Photo Box: Avatar Roblox (Coordinates: 20, 100, 161, 161) */}
+                {/* Right Side Avatar Bust (Roblox) */}
                 <div
-                  className="absolute bg-white overflow-hidden shadow-inner"
+                  className="absolute pointer-events-none overflow-hidden flex items-end justify-center"
                   style={{
-                    left: '2.83%',
-                    top: '23.70%',
-                    width: '22.80%',
-                    height: '38.15%',
+                    right: '1.2%',
+                    top: '21.0%',
+                    width: '36.5%',
+                    height: '62.0%',
                   }}
                 >
                   <img
                     src={currentDni.photoUrl || DEFAULT_ROBLOX_AVATAR}
                     alt="Avatar Roblox DNI"
-                    className="w-full h-full object-cover object-center bg-white"
+                    className="w-full h-full object-contain object-bottom"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = DEFAULT_ROBLOX_AVATAR;
                     }}
                   />
                 </div>
 
-                {/* Field 1: NÚMERO DE DNI */}
+                {/* Field 1: CUI / DNI NUMBER */}
                 <div
-                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '29.32%',
-                    top: '29.2%',
-                    fontSize: 'clamp(11px, 2.2vw, 15px)',
+                    left: '13.0%',
+                    top: '22.2%',
+                    fontSize: 'clamp(10px, 2.0vw, 15px)',
                   }}
                 >
                   {currentDni.dniNumber}
                 </div>
 
-                {/* Field 2: FECHA DE NACIMIENTO */}
+                {/* Field 2: PRIMER APELLIDO */}
                 <div
-                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal truncate"
                   style={{
-                    left: '70.82%',
-                    top: '29.2%',
-                    fontSize: 'clamp(11px, 2.2vw, 15px)',
+                    left: '31.2%',
+                    top: '26.8%',
+                    maxWidth: '36%',
+                    fontSize: 'clamp(10px, 2.1vw, 16px)',
+                  }}
+                >
+                  {currentDni.firstSurname || 'ARRIOLA'}
+                </div>
+
+                {/* Field 3: SEGUNDO APELLIDO */}
+                <div
+                  className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal truncate"
+                  style={{
+                    left: '31.2%',
+                    top: '38.0%',
+                    maxWidth: '36%',
+                    fontSize: 'clamp(10px, 2.1vw, 16px)',
+                  }}
+                >
+                  {currentDni.secondSurname || 'LÓPEZ'}
+                </div>
+
+                {/* Field 4: PRONOMBRE / NOMBRES */}
+                <div
+                  className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal truncate"
+                  style={{
+                    left: '31.2%',
+                    top: '49.0%',
+                    maxWidth: '36%',
+                    fontSize: 'clamp(10px, 2.1vw, 16px)',
+                  }}
+                >
+                  {currentDni.givenNames || 'AUGUSTO FERNANDO'}
+                </div>
+
+                {/* Field 5: SEXO */}
+                <div
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
+                  style={{
+                    left: '30.8%',
+                    top: '59.0%',
+                    fontSize: 'clamp(9px, 1.8vw, 14px)',
+                  }}
+                >
+                  {currentDni.gender === 'F' || currentDni.gender === 'Femenino' ? 'Femenino' : 'Masculino'}
+                </div>
+
+                {/* Field 6: ESTADO CIVIL */}
+                <div
+                  className="absolute font-sans font-bold text-slate-950 uppercase tracking-normal"
+                  style={{
+                    left: '50.9%',
+                    top: '59.0%',
+                    fontSize: 'clamp(9px, 1.8vw, 14px)',
+                  }}
+                >
+                  {currentDni.civilStatus || 'CASADO'}
+                </div>
+
+                {/* Field 7: FECHA DE NACIMIENTO */}
+                <div
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
+                  style={{
+                    left: '30.4%',
+                    top: '68.5%',
+                    fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
                   {currentDni.birthDate}
                 </div>
 
-                {/* Field 3: NOMBRE Y APELLIDO */}
+                {/* Field 8: SERIAL NUMBER (beside Peru map) */}
                 <div
-                  className="absolute font-mono font-black text-slate-900 tracking-normal truncate"
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '29.32%',
-                    top: '42.6%',
-                    maxWidth: '55%',
-                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                    left: '13.0%',
+                    top: '69.8%',
+                    fontSize: 'clamp(9px, 1.6vw, 13px)',
                   }}
                 >
-                  {currentDni.fullName || `${currentDni.firstSurname} ${currentDni.secondSurname}, ${currentDni.givenNames}`}
+                  {currentDni.serialCode || `000000000${(currentDni.dniNumber || '').slice(-3)}`}
                 </div>
 
-                {/* Field 4: GÉNERO */}
+                {/* Field 9: FECHA DE EMISIÓN */}
                 <div
-                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '29.32%',
-                    top: '53.5%',
-                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                    left: '30.4%',
+                    top: '76.2%',
+                    fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
-                  {currentDni.gender === 'M' ? 'Masculino' : 'Femenino'}
+                  {currentDni.issueDate || '26/10/2026'}
                 </div>
 
-                {/* Field 5: NACIONALIDAD */}
+                {/* Field 10: FECHA DE CADUCIDAD */}
                 <div
-                  className="absolute font-mono font-black text-slate-900 tracking-wide"
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '29.32%',
-                    top: '63.0%',
-                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                    left: '50.9%',
+                    top: '76.2%',
+                    fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
-                  Peruano
+                  {currentDni.expiryDate || '26/10/2034'}
                 </div>
 
-                {/* Field 6: USUARIO DE ROBLOX */}
+                {/* Field 11: GRUPO DE VOTACIÓN */}
                 <div
-                  className="absolute font-mono font-black text-slate-900 tracking-wide truncate"
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
                   style={{
-                    left: '29.32%',
-                    top: '73.4%',
-                    maxWidth: '35%',
-                    fontSize: 'clamp(10px, 2.0vw, 14px)',
+                    left: '30.8%',
+                    top: '85.2%',
+                    fontSize: 'clamp(9px, 1.8vw, 14px)',
                   }}
                 >
-                  {currentDni.robloxUsername}
+                  {currentDni.votingGroup || (currentDni.dniNumber || '').slice(0, 6) || '041186'}
+                </div>
+
+                {/* Field 12: DONACIÓN DE ÓRGANOS */}
+                <div
+                  className="absolute font-sans font-bold text-slate-950 tracking-normal"
+                  style={{
+                    left: '50.9%',
+                    top: '85.2%',
+                    fontSize: 'clamp(9px, 1.8vw, 14px)',
+                  }}
+                >
+                  {currentDni.organDonation || 'NO'}
+                </div>
+
+                {/* Field 13: HUELLA DATE OVERLAY */}
+                <div
+                  className="absolute font-sans font-black text-blue-900 tracking-wider pointer-events-none"
+                  style={{
+                    left: '8.2%',
+                    top: '85.2%',
+                    fontSize: 'clamp(11px, 2.3vw, 17px)',
+                  }}
+                >
+                  {(currentDni.birthDate || '').replace(/[\/\-]/g, ' ')}
                 </div>
               </div>
 

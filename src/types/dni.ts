@@ -14,8 +14,11 @@ export interface PeruDni {
   birthDate: string;
   issueDate: string;
   expiryDate: string;
-  gender: 'M' | 'F';
-  civilStatus: 'S' | 'C' | 'V' | 'D';
+  gender: 'M' | 'F' | 'Masculino' | 'Femenino';
+  civilStatus: 'S' | 'C' | 'V' | 'D' | 'SOLTERO' | 'CASADO' | 'DIVORCIADO' | 'VIUDO';
+  organDonation?: 'SI' | 'NO';
+  votingGroup?: string;
+  serialCode?: string;
   ubigeo: string;
   photoUrl: string;
   signatureText: string;

@@ -16,45 +16,67 @@ const commands = [
   // 1. /crear-dni
   new SlashCommandBuilder()
     .setName('crear-dni')
-    .setDescription('Registra tus datos ciudadanos y genera tu DNI peruano con tu avatar de Roblox')
+    .setDescription('Registra tus datos ciudadanos y genera tu DNI peruano oficial con tu avatar de Roblox')
     .addStringOption((option) =>
       option
         .setName('usuario_roblox')
-        .setDescription('Tu nombre de usuario exacto en Roblox')
+        .setDescription('Tu nombre de usuario o ID en Roblox')
         .setRequired(true)
     )
     .addStringOption((option) =>
       option
-        .setName('nombres')
-        .setDescription('Tus prenombres (ej. Juan Diego o tus nombres)')
+        .setName('primer_apellido')
+        .setDescription('Tu primer apellido (ej. Arriola)')
         .setRequired(true)
     )
     .addStringOption((option) =>
       option
-        .setName('apellido_paterno')
-        .setDescription('Tu primer apellido (ej. Quispe)')
+        .setName('segundo_apellido')
+        .setDescription('Tu segundo apellido (ej. López)')
         .setRequired(true)
     )
     .addStringOption((option) =>
       option
-        .setName('apellido_materno')
-        .setDescription('Tu segundo apellido (ej. Mamani)')
-        .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName('fecha_nacimiento')
-        .setDescription('Fecha de nacimiento obligatoria en formato AAAA-MM-DD (ej. 2002-05-14)')
+        .setName('prenombres')
+        .setDescription('Tus prenombres / nombres (ej. Augusto Fernando)')
         .setRequired(true)
     )
     .addStringOption((option) =>
       option
         .setName('sexo')
-        .setDescription('Sexo ciudadano obligatorio (M o F)')
+        .setDescription('Sexo ciudadano')
         .setRequired(true)
         .addChoices(
-          { name: 'Masculino (M)', value: 'M' },
-          { name: 'Femenino (F)', value: 'F' }
+          { name: 'Masculino', value: 'Masculino' },
+          { name: 'Femenino', value: 'Femenino' }
+        )
+    )
+    .addStringOption((option) =>
+      option
+        .setName('estado_civil')
+        .setDescription('Estado civil')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Soltero(a)', value: 'SOLTERO' },
+          { name: 'Casado(a)', value: 'CASADO' },
+          { name: 'Divorciado(a)', value: 'DIVORCIADO' },
+          { name: 'Viudo(a)', value: 'VIUDO' }
+        )
+    )
+    .addStringOption((option) =>
+      option
+        .setName('fecha_nacimiento')
+        .setDescription('Fecha de nacimiento DD/MM/AAAA (ej. 07/08/1986 o 1986-08-07)')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('donacion_organos')
+        .setDescription('¿Donación de órganos?')
+        .setRequired(true)
+        .addChoices(
+          { name: 'NO', value: 'NO' },
+          { name: 'SÍ', value: 'SI' }
         )
     ),
 

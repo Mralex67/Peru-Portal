@@ -186,13 +186,23 @@ app.get('/api/roblox/avatar/:username', async (req, res) => {
     let avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${uId}&width=420&height=420&format=png`;
 
     try {
-      const thumbRes = await fetch(
-        `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
+      const bustRes = await fetch(
+        `https://thumbnails.roblox.com/v1/users/avatar-bust?userIds=${uId}&size=420x420&format=Png&isCircular=false`
       );
-      if (thumbRes.ok) {
-        const thumbData: any = await thumbRes.json();
-        if (thumbData.data && thumbData.data[0]?.imageUrl) {
-          avatarUrl = thumbData.data[0].imageUrl;
+      if (bustRes.ok) {
+        const bustData: any = await bustRes.json();
+        if (bustData.data && bustData.data[0]?.imageUrl) {
+          avatarUrl = bustData.data[0].imageUrl;
+        }
+      } else {
+        const thumbRes = await fetch(
+          `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`
+        );
+        if (thumbRes.ok) {
+          const thumbData: any = await thumbRes.json();
+          if (thumbData.data && thumbData.data[0]?.imageUrl) {
+            avatarUrl = thumbData.data[0].imageUrl;
+          }
         }
       }
     } catch {}
@@ -1097,6 +1107,12 @@ async function generateDniImageBuffer(dniData: {
   givenNames?: string;
   birthDate?: string;
   gender?: string;
+  civilStatus?: string;
+  organDonation?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  votingGroup?: string;
+  serialCode?: string;
   robloxUsername?: string;
   photoUrl?: string;
 }) {
@@ -1114,67 +1130,177 @@ async function generateDniImageBuffer(dniData: {
   // 1. Draw template background
   ctx.drawImage(tpl, 0, 0);
 
-  // 2. White avatar frame box at (20, 100, 161, 161)
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(20, 100, 161, 161);
-
-  // 3. Draw avatar photo
+  // 2. Fetch & draw avatar on the right side
+  let avatarImg: any = null;
   const photoUrl = (dniData.photoUrl || '').trim();
+  const robloxUser = (dniData.robloxUsername || '').trim();
+
   if (photoUrl) {
     try {
       if (photoUrl.startsWith('data:image/')) {
         const base64Data = photoUrl.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
         const avatarBuf = Buffer.from(base64Data, 'base64');
-        const avatarImg = await loadImage(avatarBuf);
-        ctx.drawImage(avatarImg, 20, 100, 161, 161);
+        avatarImg = await loadImage(avatarBuf);
       } else {
         const resp = await fetch(photoUrl);
         if (resp.ok) {
           const arrBuf = await resp.arrayBuffer();
-          const avatarBuf = Buffer.from(arrBuf);
-          const avatarImg = await loadImage(avatarBuf);
-          ctx.drawImage(avatarImg, 20, 100, 161, 161);
+          avatarImg = await loadImage(Buffer.from(arrBuf));
         }
       }
     } catch (e) {
-      console.error('Error drawing avatar on DNI canvas:', e);
+      console.error('Error loading avatar photo for DNI:', e);
     }
   }
 
-  // 4. Draw texts matching sample template
-  ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 15px "Courier New", monospace, sans-serif';
+  // If photo was not loaded or is default headshot, attempt to fetch Roblox bust directly
+  if (!avatarImg && robloxUser) {
+    try {
+      let uId = robloxUser.replace(/^@/, '');
+      if (!/^\d+$/.test(uId)) {
+        const uRes = await fetch('https://users.roblox.com/v1/usernames/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usernames: [uId], excludeBannedUsers: false }),
+        });
+        if (uRes.ok) {
+          const uData: any = await uRes.json();
+          if (uData.data && uData.data.length > 0) {
+            uId = uData.data[0].id.toString();
+          }
+        }
+      }
 
-  // DNI Number
-  const dniText = dniData.dniNumber || '00000000';
-  ctx.fillText(dniText, 207, 140);
-
-  // Fecha Nacimiento
-  let birthText = dniData.birthDate || '16/08/1999';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(birthText)) {
-    const [y, m, d] = birthText.split('-');
-    birthText = `${d}/${m}/${y}`;
+      if (/^\d+$/.test(uId)) {
+        // Try avatar bust first (head + shoulders + suit)
+        const bustRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-bust?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
+        if (bustRes.ok) {
+          const bData: any = await bustRes.json();
+          if (bData.data && bData.data[0]?.imageUrl) {
+            const resp = await fetch(bData.data[0].imageUrl);
+            if (resp.ok) {
+              const arrBuf = await resp.arrayBuffer();
+              avatarImg = await loadImage(Buffer.from(arrBuf));
+            }
+          }
+        }
+        if (!avatarImg) {
+          const headRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uId}&size=420x420&format=Png&isCircular=false`);
+          if (headRes.ok) {
+            const hData: any = await headRes.json();
+            if (hData.data && hData.data[0]?.imageUrl) {
+              const resp = await fetch(hData.data[0].imageUrl);
+              if (resp.ok) {
+                const arrBuf = await resp.arrayBuffer();
+                avatarImg = await loadImage(Buffer.from(arrBuf));
+              }
+            }
+          }
+        }
+      }
+    } catch (rbxErr) {
+      console.error('Error fetching Roblox avatar for DNI canvas:', rbxErr);
+    }
   }
-  ctx.fillText(birthText, 500, 140);
 
-  // Nombre y Apellido
-  let nameText = dniData.fullName || '';
-  if (!nameText && (dniData.givenNames || dniData.firstSurname)) {
-    nameText = `${dniData.givenNames || ''} ${dniData.firstSurname || ''} ${dniData.secondSurname || ''}`.trim();
+  // Draw avatar on right side
+  if (avatarImg) {
+    try {
+      ctx.drawImage(avatarImg, 680, 140, 400, 420);
+    } catch (e) {
+      console.error('Error drawing avatar image on canvas:', e);
+    }
   }
-  ctx.fillText(nameText || 'CIUDADANO PERUANO', 207, 195);
 
-  // Género
+  // 3. Text setup - exact alignment matching official reference
+  ctx.fillStyle = '#080808';
+  ctx.textBaseline = 'middle';
+
+  // Format DNI / CUI
+  const dniNum = (dniData.dniNumber || '00000000').padStart(8, '0');
+  ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
+  ctx.fillText(dniNum, 145, 149);
+
+  // Names decomposition
+  let pSurname = dniData.firstSurname || '';
+  let mSurname = dniData.secondSurname || '';
+  let names = dniData.givenNames || '';
+
+  if (!pSurname && !mSurname && !names && dniData.fullName) {
+    const parts = dniData.fullName.trim().split(/\s+/);
+    if (parts.length >= 3) {
+      pSurname = parts[0];
+      mSurname = parts[1];
+      names = parts.slice(2).join(' ');
+    } else if (parts.length === 2) {
+      pSurname = parts[0];
+      names = parts[1];
+    } else {
+      names = parts[0] || 'CIUDADANO';
+    }
+  }
+
+  // Primer Apellido
+  ctx.font = 'bold 24px Arial, Helvetica, sans-serif';
+  ctx.fillText((pSurname || 'QUISPE').toUpperCase(), 350, 180);
+
+  // Segundo Apellido
+  ctx.fillText((mSurname || 'MAMANI').toUpperCase(), 350, 255);
+
+  // Pronombre / Nombres
+  ctx.fillText((names || 'JUAN CARLOS').toUpperCase(), 350, 328);
+
+  // Sexo
   const rawGender = (dniData.gender || 'M').toUpperCase();
   const genderText = rawGender.startsWith('M') ? 'Masculino' : rawGender.startsWith('F') ? 'Femenino' : rawGender;
-  ctx.fillText(genderText, 207, 240);
+  ctx.font = 'bold 21px Arial, Helvetica, sans-serif';
+  ctx.fillText(genderText, 345, 395);
 
-  // Nacionalidad
-  ctx.fillText('Peruano', 207, 280);
+  // Estado Civil
+  const rawCivil = (dniData.civilStatus || 'SOLTERO').toUpperCase();
+  const civilText = rawCivil.startsWith('C') ? 'CASADO' : rawCivil.startsWith('D') ? 'DIVORCIADO' : rawCivil.startsWith('V') ? 'VIUDO' : 'SOLTERO';
+  ctx.fillText(civilText, 570, 395);
 
-  // Usuario Roblox
-  const robloxUser = dniData.robloxUsername || 'UsuarioRoblox';
-  ctx.fillText(robloxUser, 207, 323);
+  // Fecha de Nacimiento
+  let bDate = dniData.birthDate || '07/08/1986';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(bDate)) {
+    const [y, m, d] = bDate.split('-');
+    bDate = `${d}/${m}/${y}`;
+  } else if (/^\d{2}-\d{2}-\d{4}$/.test(bDate)) {
+    bDate = bDate.replace(/-/g, '/');
+  }
+  ctx.fillText(bDate, 340, 458);
+
+  // Serial code beside Peru map (12 digits)
+  const serial = dniData.serialCode || `000000000${dniNum.slice(-3)}`;
+  ctx.font = 'bold 19px Arial, Helvetica, sans-serif';
+  ctx.fillText(serial, 145, 468);
+
+  // Fecha de Emisión
+  const today = new Date();
+  const emisionDefault = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+  const emisionText = dniData.issueDate || emisionDefault;
+  ctx.font = 'bold 21px Arial, Helvetica, sans-serif';
+  ctx.fillText(emisionText, 340, 510);
+
+  // Fecha de Caducidad (+8 years)
+  const caducidadDefault = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear() + 8}`;
+  const caducidadText = dniData.expiryDate || caducidadDefault;
+  ctx.fillText(caducidadText, 570, 510);
+
+  // Grupo de Votación (6 digits)
+  const voteGroup = dniData.votingGroup || dniNum.slice(0, 6);
+  ctx.fillText(voteGroup, 345, 570);
+
+  // Donación de Órganos
+  const organText = (dniData.organDonation || 'NO').toUpperCase().includes('S') ? 'SI' : 'NO';
+  ctx.fillText(organText, 570, 570);
+
+  // Fingerprint date overlay (DD MM YYYY)
+  const dateDigits = bDate.replace(/\//g, ' ').replace(/-/g, ' ');
+  ctx.fillStyle = '#1e3a8a';
+  ctx.font = 'bold 28px Arial, Helvetica, sans-serif';
+  ctx.fillText(dateDigits, 92, 570);
 
   return canvas.toBuffer('image/png');
 }
@@ -1205,6 +1331,12 @@ app.get('/api/dni/image/:identifier', async (req, res) => {
       givenNames: found.givenNames,
       birthDate: found.birthDate,
       gender: found.gender,
+      civilStatus: found.civilStatus,
+      organDonation: found.organDonation,
+      issueDate: found.issueDate,
+      expiryDate: found.expiryDate,
+      votingGroup: found.votingGroup,
+      serialCode: found.serialCode,
       robloxUsername: found.robloxUsername,
       photoUrl: found.photoUrl,
     });
@@ -1221,14 +1353,41 @@ app.get('/api/dni/image/:identifier', async (req, res) => {
 // Endpoint to render custom DNI image on-the-fly via query parameters
 app.get('/api/dni/render', async (req, res) => {
   try {
-    const { dni, nombre, nacimiento, genero, usuario, foto } = req.query;
+    const {
+      dni,
+      cui,
+      nombre,
+      primer_apellido,
+      segundo_apellido,
+      nombres,
+      nacimiento,
+      genero,
+      sexo,
+      estado_civil,
+      donacion_organos,
+      emision,
+      caducidad,
+      grupo_votacion,
+      serial,
+      usuario,
+      foto,
+    } = req.query;
 
     const imgBuffer = await generateDniImageBuffer({
-      dniNumber: (dni as string) || '45435156',
-      fullName: (nombre as string) || 'Christian Santiago Infante Dominguez',
-      birthDate: (nacimiento as string) || '16/08/1999',
-      gender: (genero as string) || 'Masculino',
-      robloxUsername: (usuario as string) || 'xGekkoo',
+      dniNumber: (dni as string) || (cui as string) || '28641982',
+      firstSurname: (primer_apellido as string) || undefined,
+      secondSurname: (segundo_apellido as string) || undefined,
+      givenNames: (nombres as string) || undefined,
+      fullName: (nombre as string) || undefined,
+      birthDate: (nacimiento as string) || '07/08/1986',
+      gender: (genero as string) || (sexo as string) || 'Masculino',
+      civilStatus: (estado_civil as string) || 'SOLTERO',
+      organDonation: (donacion_organos as string) || 'NO',
+      issueDate: (emision as string) || undefined,
+      expiryDate: (caducidad as string) || undefined,
+      votingGroup: (grupo_votacion as string) || undefined,
+      serialCode: (serial as string) || undefined,
+      robloxUsername: (usuario as string) || 'UsuarioRoblox',
       photoUrl: (foto as string) || '',
     });
 
