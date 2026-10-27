@@ -13,7 +13,12 @@ export const OfficialPeruLogo: React.FC<OfficialPeruLogoProps> = ({
   showSubtitle = true,
 }) => {
   const { config } = useServer();
-  const customLogoUrl = config?.customLogoUrl || '/assets/logo-peru.png';
+  const customLogoUrl =
+    config?.customLogoUrl &&
+    !config.customLogoUrl.includes('peru_street_logo.svg') &&
+    !config.customLogoUrl.includes('placeholder')
+      ? config.customLogoUrl
+      : '/assets/logo-peru.png';
 
   // Sizing variants
   const scaleClass = {
@@ -32,6 +37,12 @@ export const OfficialPeruLogo: React.FC<OfficialPeruLogoProps> = ({
             src={customLogoUrl}
             alt="Logo Oficial PE:RP"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.currentTarget as HTMLImageElement;
+              if (target.src !== '/assets/logo-peru.png' && !target.src.endsWith('/assets/logo-peru.png')) {
+                target.src = '/assets/logo-peru.png';
+              }
+            }}
             className="w-full h-full object-contain drop-shadow-[0_6px_16px_rgba(220,38,38,0.4)]"
           />
         ) : (

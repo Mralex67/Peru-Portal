@@ -262,13 +262,20 @@ export const AdminPanelModal: React.FC = () => {
     }
 
     // Load album photos
-    try {
-      const saved = localStorage.getItem('perp_album_photos_v2');
-      if (saved) setAlbumPhotos(JSON.parse(saved));
-      else setAlbumPhotos([]);
-    } catch {
-      setAlbumPhotos([]);
-    }
+    fetch('/api/album-photos')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.photos) && data.photos.length > 0) {
+          setAlbumPhotos(data.photos);
+        } else {
+          const saved = localStorage.getItem('perp_album_photos_v4');
+          if (saved) setAlbumPhotos(JSON.parse(saved));
+        }
+      })
+      .catch(() => {
+        const saved = localStorage.getItem('perp_album_photos_v4');
+        if (saved) setAlbumPhotos(JSON.parse(saved));
+      });
 
     // Load Discord OAuth config safely
     fetch('/api/auth/discord/config')
@@ -555,7 +562,12 @@ export const AdminPanelModal: React.FC = () => {
     if (newItems.length > 0) {
       const updated = [...newItems, ...albumPhotos];
       setAlbumPhotos(updated);
-      localStorage.setItem('perp_album_photos_v2', JSON.stringify(updated));
+      localStorage.setItem('perp_album_photos_v4', JSON.stringify(updated));
+      fetch('/api/album-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos: updated }),
+      }).catch(() => {});
       window.dispatchEvent(new Event('perp_album_updated'));
       playSuccessSound();
     }
@@ -567,7 +579,12 @@ export const AdminPanelModal: React.FC = () => {
     playClickSound();
     const updated = albumPhotos.filter((p) => p.id !== id);
     setAlbumPhotos(updated);
-    localStorage.setItem('perp_album_photos_v2', JSON.stringify(updated));
+    localStorage.setItem('perp_album_photos_v4', JSON.stringify(updated));
+    fetch('/api/album-photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photos: updated }),
+    }).catch(() => {});
     window.dispatchEvent(new Event('perp_album_updated'));
   };
 
@@ -1870,6 +1887,11 @@ export const AdminPanelModal: React.FC = () => {
                         <img
                           src={photo.src}
                           alt="Foto del álbum"
+                          onError={(e) => {
+                            const fallbackIdx = (i % 4) + 1;
+                            const target = e.currentTarget as HTMLImageElement;
+                            target.src = `/assets/album/album_${fallbackIdx}.webp`;
+                          }}
                           className="w-full h-full object-cover"
                         />
                         <button

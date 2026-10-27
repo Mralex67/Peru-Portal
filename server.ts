@@ -126,6 +126,52 @@ app.post('/api/upload-photo', (req, res) => {
   }
 });
 
+// ==========================================
+// ALBUM PHOTOS PERSISTENCE
+// ==========================================
+const ALBUM_FILE = path.resolve(__dirname, '.data/album_photos.json');
+const DEFAULT_ALBUM = [
+  { id: 'album-photo-1', src: '/assets/album/album_1.webp', date: 'Patrullaje Urbano PE:RP' },
+  { id: 'album-photo-2', src: '/assets/album/album_2.webp', date: 'Operativo Policial ERLC' },
+  { id: 'album-photo-3', src: '/assets/album/album_3.webp', date: 'Calles del Servidor' },
+  { id: 'album-photo-4', src: '/assets/album/album_4.webp', date: 'Patrulla Nocturna' },
+];
+
+app.get('/api/album-photos', (req, res) => {
+  try {
+    if (fs.existsSync(ALBUM_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ALBUM_FILE, 'utf-8'));
+      if (Array.isArray(data) && data.length > 0) {
+        const sanitized = data.map((item, idx) => {
+          if (!item.src || item.src.includes('discordapp.com') || item.src.includes('discord.com/attachments')) {
+            const fallbackIdx = (idx % 4) + 1;
+            return { ...item, src: `/assets/album/album_${fallbackIdx}.webp` };
+          }
+          return item;
+        });
+        return res.json({ success: true, photos: sanitized });
+      }
+    }
+    return res.json({ success: true, photos: DEFAULT_ALBUM });
+  } catch (err: any) {
+    return res.json({ success: true, photos: DEFAULT_ALBUM });
+  }
+});
+
+app.post('/api/album-photos', (req, res) => {
+  try {
+    const { photos } = req.body;
+    if (Array.isArray(photos)) {
+      fs.mkdirSync(path.dirname(ALBUM_FILE), { recursive: true });
+      fs.writeFileSync(ALBUM_FILE, JSON.stringify(photos, null, 2));
+      return res.json({ success: true, photos });
+    }
+    return res.status(400).json({ success: false, error: 'Lista de fotos inválida' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Endpoint to proxy Roblox avatar lookup
 app.get('/api/roblox/avatar/:username', async (req, res) => {
   try {

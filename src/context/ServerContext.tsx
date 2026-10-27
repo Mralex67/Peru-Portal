@@ -71,7 +71,7 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         parsed.discordMembers = '115';
         parsed.currentPlayers = 0;
         parsed.serverStatus = 'maintenance';
-        if (!parsed.customLogoUrl || parsed.customLogoUrl.includes('placeholder')) {
+        if (!parsed.customLogoUrl || parsed.customLogoUrl.includes('placeholder') || parsed.customLogoUrl.includes('peru_street_logo.svg')) {
           parsed.customLogoUrl = '/assets/logo-peru.png';
         }
         if (!parsed.yapoLogoUrl || parsed.yapoLogoUrl.includes('placeholder')) {
@@ -161,6 +161,17 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 (merged as any)[key] = val;
               }
             }
+            if (!merged.customLogoUrl || merged.customLogoUrl.includes('placeholder') || merged.customLogoUrl.includes('peru_street_logo.svg')) {
+              merged.customLogoUrl = '/assets/logo-peru.png';
+            }
+            if (!merged.heroCardImage || merged.heroCardImage.includes('discordapp.com') || merged.heroCardImage.includes('roblox_sunset_pier')) {
+              merged.heroCardImage = '/assets/hero-card.webp';
+            }
+            if (!merged.yapoLogoUrl || merged.yapoLogoUrl.includes('placeholder')) {
+              merged.yapoLogoUrl = '/assets/yapo-logo.png';
+            }
+            merged.discordMembers = '115';
+            merged.serverStatus = 'maintenance';
             if (prev.currentPlayers > 0) {
               merged.currentPlayers = prev.currentPlayers;
             }

@@ -28,6 +28,12 @@ export const YapoLogo: React.FC<YapoLogoProps> = ({
       <img
         src={yapoLogoSrc}
         alt="Banco YA P"
+        onError={(e) => {
+          const target = e.currentTarget as HTMLImageElement;
+          if (target.src !== '/assets/yapo-logo.png' && !target.src.endsWith('/assets/yapo-logo.png')) {
+            target.src = '/assets/yapo-logo.png';
+          }
+        }}
         className={`w-full h-full object-contain ${withContainer ? 'rounded-2xl p-1 bg-[#5b0fa0] border border-purple-400/40' : ''} drop-shadow-md select-none`}
       />
     </div>

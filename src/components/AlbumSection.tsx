@@ -29,6 +29,23 @@ const DEFAULT_ALBUM_PHOTOS: SimplePhoto[] = [
   { id: 'album-photo-4', src: '/assets/album/album_4.webp', date: 'Patrulla Nocturna' },
 ];
 
+const sanitizePhotos = (list: SimplePhoto[]): SimplePhoto[] => {
+  if (!Array.isArray(list) || list.length === 0) return DEFAULT_ALBUM_PHOTOS;
+  return list.map((photo, i) => {
+    if (
+      !photo.src ||
+      photo.src.includes('discordapp.com') ||
+      photo.src.includes('discord.com/attachments') ||
+      photo.src.includes('via.placeholder') ||
+      photo.src.includes('images.unsplash.com')
+    ) {
+      const idx = (i % 4) + 1;
+      return { ...photo, src: `/assets/album/album_${idx}.webp` };
+    }
+    return photo;
+  });
+};
+
 export const AlbumSection: React.FC = () => {
   const { config, isAdminAuthenticated } = useServer();
   const isLocked = config.albumUploadsLocked !== false;
@@ -37,11 +54,12 @@ export const AlbumSection: React.FC = () => {
   const [photos, setPhotos] = useState<SimplePhoto[]>(() => {
     try {
       localStorage.removeItem('perp_album_photos_v1');
-      const saved = localStorage.getItem('perp_album_photos_v3');
+      localStorage.removeItem('perp_album_photos_v2');
+      const saved = localStorage.getItem('perp_album_photos_v4');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return sanitizePhotos(parsed);
         }
       }
     } catch (e) {
@@ -57,9 +75,31 @@ export const AlbumSection: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Fetch official photos from backend
+  useEffect(() => {
+    fetch('/api/album-photos')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.photos) && data.photos.length > 0) {
+          const sanitized = sanitizePhotos(data.photos);
+          setPhotos(sanitized);
+          try {
+            localStorage.setItem('perp_album_photos_v4', JSON.stringify(sanitized));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     try {
-      localStorage.setItem('perp_album_photos_v3', JSON.stringify(photos));
+      localStorage.setItem('perp_album_photos_v4', JSON.stringify(photos));
+      // Also sync to server in background
+      fetch('/api/album-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos }),
+      }).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -68,8 +108,8 @@ export const AlbumSection: React.FC = () => {
   useEffect(() => {
     const handleSync = () => {
       try {
-        const saved = localStorage.getItem('perp_album_photos_v2');
-        if (saved) setPhotos(JSON.parse(saved));
+        const saved = localStorage.getItem('perp_album_photos_v4');
+        if (saved) setPhotos(sanitizePhotos(JSON.parse(saved)));
       } catch (e) {
         console.error(e);
       }
@@ -346,8 +386,16 @@ export const AlbumSection: React.FC = () => {
                 >
                   <img
                     src={photo.src}
-                    alt="Foto del servidor"
+                    alt={photo.date || "Foto oficial del servidor PE:RP"}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const fallbackIdx = (index % 4) + 1;
+                      const target = e.currentTarget as HTMLImageElement;
+                      const fallbackSrc = `/assets/album/album_${fallbackIdx}.webp`;
+                      if (target.src !== fallbackSrc && !target.src.endsWith(fallbackSrc)) {
+                        target.src = fallbackSrc;
+                      }
+                    }}
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300 select-none"
                   />
 
@@ -450,8 +498,16 @@ export const AlbumSection: React.FC = () => {
           >
             <img
               src={currentPhoto.src}
-              alt="Foto ampliada"
+              alt={currentPhoto.date || "Foto oficial PE:RP ampliada"}
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                const fallbackIdx = ((lightboxIndex ?? 0) % 4) + 1;
+                const target = e.currentTarget as HTMLImageElement;
+                const fallbackSrc = `/assets/album/album_${fallbackIdx}.webp`;
+                if (target.src !== fallbackSrc && !target.src.endsWith(fallbackSrc)) {
+                  target.src = fallbackSrc;
+                }
+              }}
               className="max-w-full max-h-[82vh] object-contain rounded-2xl shadow-2xl select-none"
             />
             

@@ -34,7 +34,11 @@ export const Hero: React.FC = () => {
   };
 
   const currentCardImage =
-    config.heroCardImage || '/assets/hero-card.webp';
+    config.heroCardImage &&
+    !config.heroCardImage.includes('roblox_sunset_pier') &&
+    !config.heroCardImage.includes('placeholder')
+      ? config.heroCardImage
+      : '/assets/hero-card.webp';
 
   const uploadHeroPhoto = async (dataUrl: string): Promise<string> => {
     try {
@@ -205,6 +209,12 @@ export const Hero: React.FC = () => {
                   src={currentCardImage}
                   alt="Roblox ERLC Servidor PE:RP"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.currentTarget as HTMLImageElement;
+                    if (target.src !== '/assets/hero-card.webp' && !target.src.endsWith('/assets/hero-card.webp')) {
+                      target.src = '/assets/hero-card.webp';
+                    }
+                  }}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                 />
                 
