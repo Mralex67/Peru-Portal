@@ -1443,16 +1443,16 @@ export const AdminPanelModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECTION 2: FOTO DE PORTADA COMUNIDAD PERUANA */}
+              {/* SECTION 2: FOTO DE PORTADA PE:RP STREETS */}
               <div className="p-4 sm:p-5 rounded-2xl bg-[#141726] border border-white/10 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
                       <Camera className="w-4 h-4 text-red-500" />
-                      2. Foto de Portada (Comunidad Peruana - Streets Hub)
+                      2. Foto de Portada (PE:RP Streets Hub)
                     </h4>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Cambia la foto principal que se muestra en el inicio al costado del título Streets Hub con la etiqueta Comunidad Peruana (Activo).
+                      Cambia la foto principal que se muestra en el inicio al costado del título Streets Hub con la etiqueta PE:RP Streets (Activo).
                     </p>
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 self-start sm:self-auto ${
@@ -1468,7 +1468,7 @@ export const AdminPanelModal: React.FC = () => {
                   {/* Preview */}
                   <div className="relative w-40 h-28 sm:w-48 sm:h-32 shrink-0 rounded-2xl bg-black/60 border border-white/15 overflow-hidden shadow-lg group">
                     <img
-                      src={formData.heroCardImage || "/src/assets/images/roblox_sunset_pier_1792185364963.jpg"}
+                      src={formData.heroCardImage || "/assets/hero-card.webp"}
                       alt="Vista previa Portada"
                       className="w-full h-full object-cover"
                     />
@@ -1513,7 +1513,7 @@ export const AdminPanelModal: React.FC = () => {
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, heroCardImage: '' }));
                             setHeroCardUrlInput('');
-                            updateConfig({ heroCardImage: '/src/assets/images/roblox_sunset_pier_1792185364963.jpg' });
+                            updateConfig({ heroCardImage: '/assets/hero-card.webp' });
                             playClickSound();
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"

@@ -39,6 +39,8 @@ const UPLOADS_DIR = path.resolve(__dirname, 'public/uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
+const PUBLIC_DIR = path.resolve(__dirname, 'public');
+app.use(expressApp.static(PUBLIC_DIR));
 app.use('/uploads', expressApp.static(UPLOADS_DIR));
 
 const CONFIG_FILE = path.resolve(__dirname, '.data/server_config.json');

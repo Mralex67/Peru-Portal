@@ -13,7 +13,7 @@ export const OfficialPeruLogo: React.FC<OfficialPeruLogoProps> = ({
   showSubtitle = true,
 }) => {
   const { config } = useServer();
-  const customLogoUrl = config?.customLogoUrl;
+  const customLogoUrl = config?.customLogoUrl || '/assets/logo-peru.png';
 
   // Sizing variants
   const scaleClass = {
@@ -32,7 +32,7 @@ export const OfficialPeruLogo: React.FC<OfficialPeruLogoProps> = ({
             src={customLogoUrl}
             alt="Logo Oficial PE:RP"
             referrerPolicy="no-referrer"
-            className="w-full h-full object-contain rounded-2xl drop-shadow-[0_6px_16px_rgba(220,38,38,0.4)]"
+            className="w-full h-full object-contain drop-shadow-[0_6px_16px_rgba(220,38,38,0.4)]"
           />
         ) : (
         <svg

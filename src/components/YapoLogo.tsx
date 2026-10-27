@@ -21,17 +21,17 @@ export const YapoLogo: React.FC<YapoLogoProps> = ({
     xl: 'w-32 h-32 text-xl',
   };
 
-  if (config?.yapoLogoUrl) {
-    return (
-      <div className={`relative flex items-center justify-center shrink-0 ${sizeMap[size]} ${className}`}>
-        <img
-          src={config.yapoLogoUrl}
-          alt="Banco YA P"
-          className={`w-full h-full object-contain ${withContainer ? 'rounded-2xl p-1 bg-[#5b0fa0] border border-purple-400/40' : ''} drop-shadow-md select-none`}
-        />
-      </div>
-    );
-  }
+  const yapoLogoSrc = config?.yapoLogoUrl || '/assets/yapo-logo.png';
+
+  return (
+    <div className={`relative flex items-center justify-center shrink-0 ${sizeMap[size]} ${className}`}>
+      <img
+        src={yapoLogoSrc}
+        alt="Banco YA P"
+        className={`w-full h-full object-contain ${withContainer ? 'rounded-2xl p-1 bg-[#5b0fa0] border border-purple-400/40' : ''} drop-shadow-md select-none`}
+      />
+    </div>
+  );
 
   const svgContent = (
     <svg

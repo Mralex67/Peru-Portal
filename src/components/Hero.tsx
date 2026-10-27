@@ -34,7 +34,7 @@ export const Hero: React.FC = () => {
   };
 
   const currentCardImage =
-    config.heroCardImage || '/src/assets/images/roblox_sunset_pier_1792185364963.jpg';
+    config.heroCardImage || '/assets/hero-card.webp';
 
   const uploadHeroPhoto = async (dataUrl: string): Promise<string> => {
     try {
@@ -87,7 +87,7 @@ export const Hero: React.FC = () => {
   };
 
   const handleResetDefault = () => {
-    updateConfig({ heroCardImage: '/src/assets/images/roblox_sunset_pier_1792185364963.jpg' });
+    updateConfig({ heroCardImage: '/assets/hero-card.webp' });
     setPreviewImage(null);
     setUrlInput('');
     setIsSaved(true);
@@ -203,11 +203,10 @@ export const Hero: React.FC = () => {
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
                 <img
                   src={currentCardImage}
-                  alt="Roblox ERLC Comunidad Peruana PE:RP"
+                  alt="Roblox ERLC Servidor PE:RP"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#090b12] via-transparent to-transparent pointer-events-none" />
                 
                 {/* Floating Badge */}
                 <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-red-950/80 border border-red-500/50 text-red-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 pointer-events-none">
@@ -225,22 +224,11 @@ export const Hero: React.FC = () => {
                     setShowEditModal(true);
                   }}
                   className="absolute top-4 left-4 z-20 px-2.5 py-1.5 rounded-xl bg-black/80 hover:bg-red-600 text-white text-[11px] font-bold border border-white/20 hover:border-red-400 flex items-center gap-1.5 backdrop-blur-md opacity-90 sm:opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-lg"
-                  title="Cambiar imagen de portada de la comunidad"
+                  title="Cambiar imagen de portada"
                 >
                   <Camera className="w-3.5 h-3.5 text-amber-300" />
                   <span>Editar Foto</span>
                 </button>
-
-                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-xs text-white pointer-events-none">
-                  <div>
-                    <span className="font-black text-sm block tracking-wide">COMUNIDAD PERUANA</span>
-                    <span className="text-[11px] text-slate-300">Roblox ERLC Roleplay Oficial</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 text-[11px] font-mono font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    ACTIVO
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -269,7 +257,7 @@ export const Hero: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              Esta es la imagen principal que aparece al costado de <strong>Streets Hub</strong> con la etiqueta <em>Comunidad Peruana (Activo)</em>.
+              Esta es la imagen principal que aparece al costado de <strong>Streets Hub</strong> con la etiqueta <em>PE:RP Streets (Activo)</em>.
             </p>
 
             {/* Live Preview */}

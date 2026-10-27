@@ -7,21 +7,21 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   seasonName: 'Temporada Oficial: Calles de Perú',
   heroHeadline: 'PERÚ ROLEPLAY',
   heroDescription:
-    'La comunidad líder y oficial de simulación urbana en Roblox Emergency Response: Liberty County. Patrulla las calles peruanas con la Policía Nacional del Perú (PNP), Serenazgo y SAMU con economía en Soles y rol serio.',
+    'Simulación urbana oficial en Roblox Emergency Response: Liberty County. Patrulla las calles con la Policía Nacional del Perú (PNP), Serenazgo y SAMU con economía en Soles y rol serio.',
   discordMembers: '115',
-  currentPlayers: 4,
+  currentPlayers: 0,
   maxPlayers: 50,
-  serverStatus: 'online',
-  announcementText: '🚨 Servidor oficial de PE:RP Streets activo en Roblox ERLC.',
+  serverStatus: 'maintenance',
+  announcementText: '🔧 Servidor en mantenimiento oficial. Próximamente apertura.',
   discordInviteUrl: 'https://discord.gg/NBwwDmrFwf',
-  patrolAlert: 'Patrullaje Preventivo Nacional',
-  customLogoUrl: '',
-  yapoLogoUrl: '',
+  patrolAlert: 'Mantenimiento Oficial PE:RP',
+  customLogoUrl: '/assets/logo-peru.png',
+  yapoLogoUrl: '/assets/yapo-logo.png',
   customPatrolTruckUrl: '',
-  heroCardImage: 'https://cdn.discordapp.com/attachments/1105356730516377694/1564349033819148409/xd3.webp?ex=6ae0f111&is=6adf9f91&hm=727126d693148c2dccdf5c33c08e22ea09dbd3ef935156b90c78d4802777316f',
+  heroCardImage: '/assets/hero-card.webp',
   albumUploadsLocked: true,
   erlcServerKey: '',
-  erlcAutoSync: true,
+  erlcAutoSync: false,
   erlcJoinKey: '',
 };
 
@@ -60,7 +60,7 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const saved = localStorage.getItem('perp_server_config');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Ensure no old Lima Metropolitana or activeDistrict persists
+        // Ensure clean values
         delete parsed.activeDistrict;
         if (parsed.seasonName && parsed.seasonName.includes('Lima')) {
           parsed.seasonName = DEFAULT_SERVER_CONFIG.seasonName;
@@ -68,8 +68,20 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (parsed.serverName && parsed.serverName.includes('CALLAO')) {
           parsed.serverName = DEFAULT_SERVER_CONFIG.serverName;
         }
-        if (parsed.currentPlayers === 48) {
-          parsed.currentPlayers = 4;
+        parsed.discordMembers = '115';
+        parsed.currentPlayers = 0;
+        parsed.serverStatus = 'maintenance';
+        if (!parsed.customLogoUrl || parsed.customLogoUrl.includes('placeholder')) {
+          parsed.customLogoUrl = '/assets/logo-peru.png';
+        }
+        if (!parsed.yapoLogoUrl || parsed.yapoLogoUrl.includes('placeholder')) {
+          parsed.yapoLogoUrl = '/assets/yapo-logo.png';
+        }
+        if (parsed.heroDescription && parsed.heroDescription.includes('comunidad líder')) {
+          parsed.heroDescription = DEFAULT_SERVER_CONFIG.heroDescription;
+        }
+        if (!parsed.heroCardImage || parsed.heroCardImage.includes('discordapp.com') || parsed.heroCardImage.includes('roblox_sunset_pier')) {
+          parsed.heroCardImage = '/assets/hero-card.webp';
         }
         return { ...DEFAULT_SERVER_CONFIG, ...parsed };
       }

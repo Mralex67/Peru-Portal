@@ -22,6 +22,13 @@ export interface SimplePhoto {
   date: string;
 }
 
+const DEFAULT_ALBUM_PHOTOS: SimplePhoto[] = [
+  { id: 'album-photo-1', src: '/assets/album/album_1.webp', date: 'Patrullaje Urbano PE:RP' },
+  { id: 'album-photo-2', src: '/assets/album/album_2.webp', date: 'Operativo Policial ERLC' },
+  { id: 'album-photo-3', src: '/assets/album/album_3.webp', date: 'Calles del Servidor' },
+  { id: 'album-photo-4', src: '/assets/album/album_4.webp', date: 'Patrulla Nocturna' },
+];
+
 export const AlbumSection: React.FC = () => {
   const { config, isAdminAuthenticated } = useServer();
   const isLocked = config.albumUploadsLocked !== false;
@@ -29,16 +36,18 @@ export const AlbumSection: React.FC = () => {
 
   const [photos, setPhotos] = useState<SimplePhoto[]>(() => {
     try {
-      // Clear old v1 AI photos if present
       localStorage.removeItem('perp_album_photos_v1');
-      const saved = localStorage.getItem('perp_album_photos_v2');
+      const saved = localStorage.getItem('perp_album_photos_v3');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch (e) {
       console.error(e);
     }
-    return [];
+    return DEFAULT_ALBUM_PHOTOS;
   });
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -50,7 +59,7 @@ export const AlbumSection: React.FC = () => {
 
   useEffect(() => {
     try {
-      localStorage.setItem('perp_album_photos_v2', JSON.stringify(photos));
+      localStorage.setItem('perp_album_photos_v3', JSON.stringify(photos));
     } catch (e) {
       console.error(e);
     }
@@ -179,7 +188,7 @@ export const AlbumSection: React.FC = () => {
             <div className="flex items-center gap-2 mb-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
               <span className="text-xs font-bold uppercase tracking-widest text-red-500">
-                Galería de la Comunidad
+                Galería Oficial
               </span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-white font-sans">
