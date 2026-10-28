@@ -127,15 +127,23 @@ export const PeruDniSection: React.FC = () => {
 
   // Check if current discord user has a DNI registered
   useEffect(() => {
-    if (!discordUser) {
-      // Check if there is any local DNI saved in this browser
-      const locals = getLocalDnis();
-      if (locals.length > 0) {
-        setExistingDni(locals[0]);
-        setAvatarPreview(locals[0].photoUrl);
-      } else {
-        setExistingDni(null);
+    // Purge any legacy mock or test DNIs from localStorage
+    try {
+      const raw = localStorage.getItem('perp_local_dnis_v2');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          const cleaned = list.filter(
+            (d) => d && d.dniNumber !== '28641982' && !d.fullName?.includes('ARRIOLA') && d.discordId !== '00000'
+          );
+          localStorage.setItem('perp_local_dnis_v2', JSON.stringify(cleaned));
+        }
       }
+    } catch {}
+
+    if (!discordUser) {
+      setExistingDni(null);
+      setAvatarPreview('');
       return;
     }
 
@@ -439,31 +447,8 @@ export const PeruDniSection: React.FC = () => {
     }
   };
 
-  // Active DNI to render
-  const currentDni: PeruDni = existingDni || {
-    id: 'preview',
-    discordId: discordUser?.id || '00000',
-    discordUsername: discordUser?.username || 'Ciudadano',
-    robloxUsername: robloxUsername.trim() || 'UsuarioRoblox',
-    dniNumber: '28641982',
-    verifyDigit: '2',
-    fullName: `${firstSurname.toUpperCase() || 'ARRIOLA'} ${secondSurname.toUpperCase() || 'LÓPEZ'}, ${givenNames.toUpperCase() || 'AUGUSTO FERNANDO'}`,
-    firstSurname: firstSurname.toUpperCase() || 'ARRIOLA',
-    secondSurname: secondSurname.toUpperCase() || 'LÓPEZ',
-    givenNames: givenNames.toUpperCase() || 'AUGUSTO FERNANDO',
-    birthDate: '07/08/1986',
-    issueDate: '26/10/2026',
-    expiryDate: '26/10/2034',
-    gender: 'Masculino',
-    civilStatus: 'CASADO',
-    organDonation: 'NO',
-    votingGroup: '041186',
-    serialCode: '000000000112',
-    ubigeo: '150101',
-    photoUrl: avatarPreview || `https://tr.rbxcdn.com/30DAY-AvatarBust-310966282D3529E36976BF6B07B1DC90-Png/420/420/AvatarBust/Png/noFilter`,
-    signatureText: 'A.Arriola',
-    createdAt: new Date().toISOString(),
-  };
+  // Active DNI to render (strictly null if not yet created)
+  const currentDni: PeruDni | null = existingDni;
 
   return (
     <section id="dni" className="relative py-24 bg-[#06080e] border-y border-white/5 overflow-hidden">
@@ -514,8 +499,14 @@ export const PeruDniSection: React.FC = () => {
               <span>Conectar con Discord para Tramitar DNI</span>
             </button>
           </div>
-        ) : (
-          /* State 2: User IS logged in */
+        ) : loadingCheck ? (
+          <div className="max-w-xl mx-auto rounded-3xl bg-[#0f1322] border border-sky-500/30 p-10 text-center shadow-2xl">
+            <div className="w-12 h-12 border-3 border-sky-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-white mb-1 font-sans">Consultando RENIEC PE:RP...</h3>
+            <p className="text-xs text-slate-400">Verificando si posees un DNI oficial emitido en el sistema.</p>
+          </div>
+        ) : existingDni && currentDni ? (
+          /* State 2: Real DNI exists -> Display real DNI card */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
             {/* Left Column: Interactive DNI Card Display */}
@@ -785,9 +776,8 @@ export const PeruDniSection: React.FC = () => {
             {/* Right Column: Creation Form or Status Details */}
             <div className="lg:col-span-5 bg-[#0e1220] rounded-3xl border border-sky-500/20 p-6 sm:p-7 shadow-2xl relative">
               
-              {/* If user ALREADY has a DNI */}
-              {existingDni ? (
-                <div className="space-y-5">
+              {/* Confirmed Citizen Status & Avatar Sync */}
+              <div className="space-y-5">
                   <div className="flex items-center gap-3 pb-4 border-b border-white/10">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
                       <ShieldCheck className="w-6 h-6" />
@@ -1082,9 +1072,11 @@ export const PeruDniSection: React.FC = () => {
                     </p>
                   </div>
                 </div>
-              ) : (
-                /* State: DNI not yet created. Exclusively issued via Discord Bot /crear-dni */
-                <div className="p-6 sm:p-8 rounded-3xl bg-[#090c18] border border-sky-500/30 text-center space-y-5 animate-in fade-in">
+              </div>
+            </div>
+          ) : (
+            /* State: DNI not yet created. Exclusively issued via Discord Bot /crear-dni */
+            <div className="max-w-2xl mx-auto p-6 sm:p-8 rounded-3xl bg-[#090c18] border border-sky-500/30 text-center space-y-5 animate-in fade-in shadow-2xl">
                   <div className="w-16 h-16 rounded-3xl bg-[#5865F2]/20 border border-[#5865F2]/40 text-[#5865F2] flex items-center justify-center mx-auto shadow-lg shadow-indigo-950/50">
                     <Bot className="w-8 h-8" />
                   </div>
@@ -1162,13 +1154,8 @@ export const PeruDniSection: React.FC = () => {
                       <span>Ya lo creé, verificar ahora</span>
                     </button>
                   </div>
-                </div>
-              )}
-
             </div>
-
-          </div>
-        )}
+          )}
 
       </div>
     </section>
