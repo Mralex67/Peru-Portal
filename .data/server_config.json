@@ -3,7 +3,7 @@
   "currentPlayers": 0,
   "maxPlayers": 50,
   "customLogoUrl": "/assets/logo-peru.png",
-  "heroCardImage": "/assets/hero-card.webp",
+  "heroCardImage": "/assets/hero-card.png",
   "customPatrolTruckUrl": "",
   "yapoLogoUrl": "/assets/yapo-logo.png",
   "discordMembers": "115",

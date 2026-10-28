@@ -1485,8 +1485,14 @@ export const AdminPanelModal: React.FC = () => {
                   {/* Preview */}
                   <div className="relative w-40 h-28 sm:w-48 sm:h-32 shrink-0 rounded-2xl bg-black/60 border border-white/15 overflow-hidden shadow-lg group">
                     <img
-                      src={formData.heroCardImage || "/assets/hero-card.webp"}
+                      src={formData.heroCardImage || "/assets/hero-card.png"}
                       alt="Vista previa Portada"
+                      onError={(e) => {
+                        const target = e.currentTarget as HTMLImageElement;
+                        if (!target.src.endsWith('/assets/hero-card.png')) {
+                          target.src = '/assets/hero-card.png';
+                        }
+                      }}
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute bottom-1 right-2 bg-black/80 text-[9px] font-mono font-bold text-emerald-400 px-1.5 py-0.5 rounded">
@@ -1530,7 +1536,7 @@ export const AdminPanelModal: React.FC = () => {
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, heroCardImage: '' }));
                             setHeroCardUrlInput('');
-                            updateConfig({ heroCardImage: '/assets/hero-card.webp' });
+                            updateConfig({ heroCardImage: '/assets/hero-card.png' });
                             playClickSound();
                           }}
                           className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"

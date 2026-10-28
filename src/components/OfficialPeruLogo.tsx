@@ -36,11 +36,16 @@ export const OfficialPeruLogo: React.FC<OfficialPeruLogoProps> = ({
           <img
             src={customLogoUrl}
             alt="Logo Oficial PE:RP"
-            referrerPolicy="no-referrer"
             onError={(e) => {
               const target = e.currentTarget as HTMLImageElement;
-              if (target.src !== '/assets/logo-peru.png' && !target.src.endsWith('/assets/logo-peru.png')) {
+              const step = parseInt(target.dataset.retry || '0', 10);
+              target.dataset.retry = String(step + 1);
+              if (step === 0) {
                 target.src = '/assets/logo-peru.png';
+              } else if (step === 1) {
+                target.src = './assets/logo-peru.png';
+              } else if (step === 2) {
+                target.src = '/logo-peru.png';
               }
             }}
             className="w-full h-full object-contain drop-shadow-[0_6px_16px_rgba(220,38,38,0.4)]"

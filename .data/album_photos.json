@@ -1,22 +1,22 @@
 [
   {
     "id": "album-photo-1",
-    "src": "/assets/album/album_1.webp",
+    "src": "/assets/album/album_1.png",
     "date": "Patrullaje Urbano PE:RP"
   },
   {
     "id": "album-photo-2",
-    "src": "/assets/album/album_2.webp",
+    "src": "/assets/album/album_2.png",
     "date": "Operativo Policial ERLC"
   },
   {
     "id": "album-photo-3",
-    "src": "/assets/album/album_3.webp",
+    "src": "/assets/album/album_3.png",
     "date": "Calles del Servidor"
   },
   {
     "id": "album-photo-4",
-    "src": "/assets/album/album_4.webp",
+    "src": "/assets/album/album_4.png",
     "date": "Patrulla Nocturna"
   }
 ]

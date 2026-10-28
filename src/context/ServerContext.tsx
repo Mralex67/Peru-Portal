@@ -18,7 +18,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   customLogoUrl: '/assets/logo-peru.png',
   yapoLogoUrl: '/assets/yapo-logo.png',
   customPatrolTruckUrl: '',
-  heroCardImage: '/assets/hero-card.webp',
+  heroCardImage: '/assets/hero-card.png',
   albumUploadsLocked: true,
   erlcServerKey: '',
   erlcAutoSync: false,
@@ -80,8 +80,8 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (parsed.heroDescription && parsed.heroDescription.includes('comunidad líder')) {
           parsed.heroDescription = DEFAULT_SERVER_CONFIG.heroDescription;
         }
-        if (!parsed.heroCardImage || parsed.heroCardImage.includes('discordapp.com') || parsed.heroCardImage.includes('roblox_sunset_pier')) {
-          parsed.heroCardImage = '/assets/hero-card.webp';
+        if (!parsed.heroCardImage || parsed.heroCardImage.includes('discordapp.com') || parsed.heroCardImage.includes('roblox_sunset_pier') || parsed.heroCardImage.endsWith('.webp')) {
+          parsed.heroCardImage = '/assets/hero-card.png';
         }
         return { ...DEFAULT_SERVER_CONFIG, ...parsed };
       }

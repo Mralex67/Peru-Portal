@@ -23,24 +23,28 @@ export interface SimplePhoto {
 }
 
 const DEFAULT_ALBUM_PHOTOS: SimplePhoto[] = [
-  { id: 'album-photo-1', src: '/assets/album/album_1.webp', date: 'Patrullaje Urbano PE:RP' },
-  { id: 'album-photo-2', src: '/assets/album/album_2.webp', date: 'Operativo Policial ERLC' },
-  { id: 'album-photo-3', src: '/assets/album/album_3.webp', date: 'Calles del Servidor' },
-  { id: 'album-photo-4', src: '/assets/album/album_4.webp', date: 'Patrulla Nocturna' },
+  { id: 'album-photo-1', src: '/assets/album/album_1.png', date: 'Patrullaje Urbano PE:RP' },
+  { id: 'album-photo-2', src: '/assets/album/album_2.png', date: 'Operativo Policial ERLC' },
+  { id: 'album-photo-3', src: '/assets/album/album_3.png', date: 'Calles del Servidor' },
+  { id: 'album-photo-4', src: '/assets/album/album_4.png', date: 'Patrulla Nocturna' },
 ];
 
 const sanitizePhotos = (list: SimplePhoto[]): SimplePhoto[] => {
   if (!Array.isArray(list) || list.length === 0) return DEFAULT_ALBUM_PHOTOS;
   return list.map((photo, i) => {
+    const idx = (i % 4) + 1;
     if (
       !photo.src ||
       photo.src.includes('discordapp.com') ||
       photo.src.includes('discord.com/attachments') ||
       photo.src.includes('via.placeholder') ||
-      photo.src.includes('images.unsplash.com')
+      photo.src.includes('images.unsplash.com') ||
+      photo.src.includes('foto_1792')
     ) {
-      const idx = (i % 4) + 1;
-      return { ...photo, src: `/assets/album/album_${idx}.webp` };
+      return { ...photo, src: `/assets/album/album_${idx}.png` };
+    }
+    if (photo.src.endsWith('.webp')) {
+      return { ...photo, src: photo.src.replace('.webp', '.png') };
     }
     return photo;
   });
@@ -387,13 +391,21 @@ export const AlbumSection: React.FC = () => {
                   <img
                     src={photo.src}
                     alt={photo.date || "Foto oficial del servidor PE:RP"}
-                    referrerPolicy="no-referrer"
                     onError={(e) => {
                       const fallbackIdx = (index % 4) + 1;
                       const target = e.currentTarget as HTMLImageElement;
-                      const fallbackSrc = `/assets/album/album_${fallbackIdx}.webp`;
-                      if (target.src !== fallbackSrc && !target.src.endsWith(fallbackSrc)) {
-                        target.src = fallbackSrc;
+                      const step = parseInt(target.dataset.retry || '0', 10);
+                      target.dataset.retry = String(step + 1);
+                      if (step === 0) {
+                        target.src = `/assets/album/album_${fallbackIdx}.png`;
+                      } else if (step === 1) {
+                        target.src = `/assets/album/album_${fallbackIdx}.webp`;
+                      } else if (step === 2) {
+                        target.src = `./assets/album/album_${fallbackIdx}.png`;
+                      } else if (step === 3) {
+                        target.src = `/assets/album_${fallbackIdx}.png`;
+                      } else if (step === 4) {
+                        target.src = `/assets/hero-card.png`;
                       }
                     }}
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300 select-none"
@@ -499,13 +511,21 @@ export const AlbumSection: React.FC = () => {
             <img
               src={currentPhoto.src}
               alt={currentPhoto.date || "Foto oficial PE:RP ampliada"}
-              referrerPolicy="no-referrer"
               onError={(e) => {
                 const fallbackIdx = ((lightboxIndex ?? 0) % 4) + 1;
                 const target = e.currentTarget as HTMLImageElement;
-                const fallbackSrc = `/assets/album/album_${fallbackIdx}.webp`;
-                if (target.src !== fallbackSrc && !target.src.endsWith(fallbackSrc)) {
-                  target.src = fallbackSrc;
+                const step = parseInt(target.dataset.retry || '0', 10);
+                target.dataset.retry = String(step + 1);
+                if (step === 0) {
+                  target.src = `/assets/album/album_${fallbackIdx}.png`;
+                } else if (step === 1) {
+                  target.src = `/assets/album/album_${fallbackIdx}.webp`;
+                } else if (step === 2) {
+                  target.src = `./assets/album/album_${fallbackIdx}.png`;
+                } else if (step === 3) {
+                  target.src = `/assets/album_${fallbackIdx}.png`;
+                } else if (step === 4) {
+                  target.src = `/assets/hero-card.png`;
                 }
               }}
               className="max-w-full max-h-[82vh] object-contain rounded-2xl shadow-2xl select-none"

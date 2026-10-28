@@ -30,8 +30,14 @@ export const YapoLogo: React.FC<YapoLogoProps> = ({
         alt="Banco YA P"
         onError={(e) => {
           const target = e.currentTarget as HTMLImageElement;
-          if (target.src !== '/assets/yapo-logo.png' && !target.src.endsWith('/assets/yapo-logo.png')) {
+          const step = parseInt(target.dataset.retry || '0', 10);
+          target.dataset.retry = String(step + 1);
+          if (step === 0) {
             target.src = '/assets/yapo-logo.png';
+          } else if (step === 1) {
+            target.src = './assets/yapo-logo.png';
+          } else if (step === 2) {
+            target.src = '/yapo-logo.png';
           }
         }}
         className={`w-full h-full object-contain ${withContainer ? 'rounded-2xl p-1 bg-[#5b0fa0] border border-purple-400/40' : ''} drop-shadow-md select-none`}

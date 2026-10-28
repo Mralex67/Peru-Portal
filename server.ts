@@ -40,8 +40,24 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
-app.use(expressApp.static(PUBLIC_DIR));
-app.use('/uploads', expressApp.static(UPLOADS_DIR));
+const ASSETS_DIR = path.resolve(__dirname, 'public/assets');
+
+app.use('/assets', expressApp.static(ASSETS_DIR, {
+  maxAge: '1h',
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+}));
+app.use('/uploads', expressApp.static(UPLOADS_DIR, {
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+}));
+app.use(expressApp.static(PUBLIC_DIR, {
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+}));
 
 const CONFIG_FILE = path.resolve(__dirname, '.data/server_config.json');
 

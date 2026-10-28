@@ -68,9 +68,13 @@ export const PeruDniSection: React.FC = () => {
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const templateFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Template custom state (Loaded from localStorage or guaranteed Base64 fallback)
+  // Template custom state (Loaded from disk PNG, custom uploaded, or guaranteed Base64 fallback)
   const [templateSrc, setTemplateSrc] = useState<string>(() => {
-    return localStorage.getItem('perp_custom_dni_template') || OFFICIAL_DNI_TEMPLATE_BASE64;
+    try {
+      const saved = localStorage.getItem('perp_custom_dni_template');
+      if (saved && saved.startsWith('data:image')) return saved;
+    } catch {}
+    return '/assets/dni-template-official.png';
   });
   const formatCivilStatus = (status?: string) => {
     if (!status) return 'SOLTERO';
@@ -553,11 +557,22 @@ export const PeruDniSection: React.FC = () => {
               >
                 {/* Official Card Template Background with Guaranteed Base64 Fallback */}
                 <img
-                  src={templateSrc || OFFICIAL_DNI_TEMPLATE_BASE64}
+                  src={templateSrc || '/assets/dni-template-official.png'}
                   alt="Plantilla Oficial DNI PE:RP"
                   className="absolute inset-0 w-full h-full object-fill pointer-events-none"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = OFFICIAL_DNI_TEMPLATE_BASE64;
+                    const target = e.currentTarget as HTMLImageElement;
+                    const step = parseInt(target.dataset.retry || '0', 10);
+                    target.dataset.retry = String(step + 1);
+                    if (step === 0) {
+                      target.src = '/assets/dni-template-official.png';
+                    } else if (step === 1) {
+                      target.src = './assets/dni-template-official.png';
+                    } else if (step === 2) {
+                      target.src = '/dni-template-official.png';
+                    } else {
+                      target.src = OFFICIAL_DNI_TEMPLATE_BASE64;
+                    }
                   }}
                 />
 
