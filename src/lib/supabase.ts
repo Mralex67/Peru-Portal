@@ -130,10 +130,57 @@ CREATE TABLE IF NOT EXISTS yapo_transactions (
   timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 4. TABLA DE ARRESTOS POLICIALES (PNP SIPOL)
+CREATE TABLE IF NOT EXISTS pnp_arrests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  citizen_identifier TEXT NOT NULL,
+  citizen_name TEXT NOT NULL,
+  charges TEXT NOT NULL,
+  duration_text TEXT NOT NULL,
+  duration_minutes INTEGER DEFAULT 5,
+  bail_amount NUMERIC DEFAULT 0,
+  officer_name TEXT NOT NULL,
+  officer_discord_id TEXT,
+  evidence_url TEXT,
+  status TEXT DEFAULT 'cumplido',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ
+);
+
+-- 5. TABLA DE MULTAS DE TRÁNSITO (PNP)
+CREATE TABLE IF NOT EXISTS pnp_fines (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  citizen_identifier TEXT NOT NULL,
+  citizen_name TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  status TEXT DEFAULT 'pendiente',
+  officer_name TEXT NOT NULL,
+  officer_discord_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  paid_at TIMESTAMPTZ
+);
+
+-- 6. TABLA DE SANCIONES ADMINISTRATIVAS
+CREATE TABLE IF NOT EXISTS pnp_sanctions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  target_user_id TEXT NOT NULL,
+  target_username TEXT NOT NULL,
+  moderator_name TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  evidence_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- HABILITAR ROW LEVEL SECURITY (RLS)
 ALTER TABLE peru_dnis ENABLE ROW LEVEL SECURITY;
 ALTER TABLE yapo_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE yapo_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pnp_arrests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pnp_fines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pnp_sanctions ENABLE ROW LEVEL SECURITY;
 
 -- POLÍTICAS PARA peru_dnis
 DROP POLICY IF EXISTS "Permitir lectura de DNIs" ON peru_dnis;
@@ -152,6 +199,24 @@ DROP POLICY IF EXISTS "Lectura transacciones Yapo" ON yapo_transactions;
 CREATE POLICY "Lectura transacciones Yapo" ON yapo_transactions FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Registro transacciones Yapo" ON yapo_transactions;
 CREATE POLICY "Registro transacciones Yapo" ON yapo_transactions FOR ALL USING (true);
+
+-- POLÍTICAS PARA pnp_arrests
+DROP POLICY IF EXISTS "Lectura pnp_arrests" ON pnp_arrests;
+CREATE POLICY "Lectura pnp_arrests" ON pnp_arrests FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Gestion pnp_arrests" ON pnp_arrests;
+CREATE POLICY "Gestion pnp_arrests" ON pnp_arrests FOR ALL USING (true);
+
+-- POLÍTICAS PARA pnp_fines
+DROP POLICY IF EXISTS "Lectura pnp_fines" ON pnp_fines;
+CREATE POLICY "Lectura pnp_fines" ON pnp_fines FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Gestion pnp_fines" ON pnp_fines;
+CREATE POLICY "Gestion pnp_fines" ON pnp_fines FOR ALL USING (true);
+
+-- POLÍTICAS PARA pnp_sanctions
+DROP POLICY IF EXISTS "Lectura pnp_sanctions" ON pnp_sanctions;
+CREATE POLICY "Lectura pnp_sanctions" ON pnp_sanctions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Gestion pnp_sanctions" ON pnp_sanctions;
+CREATE POLICY "Gestion pnp_sanctions" ON pnp_sanctions FOR ALL USING (true);
 `;
 
 export function getSupabaseConfig(): SupabaseConfig {
@@ -174,7 +239,39 @@ export function saveSupabaseConfig(url: string, anonKey: string): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_URL_KEY, url.trim());
     localStorage.setItem(STORAGE_KEY_KEY, anonKey.trim());
+    // Auto-sync to server so other browsers/devices receive it
+    fetch('/api/supabase/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url.trim(), anonKey: anonKey.trim() }),
+    }).catch(() => {});
   }
+}
+
+/**
+ * Synchronize Supabase configuration from server if not already in localStorage
+ */
+export async function syncSupabaseConfig(): Promise<SupabaseConfig> {
+  let cfg = getSupabaseConfig();
+  if (cfg.configured) return cfg;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/supabase/config');
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.url && json.anonKey) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_URL_KEY, json.url.trim());
+            localStorage.setItem(STORAGE_KEY_KEY, json.anonKey.trim());
+          }
+          cachedClient = null;
+          return getSupabaseConfig();
+        }
+      }
+    } catch {}
+  }
+  return cfg;
 }
 
 let cachedClient: SupabaseClient | null = null;
@@ -216,7 +313,7 @@ export function getLocalDnis(): PeruDni[] {
 function saveLocalDni(dni: PeruDni): void {
   if (typeof window === 'undefined') return;
   try {
-    const current = getLocalDnis().filter((d) => d.discordId !== dni.discordId);
+    const current = getLocalDnis().filter((d) => d.discordId !== dni.discordId && d.dniNumber !== dni.dniNumber);
     current.unshift(dni);
     localStorage.setItem(LOCAL_DNIS_KEY, JSON.stringify(current));
   } catch (err) {
@@ -257,18 +354,45 @@ function mapSupabaseRow(data: any): PeruDni {
 }
 
 /**
- * Consulta si un usuario de Discord ya tramitó su DNI (en Supabase o en local)
+ * Consulta si un usuario ya tramitó su DNI en Supabase, servidor o local
+ * Soporta consulta por Discord ID, Roblox Username, Discord Username o N° DNI
  */
-export async function getUserDni(discordId: string): Promise<PeruDni | null> {
-  if (!discordId) return null;
+export async function getUserDni(
+  identifier: string,
+  secondaryIdentifier?: string
+): Promise<PeruDni | null> {
+  const clean = (identifier || '').trim().replace(/^@/, '');
+  const cleanSec = (secondaryIdentifier || '').trim().replace(/^@/, '');
+  if (!clean && !cleanSec) return null;
+
+  // Make sure configuration is synced from server
+  await syncSupabaseConfig();
 
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
+      const orConditions: string[] = [];
+      if (clean) {
+        orConditions.push(
+          `discord_id.eq.${clean}`,
+          `roblox_username.ilike.${clean}`,
+          `dni_number.eq.${clean}`,
+          `discord_username.ilike.${clean}`
+        );
+      }
+      if (cleanSec && cleanSec !== clean) {
+        orConditions.push(
+          `discord_id.eq.${cleanSec}`,
+          `roblox_username.ilike.${cleanSec}`,
+          `dni_number.eq.${cleanSec}`,
+          `discord_username.ilike.${cleanSec}`
+        );
+      }
+
       const { data, error } = await supabase
         .from('peru_dnis')
         .select('*')
-        .eq('discord_id', discordId)
+        .or(orConditions.join(','))
         .maybeSingle();
 
       if (!error && data) {
@@ -277,54 +401,81 @@ export async function getUserDni(discordId: string): Promise<PeruDni | null> {
         return mapped;
       }
     } catch (err) {
-      console.warn('Fallo consulta a Supabase, intentando con caché local:', err);
+      console.warn('Fallo consulta a Supabase, intentando con backend y caché local:', err);
     }
   }
 
+  // Check local cache
   const locals = getLocalDnis();
-  const foundLocal = locals.find((d) => d.discordId === discordId);
+  const foundLocal = locals.find(
+    (d) =>
+      (clean && (
+        d.discordId === clean ||
+        d.dniNumber === clean ||
+        d.robloxUsername?.toLowerCase() === clean.toLowerCase() ||
+        d.discordUsername?.toLowerCase() === clean.toLowerCase()
+      )) ||
+      (cleanSec && (
+        d.discordId === cleanSec ||
+        d.dniNumber === cleanSec ||
+        d.robloxUsername?.toLowerCase() === cleanSec.toLowerCase() ||
+        d.discordUsername?.toLowerCase() === cleanSec.toLowerCase()
+      ))
+  );
   if (foundLocal) return foundLocal;
 
-  // Fallback to Backend Server API (synced with Discord Bot)
+  // Fallback to Backend Server API (which also queries Supabase in real-time)
   if (typeof window !== 'undefined') {
-    try {
-      const res = await fetch(`/api/bot/dni/${encodeURIComponent(discordId)}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.found && json.dni) {
-          const s = json.dni;
-          const mapped: PeruDni = {
-            id: `server-${s.dniNumber}`,
-            discordId: s.discordId,
-            discordUsername: s.robloxUsername || 'Ciudadano',
-            discordDisplayName: s.fullName || '',
-            robloxUsername: s.robloxUsername,
-            robloxUserId: '',
-            dniNumber: s.dniNumber,
-            verifyDigit: '7',
-            fullName: s.fullName,
-            firstSurname: s.firstSurname || '',
-            secondSurname: s.secondSurname || '',
-            givenNames: s.prenames || '',
-            birthDate: s.birthDate || '2000-01-01',
-            issueDate: '18 OCT 2026',
-            expiryDate: '18 OCT 2034',
-            gender: (s.gender as 'M' | 'F') || 'M',
-            civilStatus: 'S',
-            ubigeo: '150101',
-            photoUrl: s.photoUrl || '',
-            signatureText: `${(s.prenames || 'A')[0] || 'C'}.${s.firstSurname || 'PERU'}`,
-            status: (s.status as any) || 'active',
-            createdAt: s.createdAt || new Date().toISOString(),
-          };
-          saveLocalDni(mapped);
-          return mapped;
+    const targets = [clean, cleanSec].filter(Boolean);
+    for (const t of targets) {
+      try {
+        const res = await fetch(`/api/bot/dni/${encodeURIComponent(t)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.found && json.dni) {
+            const s = json.dni;
+            const mapped: PeruDni = {
+              id: `server-${s.dniNumber}`,
+              discordId: s.discordId,
+              discordUsername: s.discordUsername || s.robloxUsername || 'Ciudadano',
+              discordDisplayName: s.fullName || '',
+              robloxUsername: s.robloxUsername,
+              robloxUserId: '',
+              dniNumber: s.dniNumber,
+              verifyDigit: '7',
+              fullName: s.fullName,
+              firstSurname: s.firstSurname || '',
+              secondSurname: s.secondSurname || '',
+              givenNames: s.prenames || '',
+              birthDate: s.birthDate || '2000-01-01',
+              issueDate: s.issueDate || '18 OCT 2026',
+              expiryDate: s.expiryDate || '18 OCT 2034',
+              gender: (s.gender as 'M' | 'F') || 'M',
+              civilStatus: (s.civilStatus as any) || 'S',
+              ubigeo: '150101',
+              photoUrl: s.photoUrl || '',
+              signatureText: `${(s.prenames || 'A')[0] || 'C'}.${s.firstSurname || 'PERU'}`,
+              status: (s.status as any) || 'active',
+              createdAt: s.createdAt || new Date().toISOString(),
+            };
+            saveLocalDni(mapped);
+            return mapped;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   return null;
+}
+
+/**
+ * Consulta directa por cualquier término (Roblox username, Discord ID, N° DNI)
+ */
+export async function lookupCitizenDni(query: string): Promise<PeruDni | null> {
+  const clean = (query || '').trim().replace(/^@/, '');
+  if (!clean) return null;
+  return getUserDni(clean);
 }
 
 /**

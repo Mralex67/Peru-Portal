@@ -14,6 +14,7 @@ export const Navbar: React.FC = () => {
     requestAdminAccess,
     setIsDiscordAuthOpen,
     setIsWhitelistInfoOpen,
+    openPnpTablet,
   } = useServer();
 
   const [soundOn, setSoundOn] = useState(isSoundEnabled());
@@ -68,14 +69,24 @@ export const Navbar: React.FC = () => {
             <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
             <span>Banco YA P</span>
           </a>
-          <a
-            href="#trabajos"
-            className="hover:text-emerald-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 text-emerald-400 font-bold"
+          {/* PNP Police MDT Button */}
+          <button
+            type="button"
+            onClick={openPnpTablet}
+            className="hover:scale-105 active:scale-95 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-950 via-[#0a1e24] to-slate-900 border border-emerald-500/50 hover:border-emerald-400 text-emerald-300 hover:text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-950/40 cursor-pointer group"
+            title="Terminal Móvil Policial PNP (MDT)"
           >
-            <Briefcase className="w-3.5 h-3.5" />
-            <span>Foros de Trabajo</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-emerald-950/80 text-[9px] text-emerald-300 border border-emerald-500/40 uppercase">Pronto</span>
-          </a>
+            <img
+              src="/assets/pnp-emblem.png"
+              alt="PNP"
+              className="w-5 h-5 object-contain group-hover:rotate-6 transition-transform"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <span className="font-sans font-black text-white tracking-wider">PNP</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </button>
           <a
             href="#album"
             className="hover:text-white transition-colors hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] whitespace-nowrap shrink-0 flex items-center gap-1.5 text-amber-400 hover:text-amber-300"
@@ -225,17 +236,27 @@ export const Navbar: React.FC = () => {
             <YapoLogo size="sm" withContainer={false} className="w-4 h-4" />
             <span>Banco YA P (S/.)</span>
           </a>
-          <a
-            href="#trabajos"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block text-emerald-400 hover:text-emerald-300 font-semibold py-1 flex items-center justify-between"
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              openPnpTablet();
+            }}
+            className="w-full text-left py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-950/90 to-slate-900 border border-emerald-500/40 text-emerald-300 hover:text-white font-bold text-xs flex items-center justify-between"
           >
-            <div className="flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-emerald-400" />
-              <span>Foros de Trabajo</span>
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/assets/pnp-emblem.png"
+                alt="PNP"
+                className="w-5 h-5 object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <span className="font-sans font-black text-white tracking-wider">MDT POLICIAL (PNP)</span>
             </div>
-            <span className="px-1.5 py-0.2 rounded-full bg-emerald-950/80 text-[9px] text-emerald-300 border border-emerald-500/40 uppercase">Pronto</span>
-          </a>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          </button>
           <a
             href="#album"
             onClick={() => setMobileMenuOpen(false)}

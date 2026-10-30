@@ -161,10 +161,124 @@ const commands = [
         .setRequired(false)
     ),
 
-  // 8. /ayuda
+  // 8. /arrestar (Policía Nacional del Perú - Rol 1555384968086032394)
+  new SlashCommandBuilder()
+    .setName('arrestar')
+    .setDescription('Registra un arresto policial oficial en SIPOL (Solo PNP)')
+    .addStringOption((option) =>
+      option
+        .setName('usuario')
+        .setDescription('Usuario de Roblox o mención de Discord del detenido (ej. @Tsaonomori)')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('cargos')
+        .setDescription('Cargos o delitos imputados (ej. Intento de Homicidio / Art. 106)')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('tiempo')
+        .setDescription('Tiempo de condena (ej. 3m, 5m, 10m)')
+        .setRequired(true)
+    )
+    .addNumberOption((option) =>
+      option
+        .setName('fianza')
+        .setDescription('Monto de fianza en Soles (ej. 5000)')
+        .setRequired(false)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('oficial')
+        .setDescription('Oficial a cargo (opcional, por defecto tu usuario)')
+        .setRequired(false)
+    )
+    .addAttachmentOption((option) =>
+      option
+        .setName('archivo')
+        .setDescription('Foto de evidencia o ficha del arresto (Mugshot en comisaría)')
+        .setRequired(false)
+    ),
+
+  // 9. /multar (Policía Nacional del Perú - Rol 1555384968086032394)
+  new SlashCommandBuilder()
+    .setName('multar')
+    .setDescription('Emite una multa de tránsito oficial a un usuario (Solo PNP)')
+    .addStringOption((option) =>
+      option
+        .setName('usuario')
+        .setDescription('Usuario sancionado de Roblox o mención de Discord')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('motivo')
+        .setDescription('Motivo de la infracción (ej. Conduccion temeraria, Pasar semáforo en rojo)')
+        .setRequired(true)
+    )
+    .addNumberOption((option) =>
+      option
+        .setName('monto')
+        .setDescription('Monto de la multa en Soles S/. (ej. 700)')
+        .setRequired(true)
+    ),
+
+  // 10. /antecedentes
+  new SlashCommandBuilder()
+    .setName('antecedentes')
+    .setDescription('Consulta antecedentes penales, arrestos, multas y licencia de conducir')
+    .addStringOption((option) =>
+      option
+        .setName('usuario')
+        .setDescription('Usuario de Roblox, DNI o mención de Discord a consultar')
+        .setRequired(true)
+    ),
+
+  // 11. /sancionar (Staff / Moderación - Solo Discord)
+  new SlashCommandBuilder()
+    .setName('sancionar')
+    .setDescription('Aplica una sanción administrativa en Discord a un usuario (Solo Staff)')
+    .addUserOption((option) =>
+      option
+        .setName('usuario')
+        .setDescription('Usuario de Discord a sancionar')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('motivo')
+        .setDescription('Motivo detallado de la sanción')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('pruebas')
+        .setDescription('Enlace o descripción de pruebas (opcional)')
+        .setRequired(false)
+    ),
+
+  // 12. /sanciones (Staff / Consulta - Solo Discord)
+  new SlashCommandBuilder()
+    .setName('sanciones')
+    .setDescription('Consulta las sanciones administrativas registradas de un usuario en Discord')
+    .addUserOption((option) =>
+      option
+        .setName('usuario')
+        .setDescription('Usuario de Discord a consultar')
+        .setRequired(true)
+    ),
+
+  // 13. /ticket-panel (Deploy de tickets)
+  new SlashCommandBuilder()
+    .setName('ticket-panel')
+    .setDescription('Despliega el panel interactivo de Ticket Master Pro en el canal actual'),
+
+  // 14. /ayuda
   new SlashCommandBuilder()
     .setName('ayuda')
-    .setDescription('Guía de comandos ciudadanos de PE:RP y Banco YA P'),
+    .setDescription('Guía de comandos ciudadanos de PE:RP, Banco YA P y PNP'),
 ].map((command) => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(token);

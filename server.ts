@@ -9,6 +9,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -98,6 +99,87 @@ app.post('/api/server-config', (req, res) => {
     delete (merged as any).config; // prevent nested config property
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2));
     return res.json({ success: true, config: merged });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// SUPABASE SHARED CONFIGURATION & LIVE SYNC
+// ==========================================
+const SUPABASE_FILE = path.resolve(__dirname, '.data/supabase_config.json');
+let serverSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+let serverSupabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+
+try {
+  if (fs.existsSync(SUPABASE_FILE)) {
+    const s = JSON.parse(fs.readFileSync(SUPABASE_FILE, 'utf-8'));
+    if (s.url) serverSupabaseUrl = s.url;
+    if (s.anonKey) serverSupabaseAnonKey = s.anonKey;
+  }
+} catch (e) {}
+
+let serverSupabaseClient: any = null;
+function getServerSupabase() {
+  if (serverSupabaseClient) return serverSupabaseClient;
+  if (serverSupabaseUrl && serverSupabaseAnonKey) {
+    try {
+      serverSupabaseClient = createClient(serverSupabaseUrl, serverSupabaseAnonKey, {
+        auth: { persistSession: false },
+      });
+      return serverSupabaseClient;
+    } catch (e) {
+      console.error('Error inicializando Supabase en el servidor:', e);
+    }
+  }
+  return null;
+}
+
+// Get shared Supabase credentials for web clients
+app.get('/api/supabase/config', (req, res) => {
+  res.json({
+    configured: Boolean(serverSupabaseUrl && serverSupabaseAnonKey),
+    url: serverSupabaseUrl,
+    anonKey: serverSupabaseAnonKey,
+  });
+});
+
+// Save Supabase credentials from admin panel permanently
+app.post('/api/supabase/config', (req, res) => {
+  try {
+    const { url, anonKey } = req.body;
+    if (typeof url === 'string') serverSupabaseUrl = url.trim();
+    if (typeof anonKey === 'string') serverSupabaseAnonKey = anonKey.trim();
+
+    fs.mkdirSync(path.dirname(SUPABASE_FILE), { recursive: true });
+    fs.writeFileSync(
+      SUPABASE_FILE,
+      JSON.stringify({ url: serverSupabaseUrl, anonKey: serverSupabaseAnonKey, updatedAt: new Date().toISOString() }, null, 2)
+    );
+
+    // Also sync into discord-bot/config.env if exists
+    try {
+      const botEnvFile = path.resolve(__dirname, 'discord-bot/config.env');
+      if (fs.existsSync(botEnvFile)) {
+        let content = fs.readFileSync(botEnvFile, 'utf-8');
+        content = content.replace(/^SUPABASE_URL=.*$/m, `SUPABASE_URL=${serverSupabaseUrl}`);
+        content = content.replace(/^SUPABASE_ANON_KEY=.*$/m, `SUPABASE_ANON_KEY=${serverSupabaseAnonKey}`);
+        fs.writeFileSync(botEnvFile, content);
+      }
+    } catch (botErr) {
+      console.warn('Notice updating discord-bot/config.env:', botErr);
+    }
+
+    serverSupabaseClient = null;
+    getServerSupabase();
+
+    return res.json({
+      success: true,
+      configured: Boolean(serverSupabaseUrl && serverSupabaseAnonKey),
+      url: serverSupabaseUrl,
+      anonKey: serverSupabaseAnonKey,
+      message: 'Credenciales de Supabase guardadas y sincronizadas para todos los navegadores y el Bot.',
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -1135,17 +1217,62 @@ app.post('/api/bot/dni/create', async (req, res) => {
 });
 
 // 2. Lookup Citizen DNI (by DNI number, Discord ID, or Roblox username)
-app.get('/api/bot/dni/:identifier', (req, res) => {
+app.get('/api/bot/dni/:identifier', async (req, res) => {
   const { identifier } = req.params;
   const clean = identifier.trim().toLowerCase().replace(/^@/, '');
   const data = loadBankSystem();
 
-  const found = data.dnis.find(
+  let found = data.dnis.find(
     (d) =>
-      d.dniNumber.toLowerCase() === clean ||
-      d.discordId.toLowerCase() === clean ||
-      d.robloxUsername.toLowerCase() === clean
+      d.dniNumber?.toLowerCase() === clean ||
+      d.discordId?.toLowerCase() === clean ||
+      d.robloxUsername?.toLowerCase() === clean
   );
+
+  // If not found in local system, query Supabase cloud database
+  const supa = getServerSupabase();
+  if (supa && !found) {
+    try {
+      const { data: supaRow } = await supa
+        .from('peru_dnis')
+        .select('*')
+        .or(`discord_id.eq.${clean},roblox_username.ilike.${clean},dni_number.eq.${clean},discord_username.ilike.${clean}`)
+        .maybeSingle();
+
+      if (supaRow) {
+        found = {
+          dniNumber: supaRow.dni_number,
+          discordId: supaRow.discord_id,
+          robloxUsername: supaRow.roblox_username,
+          fullName: supaRow.full_name,
+          firstSurname: supaRow.first_surname || '',
+          secondSurname: supaRow.second_surname || '',
+          prenames: supaRow.given_names || '',
+          birthDate: supaRow.birth_date || '2000-01-01',
+          gender: supaRow.gender || 'M',
+          civilStatus: supaRow.civil_status || 'SOLTERO',
+          organDonation: supaRow.organ_donation || 'NO',
+          department: 'LIMA',
+          province: 'LIMA',
+          district: 'MIRAFLORES',
+          photoUrl: supaRow.photo_url || '',
+          status: supaRow.status || 'active',
+          createdAt: supaRow.created_at || new Date().toISOString(),
+        };
+
+        // Cache into local database for fast subsequent loads
+        const idx = data.dnis.findIndex((d) => d.dniNumber === found.dniNumber);
+        if (idx >= 0) {
+          data.dnis[idx] = found;
+        } else {
+          data.dnis.unshift(found);
+        }
+        saveBankSystem(data);
+      }
+    } catch (supaErr) {
+      console.warn('Aviso consultando Supabase en backend para DNI:', supaErr);
+    }
+  }
 
   if (!found) {
     return res.json({
@@ -1933,6 +2060,361 @@ app.get('/api/bot/package-files', (req, res) => {
     }
 
     res.json({ success: true, files: fileContents });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// SISTEMA PNP SIPOL & TRANSITO (TABLET Y DISCORD)
+// ==========================================
+const PNP_FILE = path.resolve(__dirname, '.data/pnp_system.json');
+
+interface PnpSystemData {
+  arrests: any[];
+  fines: any[];
+  sanctions: any[];
+  verifiedOfficers: string[];
+  licensedUsers: string[];
+}
+
+function loadPnpSystem(): PnpSystemData {
+  try {
+    if (!fs.existsSync(PNP_FILE)) {
+      const initial: PnpSystemData = {
+        arrests: [
+          {
+            id: 'arr-1',
+            code: 'A-0017',
+            citizenIdentifier: 'Tsaonomori',
+            citizenName: '『ST-P』 Tsaonomori',
+            charges: 'Intento de Homicidio',
+            durationText: '3m (3 minutos)',
+            durationMinutes: 3,
+            bailAmount: 5000,
+            officerName: '@Jhair',
+            officerDiscordId: 'jhair',
+            evidenceUrl: '/assets/aistudio/image_26cb457c.png',
+            status: 'cumplido',
+            createdAt: '2026-10-24T22:45:00.000Z',
+          },
+          {
+            id: 'arr-2',
+            code: 'A-0011',
+            citizenIdentifier: 'Tsaonomori',
+            citizenName: '『ST-P』 Tsaonomori',
+            charges: 'Intento de asesinato, tener en posecion arma de fuego, darse a la fuga.',
+            durationText: '5m',
+            durationMinutes: 5,
+            bailAmount: 15000,
+            officerName: '@Jhair',
+            officerDiscordId: 'jhair',
+            status: 'cumplido',
+            createdAt: '2026-10-17T12:00:00.000Z',
+          },
+          {
+            id: 'arr-3',
+            code: 'A-0009',
+            citizenIdentifier: 'Tsaonomori',
+            citizenName: '『ST-P』 Tsaonomori',
+            charges: 'Art.25',
+            durationText: '5m',
+            durationMinutes: 5,
+            bailAmount: 2,
+            officerName: '@Jhair',
+            officerDiscordId: 'jhair',
+            status: 'cumplido',
+            createdAt: '2026-10-16T10:00:00.000Z',
+          },
+        ],
+        fines: [
+          {
+            id: 'fine-1',
+            code: 'M-0005',
+            citizenIdentifier: '.trakeandoloz',
+            citizenName: '@ [.trakeandoloz]',
+            amount: 700,
+            status: 'pendiente',
+            reason: 'Conduccion temeraria',
+            officerName: 'jhair9813',
+            officerDiscordId: 'jhair9813',
+            createdAt: '2026-10-24T17:25:00.000Z',
+          },
+          {
+            id: 'fine-2',
+            code: 'M-0004',
+            citizenIdentifier: 'Tsaonomori',
+            citizenName: '『ST-P』 Tsaonomori',
+            amount: 500,
+            status: 'pagada',
+            reason: 'No portar licencia de conducir',
+            officerName: 'gauxchio_murga',
+            officerDiscordId: 'gauxchio_murga',
+            createdAt: '2026-10-17T15:00:00.000Z',
+          },
+          {
+            id: 'fine-3',
+            code: 'M-0003',
+            citizenIdentifier: 'Tsaonomori',
+            citizenName: '『ST-P』 Tsaonomori',
+            amount: 300,
+            status: 'pagada',
+            reason: 'Pasar un semaforo n rojo',
+            officerName: 'gauxchio_murga',
+            officerDiscordId: 'gauxchio_murga',
+            createdAt: '2026-10-17T14:30:00.000Z',
+          },
+          {
+            id: 'fine-4',
+            code: 'M-0002',
+            citizenIdentifier: 'Tsaonomori',
+            citizenName: '『ST-P』 Tsaonomori',
+            amount: 100,
+            status: 'pagada',
+            reason: 'Exceso de velocidad',
+            officerName: 'gauxchio_murga',
+            officerDiscordId: 'gauxchio_murga',
+            createdAt: '2026-10-17T14:00:00.000Z',
+          },
+        ],
+        sanctions: [],
+        verifiedOfficers: ['1555384968086032394', 'jhair', 'jhair9813', 'admin'],
+        licensedUsers: ['1556723203114668082', '61187362818282827', 'jhair9813'],
+      };
+      const dir = path.dirname(PNP_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(PNP_FILE, JSON.stringify(initial, null, 2));
+      return initial;
+    }
+    const raw = fs.readFileSync(PNP_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading PNP system data:', e);
+    return { arrests: [], fines: [], sanctions: [], verifiedOfficers: [], licensedUsers: [] };
+  }
+}
+
+function savePnpSystem(data: PnpSystemData) {
+  try {
+    const dir = path.dirname(PNP_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(PNP_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('Error saving PNP system data:', e);
+  }
+}
+
+// 1. Get all arrests
+app.get('/api/pnp/arrests', (req, res) => {
+  const data = loadPnpSystem();
+  res.json({ success: true, arrests: data.arrests });
+});
+
+// 2. Register arrest (SIPOL)
+app.post('/api/pnp/arrests', (req, res) => {
+  try {
+    const { citizenIdentifier, citizenName, charges, durationText, bailAmount = 0, officerName, evidenceUrl } = req.body;
+    if (!citizenIdentifier || !charges) {
+      return res.status(400).json({ success: false, error: 'Falta usuario o cargos del arresto' });
+    }
+
+    const data = loadPnpSystem();
+    const nextNum = data.arrests.length + 18;
+    const code = `A-00${nextNum}`;
+
+    const newArrest = {
+      id: `arr-${Date.now()}`,
+      code,
+      citizenIdentifier: citizenIdentifier.trim().replace(/^@/, ''),
+      citizenName: citizenName?.trim() || `@ ${citizenIdentifier.trim().replace(/^@/, '')}`,
+      charges: charges.trim(),
+      durationText: durationText?.trim() || '3m (3 minutos)',
+      durationMinutes: parseInt(durationText) || 3,
+      bailAmount: Number(bailAmount) || 0,
+      officerName: officerName?.trim() || '@Oficial_PNP',
+      evidenceUrl: evidenceUrl || '',
+      status: 'activo',
+      createdAt: new Date().toISOString(),
+    };
+
+    data.arrests.unshift(newArrest);
+    savePnpSystem(data);
+
+    res.json({ success: true, arrest: newArrest });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Get all fines
+app.get('/api/pnp/fines', (req, res) => {
+  const data = loadPnpSystem();
+  res.json({ success: true, fines: data.fines });
+});
+
+// 4. Register fine
+app.post('/api/pnp/fines', (req, res) => {
+  try {
+    const { citizenIdentifier, citizenName, reason, amount, officerName } = req.body;
+    if (!citizenIdentifier || !reason || amount === undefined) {
+      return res.status(400).json({ success: false, error: 'Falta usuario, motivo o monto de la multa' });
+    }
+
+    const data = loadPnpSystem();
+    const nextNum = data.fines.length + 6;
+    const code = `M-00${nextNum < 10 ? '0' + nextNum : nextNum}`;
+
+    const newFine = {
+      id: `fine-${Date.now()}`,
+      code,
+      citizenIdentifier: citizenIdentifier.trim().replace(/^@/, ''),
+      citizenName: citizenName?.trim() || `@ [${citizenIdentifier.trim().replace(/^@/, '')}]`,
+      reason: reason.trim(),
+      amount: Number(amount) || 100,
+      status: 'pendiente',
+      officerName: officerName?.trim() || 'Oficial_PNP',
+      createdAt: new Date().toISOString(),
+    };
+
+    data.fines.unshift(newFine);
+    savePnpSystem(data);
+
+    res.json({ success: true, fine: newFine });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Pay fine
+app.put('/api/pnp/fines/:code/pay', (req, res) => {
+  const { code } = req.params;
+  const data = loadPnpSystem();
+  const fine = data.fines.find((f) => f.code.toLowerCase() === code.toLowerCase());
+  if (!fine) {
+    return res.status(404).json({ success: false, error: 'Multa no encontrada' });
+  }
+  fine.status = 'pagada';
+  fine.paidAt = new Date().toISOString();
+  savePnpSystem(data);
+  res.json({ success: true, fine });
+});
+
+// 6. Get Antecedentes & Citizen Record (matching image 3)
+app.get('/api/pnp/records/:identifier', (req, res) => {
+  const { identifier } = req.params;
+  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const data = loadPnpSystem();
+  const bankData = loadBankSystem();
+
+  // Match citizen by identifier in DNI, Roblox, or Discord
+  const dniMatch = bankData.dnis.find(
+    (d: any) =>
+      d.dniNumber?.toLowerCase() === clean ||
+      d.discordId?.toLowerCase() === clean ||
+      d.robloxUsername?.toLowerCase() === clean
+  );
+
+  const matchedArrests = data.arrests.filter(
+    (a) =>
+      a.citizenIdentifier.toLowerCase() === clean ||
+      a.citizenName.toLowerCase().includes(clean) ||
+      (dniMatch && (a.citizenIdentifier.toLowerCase() === dniMatch.robloxUsername.toLowerCase() || a.citizenIdentifier === dniMatch.dniNumber))
+  );
+
+  const matchedFines = data.fines.filter(
+    (f) =>
+      f.citizenIdentifier.toLowerCase() === clean ||
+      f.citizenName.toLowerCase().includes(clean) ||
+      (dniMatch && (f.citizenIdentifier.toLowerCase() === dniMatch.robloxUsername.toLowerCase() || f.citizenIdentifier === dniMatch.dniNumber))
+  );
+
+  const unpaidFines = matchedFines.filter((f) => f.status === 'pendiente');
+  const unpaidTotal = unpaidFines.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+  const activeArrests = matchedArrests.filter((a) => a.status === 'activo');
+
+  // Check Driver License (Role 1556723203114668082 or known registered)
+  const hasLicense =
+    data.licensedUsers.some((u) => u.toLowerCase() === clean || (dniMatch && u === dniMatch.discordId)) ||
+    clean === '61187362818282827' ||
+    clean === '1556723203114668082';
+
+  const hasRecords = matchedArrests.length > 0 || matchedFines.length > 0;
+
+  res.json({
+    success: true,
+    identifier,
+    citizenName: dniMatch ? dniMatch.fullName : identifier,
+    robloxUsername: dniMatch ? dniMatch.robloxUsername : identifier,
+    dniNumber: dniMatch ? dniMatch.dniNumber : null,
+    hasRecords,
+    summary: {
+      statusText: hasRecords ? 'Con antecedentes' : 'Limpio',
+      multasCount: matchedFines.length,
+      multasPendientes: unpaidFines.length,
+      multasTotalPorPagar: unpaidTotal,
+      arrestosCount: matchedArrests.length,
+      arrestosActivos: activeArrests.length,
+      hasLicense,
+      licenseRole: '1556723203114668082',
+    },
+    arrests: matchedArrests,
+    fines: matchedFines,
+  });
+});
+
+// 7. Verify Police Officer Role & Badge (Role 1555384968086032394)
+app.get('/api/pnp/verify-role/:identifier', (req, res) => {
+  const { identifier } = req.params;
+  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const data = loadPnpSystem();
+
+  const isOfficer =
+    clean === '1555384968086032394' ||
+    clean === '105' ||
+    clean === 'pnp105' ||
+    clean === 'st-p' ||
+    data.verifiedOfficers.some((o) => o.toLowerCase() === clean);
+
+  res.json({
+    success: true,
+    isOfficer,
+    policeRoleId: '1555384968086032394',
+    badge: isOfficer ? `PNP-OFICIAL-${clean.slice(0, 6).toUpperCase()}` : null,
+  });
+});
+
+// 8. Discord Only: Sanctions (/sancionar, /sanciones)
+app.get('/api/pnp/sanctions/:userId', (req, res) => {
+  const { userId } = req.params;
+  const clean = userId.trim().toLowerCase().replace(/^@/, '');
+  const data = loadPnpSystem();
+
+  const userSanctions = data.sanctions.filter((s) => s.targetUserId.toLowerCase() === clean);
+  res.json({ success: true, sanctions: userSanctions });
+});
+
+app.post('/api/pnp/sanctions', (req, res) => {
+  try {
+    const { targetUserId, targetUsername, moderatorName, reason, evidenceUrl } = req.body;
+    if (!targetUserId || !reason) {
+      return res.status(400).json({ success: false, error: 'Faltan parámetros de sanción' });
+    }
+
+    const data = loadPnpSystem();
+    const sanction = {
+      id: `sanc-${Date.now()}`,
+      targetUserId: targetUserId.trim(),
+      targetUsername: targetUsername?.trim() || targetUserId.trim(),
+      moderatorName: moderatorName?.trim() || 'Staff PE:RP',
+      reason: reason.trim(),
+      evidenceUrl: evidenceUrl || '',
+      createdAt: new Date().toISOString(),
+    };
+
+    data.sanctions.unshift(sanction);
+    savePnpSystem(data);
+
+    res.json({ success: true, sanction });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

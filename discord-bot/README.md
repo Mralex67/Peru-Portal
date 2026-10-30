@@ -15,9 +15,19 @@ Este bot conecta la economía del servidor de Discord con el **Banco YA P** y el
 | `/retirar` | Retira dinero de Banco YA P a tu mano (efectivo en mano) | `/retirar monto:30` |
 | `/depositar` | Deposita dinero de tu mano al Banco YA P | `/depositar monto:20` |
 | `/historial` | Muestra los últimos movimientos de tu cuenta | `/historial` |
+| `/arrestar` | Registra arresto policial SIPOL con foto mugshot (Rol PNP: `1555384968086032394`) | `/arrestar usuario:Tsaonomori cargos:Intento Homicidio tiempo:3m fianza:5000` |
+| `/multar` | Emite una multa de tránsito oficial (Rol PNP: `1555384968086032394`) | `/multar usuario:.trakeandoloz motivo:Conduccion temeraria monto:700` |
+| `/antecedentes` | Consulta antecedentes, multas, arrestos y Licencia de Conducir (`1556723203114668082`) | `/antecedentes usuario:Tsaonomori` |
+| `/sancionar` | Sanción administrativa interna en Discord (Solo Staff) | `/sancionar usuario:@User motivo:Toxicidad pruebas:link` |
+| `/sanciones` | Consulta historial de sanciones en Discord de un usuario | `/sanciones usuario:@User` |
+| `$ticket-master-pro11896767-proro` | Comando secreto en el canal para desplegar el panel de Tickets | Escribir en cualquier canal de Discord |
 | `/ayuda` | Despliega la guía de comandos en Discord | `/ayuda` |
 
-> 🔒 **Nota de Seguridad:** Todos los comandos y funciones administrativas (congelar cuentas, reiniciar fondos, editar saldos, cambiar fotos) se realizan **exclusivamente desde el Panel de Administración Web**, no en el bot de Discord.
+> 👮 **Roles Oficiales del Sistema:**
+> - **Policía Nacional del Perú (PNP):** `1555384968086032394` (permite usar `/arrestar`, `/multar` y acceder a canales policiales).
+> - **Licencia de Conducir Vigente:** `1556723203114668082` (se refleja automáticamente en `/antecedentes` y en la Tablet SIPOL).
+>
+> 🔒 **Nota de Seguridad:** Las sanciones administrativas y tickets se gestionan de forma segura y privada.
 
 ---
 

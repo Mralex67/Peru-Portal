@@ -49,6 +49,14 @@ interface ServerContextType {
   setIsDiscordAuthOpen: (open: boolean) => void;
   isWhitelistInfoOpen: boolean;
   setIsWhitelistInfoOpen: (open: boolean) => void;
+  isPnpTabletOpen: boolean;
+  setIsPnpTabletOpen: (open: boolean) => void;
+  isPnpAuthenticated: boolean;
+  setIsPnpAuthenticated: (auth: boolean) => void;
+  pnpOfficerBadge: string;
+  setPnpOfficerBadge: (badge: string) => void;
+  openPnpTablet: () => void;
+  closePnpTablet: () => void;
 }
 
 const ServerContext = createContext<ServerContextType | undefined>(undefined);
@@ -139,6 +147,19 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Other modals
   const [isDiscordAuthOpen, setIsDiscordAuthOpen] = useState(false);
   const [isWhitelistInfoOpen, setIsWhitelistInfoOpen] = useState(false);
+
+  // PNP Police MDT Tablet State
+  const [isPnpTabletOpen, setIsPnpTabletOpen] = useState(false);
+  const [isPnpAuthenticated, setIsPnpAuthenticated] = useState(false);
+  const [pnpOfficerBadge, setPnpOfficerBadge] = useState('PNP-0105');
+
+  const openPnpTablet = () => {
+    setIsPnpTabletOpen(true);
+  };
+
+  const closePnpTablet = () => {
+    setIsPnpTabletOpen(false);
+  };
 
   // Fetch persisted server configuration from backend on startup
   useEffect(() => {
@@ -448,6 +469,14 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsDiscordAuthOpen,
         isWhitelistInfoOpen,
         setIsWhitelistInfoOpen,
+        isPnpTabletOpen,
+        setIsPnpTabletOpen,
+        isPnpAuthenticated,
+        setIsPnpAuthenticated,
+        pnpOfficerBadge,
+        setPnpOfficerBadge,
+        openPnpTablet,
+        closePnpTablet,
       }}
     >
       {children}

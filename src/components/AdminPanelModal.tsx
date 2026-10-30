@@ -39,6 +39,7 @@ import { OFFICIAL_DNI_TEMPLATE_BASE64 } from '../assets/dniTemplateBase64';
 import {
   getSupabaseConfig,
   saveSupabaseConfig,
+  syncSupabaseConfig,
   SUPABASE_SQL_INIT,
   COMBINED_SUPABASE_SQL,
   getAllRegisteredDnis,
@@ -294,9 +295,10 @@ export const AdminPanelModal: React.FC = () => {
       .catch(() => {});
 
     // Load Supabase configuration & registered DNIs
-    const sConf = getSupabaseConfig();
-    setSupabaseUrl(sConf.url);
-    setSupabaseKey(sConf.anonKey);
+    syncSupabaseConfig().then((sConf) => {
+      setSupabaseUrl(sConf.url);
+      setSupabaseKey(sConf.anonKey);
+    }).catch(() => {});
     getAllRegisteredDnis().then(setRegisteredDnis).catch(() => {});
 
     // Synchronize form with latest server config whenever opening panel

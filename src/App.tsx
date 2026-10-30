@@ -14,6 +14,7 @@ import { AdminPanelModal } from './components/AdminPanelModal';
 import { AdminPasswordModal } from './components/AdminPasswordModal';
 import { DiscordAuthModal } from './components/DiscordAuthModal';
 import { WhitelistInfoModal } from './components/WhitelistInfoModal';
+import { PnpTabletModal } from './components/PnpTabletModal';
 
 function MainApp() {
   return (
@@ -56,6 +57,7 @@ function MainApp() {
       <AdminPanelModal />
       <DiscordAuthModal />
       <WhitelistInfoModal />
+      <PnpTabletModal />
     </div>
   );
 }
