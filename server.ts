@@ -2076,22 +2076,44 @@ const PNP_ROLE_ID = '1555384968086032394';
 const LICENSE_ROLE_ID = '1556723203114668082';
 
 function loadSecretsVault() {
+  let fileVault: any = {};
   try {
     if (fs.existsSync(SECRETS_VAULT_FILE)) {
-      return JSON.parse(fs.readFileSync(SECRETS_VAULT_FILE, 'utf-8'));
+      fileVault = JSON.parse(fs.readFileSync(SECRETS_VAULT_FILE, 'utf-8'));
     }
   } catch {}
-  return {
-    supabaseUrl: serverSupabaseUrl,
-    supabaseAnonKey: serverSupabaseAnonKey,
-    discordToken: process.env.DISCORD_TOKEN || '',
-    discordClientId: discordClientId,
-    discordClientSecret: discordClientSecret,
-    discordGuildId: GUILD_PERP_ID,
-    pnpRoleId: PNP_ROLE_ID,
-    licenseRoleId: LICENSE_ROLE_ID,
-    erlcServerKey: erlcServerKey,
+
+  // Prioritize environment variables injected by Google AI Studio Secrets (process.env)
+  const envSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const envSupabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const envDiscordToken = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
+  const envDiscordClientId = process.env.DISCORD_CLIENT_ID || process.env.VITE_DISCORD_CLIENT_ID;
+  const envDiscordClientSecret = process.env.DISCORD_CLIENT_SECRET;
+  const envDiscordGuildId = process.env.DISCORD_GUILD_ID;
+  const envPnpRoleId = process.env.PNP_ROLE_ID;
+  const envLicenseRoleId = process.env.LICENSE_ROLE_ID;
+  const envErlcKey = process.env.ERLC_SERVER_KEY || process.env.ERLC_API_KEY;
+
+  const result = {
+    supabaseUrl: envSupabaseUrl || fileVault.supabaseUrl || serverSupabaseUrl || '',
+    supabaseAnonKey: envSupabaseAnonKey || fileVault.supabaseAnonKey || serverSupabaseAnonKey || '',
+    discordToken: envDiscordToken || fileVault.discordToken || '',
+    discordClientId: envDiscordClientId || fileVault.discordClientId || discordClientId || '',
+    discordClientSecret: envDiscordClientSecret || fileVault.discordClientSecret || discordClientSecret || '',
+    discordGuildId: envDiscordGuildId || fileVault.discordGuildId || GUILD_PERP_ID,
+    pnpRoleId: envPnpRoleId || fileVault.pnpRoleId || PNP_ROLE_ID,
+    licenseRoleId: envLicenseRoleId || fileVault.licenseRoleId || LICENSE_ROLE_ID,
+    erlcServerKey: envErlcKey || fileVault.erlcServerKey || erlcServerKey || '',
   };
+
+  // Keep in-memory server singletons synchronized
+  if (result.supabaseUrl) serverSupabaseUrl = result.supabaseUrl;
+  if (result.supabaseAnonKey) serverSupabaseAnonKey = result.supabaseAnonKey;
+  if (result.discordClientId) discordClientId = result.discordClientId;
+  if (result.discordClientSecret) discordClientSecret = result.discordClientSecret;
+  if (result.erlcServerKey) erlcServerKey = result.erlcServerKey;
+
+  return result;
 }
 
 interface PnpSystemData {

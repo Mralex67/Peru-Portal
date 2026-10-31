@@ -3877,6 +3877,12 @@ export const AdminPanelModal: React.FC = () => {
                     <p className="text-xs text-slate-300 leading-relaxed">
                       Guarda aquí los tokens y credenciales de Supabase, Discord y ER:LC para que queden guardados en el servidor globalmente. De este modo, <strong>ningún oficial ni usuario tiene que configurar bases de datos en su dispositivo personal</strong>; todo queda conectado directamente en la web.
                     </p>
+                    <div className="mt-2 p-2.5 rounded-xl bg-slate-900/80 border border-amber-500/30 text-[11px] text-amber-200/90 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        <strong>¡Totalmente compatible con AI Studio Secrets!</strong> También puedes ir al botón <strong>Publish &gt; Secrets</strong> arriba a la derecha y añadir variables como <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">SUPABASE_URL</code>, <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">SUPABASE_ANON_KEY</code>, <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">DISCORD_TOKEN</code>, etc. El servidor las detectará automáticamente al iniciar.
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
