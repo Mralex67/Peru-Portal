@@ -2069,6 +2069,30 @@ app.get('/api/bot/package-files', (req, res) => {
 // SISTEMA PNP SIPOL & TRANSITO (TABLET Y DISCORD)
 // ==========================================
 const PNP_FILE = path.resolve(__dirname, '.data/pnp_system.json');
+const SECRETS_VAULT_FILE = path.resolve(__dirname, '.data/secrets_vault.json');
+
+const GUILD_PERP_ID = '1554629558760775710';
+const PNP_ROLE_ID = '1555384968086032394';
+const LICENSE_ROLE_ID = '1556723203114668082';
+
+function loadSecretsVault() {
+  try {
+    if (fs.existsSync(SECRETS_VAULT_FILE)) {
+      return JSON.parse(fs.readFileSync(SECRETS_VAULT_FILE, 'utf-8'));
+    }
+  } catch {}
+  return {
+    supabaseUrl: serverSupabaseUrl,
+    supabaseAnonKey: serverSupabaseAnonKey,
+    discordToken: process.env.DISCORD_TOKEN || '',
+    discordClientId: discordClientId,
+    discordClientSecret: discordClientSecret,
+    discordGuildId: GUILD_PERP_ID,
+    pnpRoleId: PNP_ROLE_ID,
+    licenseRoleId: LICENSE_ROLE_ID,
+    erlcServerKey: erlcServerKey,
+  };
+}
 
 interface PnpSystemData {
   arrests: any[];
@@ -2082,104 +2106,11 @@ function loadPnpSystem(): PnpSystemData {
   try {
     if (!fs.existsSync(PNP_FILE)) {
       const initial: PnpSystemData = {
-        arrests: [
-          {
-            id: 'arr-1',
-            code: 'A-0017',
-            citizenIdentifier: 'Tsaonomori',
-            citizenName: '『ST-P』 Tsaonomori',
-            charges: 'Intento de Homicidio',
-            durationText: '3m (3 minutos)',
-            durationMinutes: 3,
-            bailAmount: 5000,
-            officerName: '@Jhair',
-            officerDiscordId: 'jhair',
-            evidenceUrl: '/assets/aistudio/image_26cb457c.png',
-            status: 'cumplido',
-            createdAt: '2026-10-24T22:45:00.000Z',
-          },
-          {
-            id: 'arr-2',
-            code: 'A-0011',
-            citizenIdentifier: 'Tsaonomori',
-            citizenName: '『ST-P』 Tsaonomori',
-            charges: 'Intento de asesinato, tener en posecion arma de fuego, darse a la fuga.',
-            durationText: '5m',
-            durationMinutes: 5,
-            bailAmount: 15000,
-            officerName: '@Jhair',
-            officerDiscordId: 'jhair',
-            status: 'cumplido',
-            createdAt: '2026-10-17T12:00:00.000Z',
-          },
-          {
-            id: 'arr-3',
-            code: 'A-0009',
-            citizenIdentifier: 'Tsaonomori',
-            citizenName: '『ST-P』 Tsaonomori',
-            charges: 'Art.25',
-            durationText: '5m',
-            durationMinutes: 5,
-            bailAmount: 2,
-            officerName: '@Jhair',
-            officerDiscordId: 'jhair',
-            status: 'cumplido',
-            createdAt: '2026-10-16T10:00:00.000Z',
-          },
-        ],
-        fines: [
-          {
-            id: 'fine-1',
-            code: 'M-0005',
-            citizenIdentifier: '.trakeandoloz',
-            citizenName: '@ [.trakeandoloz]',
-            amount: 700,
-            status: 'pendiente',
-            reason: 'Conduccion temeraria',
-            officerName: 'jhair9813',
-            officerDiscordId: 'jhair9813',
-            createdAt: '2026-10-24T17:25:00.000Z',
-          },
-          {
-            id: 'fine-2',
-            code: 'M-0004',
-            citizenIdentifier: 'Tsaonomori',
-            citizenName: '『ST-P』 Tsaonomori',
-            amount: 500,
-            status: 'pagada',
-            reason: 'No portar licencia de conducir',
-            officerName: 'gauxchio_murga',
-            officerDiscordId: 'gauxchio_murga',
-            createdAt: '2026-10-17T15:00:00.000Z',
-          },
-          {
-            id: 'fine-3',
-            code: 'M-0003',
-            citizenIdentifier: 'Tsaonomori',
-            citizenName: '『ST-P』 Tsaonomori',
-            amount: 300,
-            status: 'pagada',
-            reason: 'Pasar un semaforo n rojo',
-            officerName: 'gauxchio_murga',
-            officerDiscordId: 'gauxchio_murga',
-            createdAt: '2026-10-17T14:30:00.000Z',
-          },
-          {
-            id: 'fine-4',
-            code: 'M-0002',
-            citizenIdentifier: 'Tsaonomori',
-            citizenName: '『ST-P』 Tsaonomori',
-            amount: 100,
-            status: 'pagada',
-            reason: 'Exceso de velocidad',
-            officerName: 'gauxchio_murga',
-            officerDiscordId: 'gauxchio_murga',
-            createdAt: '2026-10-17T14:00:00.000Z',
-          },
-        ],
+        arrests: [],
+        fines: [],
         sanctions: [],
-        verifiedOfficers: ['1555384968086032394', 'jhair', 'jhair9813', 'admin'],
-        licensedUsers: ['1556723203114668082', '61187362818282827', 'jhair9813'],
+        verifiedOfficers: ['1555384968086032394'],
+        licensedUsers: ['1556723203114668082'],
       };
       const dir = path.dirname(PNP_FILE);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -2362,25 +2293,204 @@ app.get('/api/pnp/records/:identifier', (req, res) => {
   });
 });
 
-// 7. Verify Police Officer Role & Badge (Role 1555384968086032394)
-app.get('/api/pnp/verify-role/:identifier', (req, res) => {
+// 7. Verify Police Officer Role & Badge (Strictly checks Discord Guild 1554629558760775710 & Role 1555384968086032394)
+app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
   const { identifier } = req.params;
-  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const clean = identifier.trim().replace(/^@/, '');
   const data = loadPnpSystem();
+  const vault = loadSecretsVault();
+  const botToken = vault.discordToken || process.env.DISCORD_TOKEN || '';
 
-  const isOfficer =
-    clean === '1555384968086032394' ||
-    clean === '105' ||
-    clean === 'pnp105' ||
-    clean === 'st-p' ||
-    data.verifiedOfficers.some((o) => o.toLowerCase() === clean);
+  // Valid Discord snowflake ID check (17-21 digits)
+  const isSnowflake = /^\d{16,21}$/.test(clean);
 
+  if (!isSnowflake) {
+    return res.status(400).json({
+      success: false,
+      isOfficer: false,
+      error: 'Debes ingresar tu ID de Usuario de Discord (17-20 dígitos numéricos). No se admiten claves genéricas ni PINs.',
+    });
+  }
+
+  // Check Discord API directly against official server 1554629558760775710
+  if (botToken && botToken !== 'tu_token_de_bot_aqui') {
+    try {
+      const guildRes = await fetch(`https://discord.com/api/v10/guilds/${GUILD_PERP_ID}/members/${clean}`, {
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (guildRes.ok) {
+        const memberData: any = await guildRes.json();
+        const roles: string[] = memberData.roles || [];
+        const hasPoliceRole = roles.includes(PNP_ROLE_ID);
+
+        if (hasPoliceRole) {
+          if (!data.verifiedOfficers.includes(clean)) {
+            data.verifiedOfficers.push(clean);
+            savePnpSystem(data);
+          }
+          return res.json({
+            success: true,
+            isOfficer: true,
+            policeRoleId: PNP_ROLE_ID,
+            guildId: GUILD_PERP_ID,
+            badge: `PNP-OFICIAL-${clean.slice(-4)}`,
+            member: {
+              username: memberData.user?.username,
+              displayName: memberData.nick || memberData.user?.global_name || memberData.user?.username,
+              avatar: memberData.user?.avatar,
+            },
+            message: `¡Identidad Policial Verificada! Rol PNP (${PNP_ROLE_ID}) confirmado en el servidor oficial.`,
+          });
+        } else {
+          return res.json({
+            success: true,
+            isOfficer: false,
+            policeRoleId: PNP_ROLE_ID,
+            guildId: GUILD_PERP_ID,
+            error: `Acceso denegado: El usuario "${memberData.user?.username || clean}" está en el servidor pero NO tiene el Rol Oficial PNP (${PNP_ROLE_ID}).`,
+          });
+        }
+      } else if (guildRes.status === 404) {
+        return res.json({
+          success: true,
+          isOfficer: false,
+          error: `Acceso denegado: El ID de Discord "${clean}" no pertenece al servidor oficial Perú Streets RP (ID: ${GUILD_PERP_ID}).`,
+        });
+      }
+    } catch (apiErr: any) {
+      console.error('Error consultando API de Discord para verificación:', apiErr.message);
+    }
+  }
+
+  // Fallback if bot token is offline or rate limited
+  const isOfficer = data.verifiedOfficers.includes(clean) || clean === PNP_ROLE_ID;
+  if (isOfficer) {
+    return res.json({
+      success: true,
+      isOfficer: true,
+      policeRoleId: PNP_ROLE_ID,
+      guildId: GUILD_PERP_ID,
+      badge: `PNP-OFICIAL-${clean.slice(-4)}`,
+      message: 'Oficial PNP Autorizado por registro de servidor.',
+    });
+  }
+
+  return res.json({
+    success: true,
+    isOfficer: false,
+    policeRoleId: PNP_ROLE_ID,
+    guildId: GUILD_PERP_ID,
+    error: `Acceso denegado: Tu ID de Discord "${clean}" no cuenta con el Rol Policial PNP (${PNP_ROLE_ID}) en el servidor oficial de PE:RP.`,
+  });
+});
+
+// ==========================================
+// BÓVEDA DE SECRETS & BASES DE DATOS (API SERVER-SIDE)
+// ==========================================
+app.get('/api/secrets/config', (req, res) => {
+  const vault = loadSecretsVault();
   res.json({
     success: true,
-    isOfficer,
-    policeRoleId: '1555384968086032394',
-    badge: isOfficer ? `PNP-OFICIAL-${clean.slice(0, 6).toUpperCase()}` : null,
+    configured: {
+      supabaseUrl: Boolean(vault.supabaseUrl),
+      supabaseAnonKey: Boolean(vault.supabaseAnonKey),
+      discordToken: Boolean(vault.discordToken && vault.discordToken !== 'tu_token_de_bot_aqui'),
+      discordClientId: Boolean(vault.discordClientId),
+      discordClientSecret: Boolean(vault.discordClientSecret),
+      erlcServerKey: Boolean(vault.erlcServerKey),
+    },
+    guildId: vault.discordGuildId || GUILD_PERP_ID,
+    pnpRoleId: vault.pnpRoleId || PNP_ROLE_ID,
+    licenseRoleId: vault.licenseRoleId || LICENSE_ROLE_ID,
+    masked: {
+      supabaseUrl: vault.supabaseUrl ? vault.supabaseUrl.replace(/(https:\/\/[^.]+).*/, '$1.supabase.co') : '',
+      supabaseAnonKey: vault.supabaseAnonKey ? `${vault.supabaseAnonKey.slice(0, 8)}...${vault.supabaseAnonKey.slice(-6)}` : '',
+      discordToken: vault.discordToken && vault.discordToken !== 'tu_token_de_bot_aqui' ? `${vault.discordToken.slice(0, 6)}...${vault.discordToken.slice(-4)}` : '',
+      discordClientId: vault.discordClientId || '',
+      erlcServerKey: vault.erlcServerKey ? `${vault.erlcServerKey.slice(0, 4)}...${vault.erlcServerKey.slice(-4)}` : '',
+    },
   });
+});
+
+app.post('/api/secrets/save', (req, res) => {
+  try {
+    const {
+      supabaseUrl,
+      supabaseAnonKey,
+      discordToken,
+      discordClientId: newClientId,
+      discordClientSecret: newClientSecret,
+      discordGuildId,
+      pnpRoleId,
+      licenseRoleId,
+      erlcServerKey: newErlcKey,
+    } = req.body;
+
+    const currentVault = loadSecretsVault();
+    const updatedVault = {
+      ...currentVault,
+      supabaseUrl: typeof supabaseUrl === 'string' && supabaseUrl.trim() ? supabaseUrl.trim() : currentVault.supabaseUrl,
+      supabaseAnonKey: typeof supabaseAnonKey === 'string' && supabaseAnonKey.trim() ? supabaseAnonKey.trim() : currentVault.supabaseAnonKey,
+      discordToken: typeof discordToken === 'string' && discordToken.trim() ? discordToken.trim() : currentVault.discordToken,
+      discordClientId: typeof newClientId === 'string' && newClientId.trim() ? newClientId.trim() : currentVault.discordClientId,
+      discordClientSecret: typeof newClientSecret === 'string' && newClientSecret.trim() ? newClientSecret.trim() : currentVault.discordClientSecret,
+      discordGuildId: typeof discordGuildId === 'string' && discordGuildId.trim() ? discordGuildId.trim() : currentVault.discordGuildId || GUILD_PERP_ID,
+      pnpRoleId: typeof pnpRoleId === 'string' && pnpRoleId.trim() ? pnpRoleId.trim() : currentVault.pnpRoleId || PNP_ROLE_ID,
+      licenseRoleId: typeof licenseRoleId === 'string' && licenseRoleId.trim() ? licenseRoleId.trim() : currentVault.licenseRoleId || LICENSE_ROLE_ID,
+      erlcServerKey: typeof newErlcKey === 'string' && newErlcKey.trim() ? newErlcKey.trim() : currentVault.erlcServerKey,
+      updatedAt: new Date().toISOString(),
+    };
+
+    fs.mkdirSync(path.dirname(SECRETS_VAULT_FILE), { recursive: true });
+    fs.writeFileSync(SECRETS_VAULT_FILE, JSON.stringify(updatedVault, null, 2));
+
+    // Update Supabase file & active client
+    if (updatedVault.supabaseUrl && updatedVault.supabaseAnonKey) {
+      serverSupabaseUrl = updatedVault.supabaseUrl;
+      serverSupabaseAnonKey = updatedVault.supabaseAnonKey;
+      serverSupabaseClient = null;
+      getServerSupabase();
+      fs.writeFileSync(
+        SUPABASE_FILE,
+        JSON.stringify({ url: serverSupabaseUrl, anonKey: serverSupabaseAnonKey, updatedAt: new Date().toISOString() }, null, 2)
+      );
+    }
+
+    // Update Discord auth in memory
+    if (updatedVault.discordClientId) discordClientId = updatedVault.discordClientId;
+    if (updatedVault.discordClientSecret) discordClientSecret = updatedVault.discordClientSecret;
+    if (updatedVault.discordToken) process.env.DISCORD_TOKEN = updatedVault.discordToken;
+    if (updatedVault.erlcServerKey) erlcServerKey = updatedVault.erlcServerKey;
+
+    // Sync to discord-bot/config.env & .env
+    const envContent = [
+      `DISCORD_TOKEN=${updatedVault.discordToken || ''}`,
+      `CLIENT_ID=${updatedVault.discordClientId || ''}`,
+      `CLIENT_SECRET=${updatedVault.discordClientSecret || ''}`,
+      `GUILD_ID=${updatedVault.discordGuildId || GUILD_PERP_ID}`,
+      `POLICE_ROLE_ID=${updatedVault.pnpRoleId || PNP_ROLE_ID}`,
+      `LICENSE_ROLE_ID=${updatedVault.licenseRoleId || LICENSE_ROLE_ID}`,
+      `SUPABASE_URL=${updatedVault.supabaseUrl || ''}`,
+      `SUPABASE_ANON_KEY=${updatedVault.supabaseAnonKey || ''}`,
+      `API_BASE_URL=http://localhost:${PORT}`,
+    ].join('\n');
+
+    try {
+      fs.writeFileSync(path.resolve(__dirname, 'discord-bot/config.env'), envContent);
+      fs.writeFileSync(path.resolve(__dirname, 'discord-bot/.env'), envContent);
+    } catch {}
+
+    res.json({
+      success: true,
+      message: '¡Secrets y Bases de Datos guardados exitosamente en el servidor! Sincronizados de forma universal para todos los dispositivos y oficiales.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // 8. Discord Only: Sanctions (/sancionar, /sanciones)

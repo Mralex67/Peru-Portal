@@ -72,9 +72,32 @@ export const AdminPanelModal: React.FC = () => {
   const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin, adminRole } = useServer();
 
   const [formData, setFormData] = useState({ ...config });
-  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot' | 'template'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot' | 'template' | 'secrets'>('general');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
+
+  // Secrets Vault & Encryptor State
+  const [secretsVault, setSecretsVault] = useState({
+    supabaseUrl: '',
+    supabaseAnonKey: '',
+    discordToken: '',
+    discordClientId: '',
+    discordClientSecret: '',
+    discordGuildId: '1554629558760775710',
+    pnpRoleId: '1555384968086032394',
+    licenseRoleId: '1556723203114668082',
+    erlcServerKey: '',
+  });
+  const [secretsConfigured, setSecretsConfigured] = useState(false);
+  const [isSavingSecrets, setIsSavingSecrets] = useState(false);
+  const [secretsFeedback, setSecretsFeedback] = useState('');
+  const [showSecretField, setShowSecretField] = useState<{ [key: string]: boolean }>({});
+
+  // Encryption tool states
+  const [encryptRawInput, setEncryptRawInput] = useState('');
+  const [encryptSecretKey, setEncryptSecretKey] = useState('');
+  const [encryptResultText, setEncryptResultText] = useState('');
+  const [encryptCopied, setEncryptCopied] = useState(false);
 
   // DNI Template customization state in Admin Panel
   const [adminTemplateSrc, setAdminTemplateSrc] = useState<string>(() => {
@@ -340,9 +363,95 @@ export const AdminPanelModal: React.FC = () => {
         }
       })
       .catch(() => {});
+
+    // Load server secrets vault config
+    fetch('/api/secrets/config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setSecretsConfigured(Boolean(data.configured));
+          setSecretsVault((prev) => ({
+            ...prev,
+            supabaseUrl: data.supabaseUrl || prev.supabaseUrl,
+            discordClientId: data.discordClientId || prev.discordClientId,
+            discordGuildId: data.discordGuildId || '1554629558760775710',
+            pnpRoleId: data.pnpRoleId || '1555384968086032394',
+            licenseRoleId: data.licenseRoleId || '1556723203114668082',
+          }));
+        }
+      })
+      .catch(() => {});
   }, [isAdminOpen]);
 
   if (!isAdminOpen) return null;
+
+  // Encriptador & Desencriptador para Tokens y Claves
+  const perpEncrypt = (text: string, pass: string): string => {
+    if (!text) return '';
+    const key = pass || 'PERP_POLICIA_SECRETS_2026';
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+      result += String.fromCharCode(charCode);
+    }
+    try {
+      return btoa(unescape(encodeURIComponent(result)));
+    } catch {
+      return btoa(result);
+    }
+  };
+
+  const perpDecrypt = (encoded: string, pass: string): string => {
+    if (!encoded) return '';
+    try {
+      let raw = '';
+      try {
+        raw = decodeURIComponent(escape(atob(encoded.trim())));
+      } catch {
+        raw = atob(encoded.trim());
+      }
+      const key = pass || 'PERP_POLICIA_SECRETS_2026';
+      let result = '';
+      for (let i = 0; i < raw.length; i++) {
+        const charCode = raw.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+        result += String.fromCharCode(charCode);
+      }
+      return result;
+    } catch (e) {
+      return 'Error: Clave o texto encriptado inválido.';
+    }
+  };
+
+  const handleSaveSecretsVault = async () => {
+    setIsSavingSecrets(true);
+    setSecretsFeedback('');
+    playClickSound();
+
+    try {
+      const res = await fetch('/api/secrets/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(secretsVault),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSecretsConfigured(true);
+        setSecretsFeedback('✅ ¡Bóveda de Secrets guardada permanentemente en el servidor! Base de datos y credenciales integradas en la nube.');
+        playSuccessSound();
+        if (secretsVault.supabaseUrl && secretsVault.supabaseAnonKey) {
+          saveSupabaseConfig(secretsVault.supabaseUrl, secretsVault.supabaseAnonKey);
+          setSupabaseUrl(secretsVault.supabaseUrl);
+          setSupabaseKey(secretsVault.supabaseAnonKey);
+        }
+      } else {
+        setSecretsFeedback('❌ ' + (data.message || 'Error al guardar los secrets en el servidor.'));
+      }
+    } catch (err: any) {
+      setSecretsFeedback('❌ Error de conexión al guardar secrets: ' + (err.message || 'desconocido'));
+    } finally {
+      setIsSavingSecrets(false);
+    }
+  };
 
   // Compress image to standard dimensions before upload to keep loads fast and avoid quota limits
   const optimizeImageFile = (file: File, maxDim = 1280): Promise<string> => {
@@ -936,6 +1045,23 @@ export const AdminPanelModal: React.FC = () => {
                   </span>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setActiveTab('secrets');
+                }}
+                className={`pb-2.5 px-4 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap ${
+                  activeTab === 'secrets' ? 'border-amber-400 text-white bg-amber-950/40 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Key className="w-4 h-4 text-amber-400" />
+                <span>Bóveda & Encriptador</span>
+                {secretsConfigured && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+              </button>
             </>
           ) : (
             <>
@@ -1040,6 +1166,22 @@ export const AdminPanelModal: React.FC = () => {
               >
                 <Palette className="w-3.5 h-3.5 text-sky-400" />
                 Plantilla DNI (Canva)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setActiveTab('secrets');
+                }}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'secrets' ? 'border-amber-400 text-white bg-amber-950/30 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5 text-amber-400" />
+                <span>Bóveda & Encriptador</span>
+                {secretsConfigured && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
               </button>
             </>
           )}
@@ -3708,6 +3850,349 @@ export const AdminPanelModal: React.FC = () => {
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Restaurar Oficial</span>
                 </button>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB: SECRETS VAULT & ENCRIPTADOR */}
+          {activeTab === 'secrets' && (
+            <div className="space-y-6">
+              
+              {/* Header Banner */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-[#101426] to-amber-950/20 border border-amber-500/30">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 shrink-0">
+                    <Key className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-black uppercase text-amber-300 tracking-wider">
+                        Bóveda Central de Secrets & Bases de Datos
+                      </h4>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        GLOBAL & PERSISTENTE
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Guarda aquí los tokens y credenciales de Supabase, Discord y ER:LC para que queden guardados en el servidor globalmente. De este modo, <strong>ningún oficial ni usuario tiene que configurar bases de datos en su dispositivo personal</strong>; todo queda conectado directamente en la web.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION A: ENCRIPTADOR / DESENCRIPTADOR */}
+              <div className="p-5 rounded-2xl bg-[#0c1020] border border-amber-500/20 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-white">
+                      Herramienta: Encriptador / Desencriptador de Tokens
+                    </h5>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Protección de Tokens y Claves
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  Usa esta herramienta si deseas cifrar u ocultar tokens o contraseñas antes de compartirlas o guardarlas.
+                </p>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                      Texto / Token a Procesar
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={encryptRawInput}
+                      onChange={(e) => setEncryptRawInput(e.target.value)}
+                      placeholder="Pega aquí tu token de Discord, API key o contraseña..."
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                      Contraseña Secreta de Cifrado (Opcional - por defecto usa salt PE:RP)
+                    </label>
+                    <input
+                      type="password"
+                      value={encryptSecretKey}
+                      onChange={(e) => setEncryptSecretKey(e.target.value)}
+                      placeholder="Ej: mi_clave_secreta_policial_2026"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playClickSound();
+                        const enc = perpEncrypt(encryptRawInput, encryptSecretKey);
+                        setEncryptResultText(enc);
+                        setEncryptCopied(false);
+                      }}
+                      disabled={!encryptRawInput.trim()}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>🔒 Encriptar Clave</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playClickSound();
+                        const dec = perpDecrypt(encryptRawInput, encryptSecretKey);
+                        setEncryptResultText(dec);
+                        setEncryptCopied(false);
+                      }}
+                      disabled={!encryptRawInput.trim()}
+                      className="px-4 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+                    >
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>🔓 Desencriptar Clave</span>
+                    </button>
+                  </div>
+
+                  {encryptResultText && (
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-amber-500/30 space-y-2 mt-3 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-amber-400">
+                          Resultado Procesado:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(encryptResultText);
+                            setEncryptCopied(true);
+                            playSuccessSound();
+                            setTimeout(() => setEncryptCopied(false), 2500);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          {encryptCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          <span>{encryptCopied ? '¡Copiado!' : 'Copiar'}</span>
+                        </button>
+                      </div>
+                      <div className="text-xs font-mono text-emerald-400 break-all select-all p-2 rounded bg-black/60 border border-white/5">
+                        {encryptResultText}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* SECTION B: BÓVEDA DE CONFIGURACIÓN DE BASE DE DATOS Y SECRETS */}
+              <div className="p-5 rounded-2xl bg-[#0c1020] border border-white/10 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-sky-400" />
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-white">
+                      Configuración de Servidor & Base de Datos
+                    </h5>
+                  </div>
+                  {secretsConfigured && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30">
+                      Servidor Conectado
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Supabase URL */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                      URL del Proyecto Supabase
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://xyzabcdefg.supabase.co"
+                      value={secretsVault.supabaseUrl}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, supabaseUrl: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+
+                  {/* Supabase Anon Key */}
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold uppercase text-slate-300">
+                        Supabase Anon Key (API Pública)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretField(p => ({ ...p, anonKey: !p.anonKey }))}
+                        className="text-[10px] text-slate-400 hover:text-white"
+                      >
+                        {showSecretField.anonKey ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </div>
+                    <input
+                      type={showSecretField.anonKey ? 'text' : 'password'}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      value={secretsVault.supabaseAnonKey}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, supabaseAnonKey: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+
+                  {/* Discord Bot Token */}
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold uppercase text-slate-300">
+                        Token del Bot de Discord
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretField(p => ({ ...p, botToken: !p.botToken }))}
+                        className="text-[10px] text-slate-400 hover:text-white"
+                      >
+                        {showSecretField.botToken ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </div>
+                    <input
+                      type={showSecretField.botToken ? 'text' : 'password'}
+                      placeholder="MTI... (Token de Discord Developer Portal)"
+                      value={secretsVault.discordToken}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, discordToken: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+
+                  {/* Discord Client ID */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                      Discord Client ID (Application ID)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: 1105356730516377694"
+                      value={secretsVault.discordClientId}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, discordClientId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+
+                  {/* Discord Client Secret */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold uppercase text-slate-300">
+                        Discord Client Secret (OAuth2)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretField(p => ({ ...p, clientSecret: !p.clientSecret }))}
+                        className="text-[10px] text-slate-400 hover:text-white"
+                      >
+                        {showSecretField.clientSecret ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </div>
+                    <input
+                      type={showSecretField.clientSecret ? 'text' : 'password'}
+                      placeholder="Client Secret de Discord"
+                      value={secretsVault.discordClientSecret}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, discordClientSecret: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+
+                  {/* Discord Server ID */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                      ID del Servidor Discord PE:RP
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="1554629558760775710"
+                      value={secretsVault.discordGuildId}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, discordGuildId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Servidor oficial donde opera el bot.</p>
+                  </div>
+
+                  {/* PNP Role ID */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                      ID del Rol PNP (Policía Nacional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="1555384968086032394"
+                      value={secretsVault.pnpRoleId}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, pnpRoleId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-rose-400"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Requerido para entrar a la Tablet MDT PNP.</p>
+                  </div>
+
+                  {/* License Role ID */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-300 mb-1">
+                      ID Rol Licencia de Conducir
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="1556723203114668082"
+                      value={secretsVault.licenseRoleId}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, licenseRoleId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Verificación automática de licencia.</p>
+                  </div>
+
+                  {/* ER:LC Server Key */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold uppercase text-slate-300">
+                        API Key ER:LC (Roblox)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretField(p => ({ ...p, erlcKey: !p.erlcKey }))}
+                        className="text-[10px] text-slate-400 hover:text-white"
+                      >
+                        {showSecretField.erlcKey ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </div>
+                    <input
+                      type={showSecretField.erlcKey ? 'text' : 'password'}
+                      placeholder="Server API Key de ER:LC"
+                      value={secretsVault.erlcServerKey}
+                      onChange={(e) => setSecretsVault({ ...secretsVault, erlcServerKey: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Para jugadores y aforo en vivo.</p>
+                  </div>
+                </div>
+
+                {/* Feedback */}
+                {secretsFeedback && (
+                  <div className={`p-3 rounded-xl text-xs font-semibold ${
+                    secretsFeedback.startsWith('✅')
+                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-rose-950/60 text-rose-300 border border-rose-500/40'
+                  }`}>
+                    {secretsFeedback}
+                  </div>
+                )}
+
+                {/* Save Button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveSecretsVault}
+                    disabled={isSavingSecrets}
+                    className="w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-950/50 transition-all"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingSecrets ? 'Guardando en Servidor...' : '💾 Guardar en Bóveda del Servidor (Persistente Global)'}</span>
+                  </button>
+                </div>
               </div>
 
             </div>

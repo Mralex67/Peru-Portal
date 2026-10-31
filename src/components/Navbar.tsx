@@ -5,6 +5,7 @@ import { YapoLogo } from './YapoLogo';
 import { InteractiveButton } from './InteractiveButton';
 import { useServer } from '../context/ServerContext';
 import { toggleSound, isSoundEnabled } from '../utils/audio';
+import { PNP_EMBLEM_URL } from '../assets/pnpEmblem';
 
 export const Navbar: React.FC = () => {
   const {
@@ -77,11 +78,11 @@ export const Navbar: React.FC = () => {
             title="Terminal Móvil Policial PNP (MDT)"
           >
             <img
-              src="/assets/pnp-emblem.png"
+              src={PNP_EMBLEM_URL}
               alt="PNP"
               className="w-5 h-5 object-contain group-hover:rotate-6 transition-transform"
               onError={(e) => {
-                e.currentTarget.style.display = 'none';
+                e.currentTarget.src = '/assets/pnp-emblem.png';
               }}
             />
             <span className="font-sans font-black text-white tracking-wider">PNP</span>
@@ -246,11 +247,11 @@ export const Navbar: React.FC = () => {
           >
             <div className="flex items-center gap-2.5">
               <img
-                src="/assets/pnp-emblem.png"
+                src={PNP_EMBLEM_URL}
                 alt="PNP"
                 className="w-5 h-5 object-contain"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.src = '/assets/pnp-emblem.png';
                 }}
               />
               <span className="font-sans font-black text-white tracking-wider">MDT POLICIAL (PNP)</span>

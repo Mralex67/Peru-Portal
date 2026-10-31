@@ -43,6 +43,7 @@ import {
 import { lookupCitizenDni } from '../lib/supabase';
 import { PeruDni } from '../types/dni';
 import { playClickSound, playSuccessSound } from '../utils/audio';
+import { PNP_EMBLEM_URL } from '../assets/pnpEmblem';
 
 export const PnpTabletModal: React.FC = () => {
   const {
@@ -137,74 +138,40 @@ export const PnpTabletModal: React.FC = () => {
   if (!isPnpTabletOpen) return null;
 
   // Verification logic:
+  // Server ID: 1554629558760775710
   // Role ID PNP: 1555384968086032394
   // Driver License Role ID: 1556723203114668082
-  const handleVerifyDiscordRole = async () => {
+  const handleVerifyDiscordOfficer = async (inputOverride?: string) => {
+    const rawId = (inputOverride !== undefined ? inputOverride : (badgeCodeInput || discordUser?.id || '')).trim().replace(/^@/, '');
+    if (!rawId) {
+      setAuthError('Ingresa tu ID de Usuario de Discord (17 a 20 dígitos numéricos).');
+      return;
+    }
+
+    if (!/^\d{16,21}$/.test(rawId)) {
+      setAuthError('Formato inválido. El ID de Discord debe contener entre 17 y 20 dígitos numéricos (ej. 61187362818282827). No se admiten claves genéricas ni PINs.');
+      return;
+    }
+
     setIsVerifyingDiscord(true);
     setAuthError('');
     playClickSound();
 
     try {
-      if (discordUser) {
-        // Query backend server to check if user has the official PNP role 1555384968086032394
-        const res = await fetch(`/api/pnp/verify-role/${encodeURIComponent(discordUser.id)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.hasPoliceRole) {
-            setIsPnpAuthenticated(true);
-            setPnpOfficerBadge(data.badgeNumber || `PNP-${discordUser.id.slice(-4)}`);
-            playSuccessSound();
-            return;
-          }
-        }
-        
-        // If OAuth role check allows bypass or user is verified
-        if (discordUser.isStaff || discordUser.role === 'Comandante PNP' || discordUser.role === 'Policía') {
-          setIsPnpAuthenticated(true);
-          setPnpOfficerBadge(`PNP-${discordUser.id.slice(-4)}`);
-          playSuccessSound();
-          return;
-        }
+      const res = await fetch(`/api/pnp/verify-role/${encodeURIComponent(rawId)}`);
+      const data = await res.json();
 
-        // If not having the Discord role yet, notify clearly
-        setAuthError(
-          `Tu cuenta de Discord (@${discordUser.username}) no cuenta con el rol oficial de la PNP (ID: 1555384968086032394). Puedes ingresar usando tu Clave de Placa o PIN de Oficial abajo.`
-        );
+      if (data && data.isOfficer) {
+        setIsPnpAuthenticated(true);
+        setPnpOfficerBadge(data.badge || `PNP-${rawId.slice(-4)}`);
+        playSuccessSound();
       } else {
-        setAuthError('Inicia sesión con Discord primero o ingresa directamente con tu Clave de Placa Policial.');
+        setAuthError(data?.error || `Acceso denegado: El usuario no posee el Rol Policial PNP (ID: 1555384968086032394) en el servidor oficial Perú Streets RP (ID: 1554629558760775710).`);
       }
     } catch {
-      setAuthError('Error conectando con el servidor de Discord.');
+      setAuthError('Error de red al consultar el servidor de verificación.');
     } finally {
       setIsVerifyingDiscord(false);
-    }
-  };
-
-  const handleVerifyWithBadgePin = () => {
-    const clean = badgeCodeInput.trim().toUpperCase();
-    if (!clean) {
-      setAuthError('Ingresa tu clave de placa policial.');
-      return;
-    }
-    playClickSound();
-
-    // Standard police credentials: 105, PNP105, 0105, ST-P, 1555384968086032394, or any 4+ char alphanumeric badge
-    if (
-      clean === '105' ||
-      clean === 'PNP105' ||
-      clean === '0105' ||
-      clean === 'ST-P' ||
-      clean === 'JHAIR' ||
-      clean === 'POLICIA' ||
-      clean === '1555384968086032394' ||
-      clean.length >= 4
-    ) {
-      setIsPnpAuthenticated(true);
-      setPnpOfficerBadge(clean.startsWith('PNP') ? clean : `PNP-${clean}`);
-      playSuccessSound();
-      setAuthError('');
-    } else {
-      setAuthError('Clave de placa policial inválida. Intenta con "105" o tu código asignado.');
     }
   };
 
@@ -350,10 +317,10 @@ export const PnpTabletModal: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <img
-                src="/assets/pnp-emblem.png"
+                src={PNP_EMBLEM_URL}
                 alt="PNP"
                 className="w-6 h-6 object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                onError={(e) => { e.currentTarget.src = '/assets/pnp-emblem.png'; }}
               />
               <span className="font-sans font-black text-xs text-white tracking-widest uppercase">
                 POLICÍA NACIONAL DEL PERÚ
@@ -409,9 +376,10 @@ export const PnpTabletModal: React.FC = () => {
               <div className="relative mx-auto w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
                 <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse" />
                 <img
-                  src="/assets/pnp-emblem.png"
+                  src={PNP_EMBLEM_URL}
                   alt="Emblema PNP"
                   className="w-full h-full object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)] relative z-10"
+                  onError={(e) => { e.currentTarget.src = '/assets/pnp-emblem.png'; }}
                 />
               </div>
 
@@ -422,74 +390,80 @@ export const PnpTabletModal: React.FC = () => {
                 <h2 className="text-xl sm:text-2xl font-black text-white uppercase font-sans tracking-wide">
                   Verificar Identidad Policial
                 </h2>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Terminal Móvil de Datos de la <strong>Policía Nacional del Perú (PE:RP)</strong>. El sistema valida automáticamente tu <strong>Rol Oficial de la PNP (ID: 1555384968086032394)</strong> o tu Clave de Placa Policial.
+                <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+                  Terminal Móvil de la <strong>Policía Nacional del Perú (PE:RP)</strong>. El sistema valida mediante el bot que estés en el <strong>Servidor Oficial (ID: 1554629558760775710)</strong> y cuentes con el <strong>Rol PNP (ID: 1555384968086032394)</strong>.
                 </p>
               </div>
 
               {/* Error box */}
               {authError && (
-                <div className="p-3.5 rounded-xl bg-rose-950/80 border border-rose-500/50 text-rose-200 text-xs text-left flex items-start gap-2.5">
+                <div className="p-3.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-rose-200 text-xs text-left flex items-start gap-2.5 shadow-lg">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <span>{authError}</span>
+                  <span className="leading-relaxed">{authError}</span>
                 </div>
               )}
 
-              {/* Option 1: Discord Role Verification */}
-              <div className="space-y-3 pt-2">
+              {/* Verification Form: Discord Snowflake ID */}
+              <div className="space-y-3 pt-1 text-left">
+                {discordUser && (
+                  <button
+                    type="button"
+                    disabled={isVerifyingDiscord}
+                    onClick={() => handleVerifyDiscordOfficer(discordUser.id)}
+                    className="w-full py-3 px-4 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 hover:text-white font-bold text-xs flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span>Verificar como <strong>@{discordUser.username}</strong></span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400">{discordUser.id}</span>
+                  </button>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>ID de Usuario de Discord (Snowflake):</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={badgeCodeInput}
+                      onChange={(e) => setBadgeCodeInput(e.target.value.replace(/[^0-9]/g, ''))}
+                      onKeyDown={(e) => e.key === 'Enter' && handleVerifyDiscordOfficer()}
+                      placeholder="Ej. 61187362818282827 (17 a 20 dígitos)"
+                      className="w-full px-4 py-3 rounded-xl bg-[#121724] border border-white/15 text-white font-mono text-sm focus:outline-none focus:border-emerald-500 tracking-wider"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Copia tu ID de Discord haciendo clic derecho en tu perfil &gt; <em>Copiar ID de usuario</em>.
+                  </p>
+                </div>
+
                 <button
                   type="button"
                   disabled={isVerifyingDiscord}
-                  onClick={handleVerifyDiscordRole}
-                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-950/80 cursor-pointer disabled:opacity-50 transition-all"
+                  onClick={() => handleVerifyDiscordOfficer()}
+                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/80 cursor-pointer disabled:opacity-50 transition-all"
                 >
                   {isVerifyingDiscord ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Verificando rol policial en Discord...</span>
+                      <span>Consultando rol en servidor 1554629558760775710...</span>
                     </>
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Verificar con mi Cuenta de Discord</span>
+                      <span>Verificar Rol Policial PNP</span>
                     </>
                   )}
                 </button>
-
-                <div className="relative flex items-center justify-center">
-                  <div className="border-t border-white/10 w-full" />
-                  <span className="bg-[#0a0d14] px-3 text-[10px] uppercase font-bold text-slate-400">
-                    O Ingreso con Clave de Placa
-                  </span>
-                  <div className="border-t border-white/10 w-full" />
-                </div>
-
-                {/* Option 2: Badge / PIN Code */}
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={badgeCodeInput}
-                      onChange={(e) => setBadgeCodeInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleVerifyWithBadgePin()}
-                      placeholder="Ej. 105 o tu N° de Placa..."
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#121724] border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleVerifyWithBadgePin}
-                    className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs cursor-pointer border border-white/10 transition-colors"
-                  >
-                    Ingresar
-                  </button>
-                </div>
               </div>
 
-              {/* Quick tip */}
-              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/20 text-[11px] text-emerald-300/80 text-left">
-                💡 <strong>Comandos sincronizados con Discord:</strong> Las multas y arrestos emitidos en esta tablet se integran con los comandos <code className="text-white font-mono">/arrestar</code>, <code className="text-white font-mono">/multar</code> y <code className="text-white font-mono">/antecedentes</code>.
+              {/* Requirement badge */}
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-[10px] text-slate-400 space-y-1">
+                <div>🏢 <strong>Servidor Oficial:</strong> <code className="text-emerald-300">1554629558760775710</code></div>
+                <div>👮 <strong>Rol Requerido:</strong> <code className="text-emerald-300">1555384968086032394</code> (PNP Oficial)</div>
               </div>
 
             </div>

@@ -5,112 +5,9 @@ const PNP_ARRESTS_KEY = 'perp_pnp_arrests_v2';
 const PNP_FINES_KEY = 'perp_pnp_fines_v2';
 const PNP_SANCTIONS_KEY = 'perp_pnp_sanctions_v2';
 
-// Default initial arrests from official reference in the image
-export const INITIAL_PNP_ARRESTS: PnpArrest[] = [
-  {
-    id: 'arrest-0017',
-    arrestCode: 'A-0017',
-    suspectRoblox: 'Tsaonomori',
-    suspectName: '『ST-P』 Tsaonomori',
-    charges: 'Intento de Homicidio',
-    timeMinutes: 3,
-    timeDisplay: '3m (3 minutos)',
-    bailAmount: 5000,
-    bailDisplay: 'S/5,000',
-    officerName: '@Jhair',
-    evidenceImageUrl: '/assets/aistudio/image_26cb457c.png',
-    status: 'served',
-    createdAt: '2026-10-24',
-    createdAtTime: '22:45',
-    releaseDateText: 'hace 6 días',
-  },
-  {
-    id: 'arrest-0011',
-    arrestCode: 'A-0011',
-    suspectRoblox: 'Tsaonomori',
-    suspectName: '『ST-P』 Tsaonomori',
-    charges: 'Intento de asesinato, tener en posesion arma de fuego, darse a la fuga.',
-    timeMinutes: 5,
-    timeDisplay: '5m (5 minutos)',
-    bailAmount: 15000,
-    bailDisplay: 'S/15,000',
-    officerName: '@Oficial_PNP',
-    evidenceImageUrl: '',
-    status: 'served',
-    createdAt: '2026-10-17',
-    createdAtTime: '19:10',
-    releaseDateText: 'Cumplido',
-  },
-  {
-    id: 'arrest-0009',
-    arrestCode: 'A-0009',
-    suspectRoblox: 'Tsaonomori',
-    suspectName: '『ST-P』 Tsaonomori',
-    charges: 'Art.25',
-    timeMinutes: 5,
-    timeDisplay: '5m (5 minutos)',
-    bailAmount: 2,
-    bailDisplay: 'S/2',
-    officerName: '@Jhair',
-    evidenceImageUrl: '',
-    status: 'served',
-    createdAt: '2026-10-16',
-    createdAtTime: '14:02',
-    releaseDateText: 'Cumplido',
-  },
-];
-
-// Default initial fines from official reference in the image
-export const INITIAL_PNP_FINES: PnpFine[] = [
-  {
-    id: 'fine-0005',
-    fineCode: 'M-0005',
-    suspectRoblox: '.trakeandoloz',
-    amount: 700,
-    amountDisplay: 'S/700',
-    reason: 'Conduccion temeraria',
-    status: 'Pendiente',
-    issuedBy: 'jhair9813',
-    issuedDate: '2026-10-24',
-    createdAt: '2026-10-24T17:25:00.000Z',
-  },
-  {
-    id: 'fine-0004',
-    fineCode: 'M-0004',
-    suspectRoblox: 'Tsaonomori',
-    amount: 500,
-    amountDisplay: 'S/500',
-    reason: 'No portar licencia de conducir',
-    status: 'Pagada',
-    issuedBy: 'gauxchio_murga',
-    issuedDate: '2026-10-17',
-    createdAt: '2026-10-17T15:30:00.000Z',
-  },
-  {
-    id: 'fine-0003',
-    fineCode: 'M-0003',
-    suspectRoblox: 'Tsaonomori',
-    amount: 300,
-    amountDisplay: 'S/300',
-    reason: 'Pasar un semaforo n rojo',
-    status: 'Pagada',
-    issuedBy: 'gauxchio_murga',
-    issuedDate: '2026-10-17',
-    createdAt: '2026-10-17T12:10:00.000Z',
-  },
-  {
-    id: 'fine-0002',
-    fineCode: 'M-0002',
-    suspectRoblox: 'Tsaonomori',
-    amount: 100,
-    amountDisplay: 'S/100',
-    reason: 'Exceso de velocidad',
-    status: 'Pagada',
-    issuedBy: 'gauxchio_murga',
-    issuedDate: '2026-10-17',
-    createdAt: '2026-10-17T10:45:00.000Z',
-  },
-];
+// Reset all initial arrests and fines to 0 as requested
+export const INITIAL_PNP_ARRESTS: PnpArrest[] = [];
+export const INITIAL_PNP_FINES: PnpFine[] = [];
 
 export function getLocalArrests(): PnpArrest[] {
   if (typeof window === 'undefined') return INITIAL_PNP_ARRESTS;
@@ -118,7 +15,7 @@ export function getLocalArrests(): PnpArrest[] {
     const raw = localStorage.getItem(PNP_ARRESTS_KEY);
     if (raw) {
       const list = JSON.parse(raw);
-      if (Array.isArray(list) && list.length > 0) return list;
+      if (Array.isArray(list)) return list;
     }
   } catch {}
   return INITIAL_PNP_ARRESTS;
@@ -137,7 +34,7 @@ export function getLocalFines(): PnpFine[] {
     const raw = localStorage.getItem(PNP_FINES_KEY);
     if (raw) {
       const list = JSON.parse(raw);
-      if (Array.isArray(list) && list.length > 0) return list;
+      if (Array.isArray(list)) return list;
     }
   } catch {}
   return INITIAL_PNP_FINES;
