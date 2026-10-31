@@ -2315,7 +2315,7 @@ app.get('/api/pnp/records/:identifier', (req, res) => {
   });
 });
 
-// 7. Verify Police Officer Role & Badge (Strictly checks Discord Guild 1554629558760775710 & Role 1555384968086032394)
+// 7. Verify Police Officer Role & Badge (Checks Discord Guilds and Police Roles dynamically)
 app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
   const { identifier } = req.params;
   const clean = identifier.trim().replace(/^@/, '');
@@ -2323,8 +2323,8 @@ app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
   const vault = loadSecretsVault();
   const botToken = vault.discordToken || process.env.DISCORD_TOKEN || '';
 
-  // Valid Discord snowflake ID check (17-21 digits)
-  const isSnowflake = /^\d{16,21}$/.test(clean);
+  // Valid Discord snowflake ID check (16-22 digits)
+  const isSnowflake = /^\d{16,22}$/.test(clean);
 
   if (!isSnowflake) {
     return res.status(400).json({
@@ -2334,80 +2334,153 @@ app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
     });
   }
 
-  // Check Discord API directly against official server 1554629558760775710
-  if (botToken && botToken !== 'tu_token_de_bot_aqui') {
-    try {
-      const guildRes = await fetch(`https://discord.com/api/v10/guilds/${GUILD_PERP_ID}/members/${clean}`, {
-        headers: {
-          Authorization: `Bot ${botToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (guildRes.ok) {
-        const memberData: any = await guildRes.json();
-        const roles: string[] = memberData.roles || [];
-        const hasPoliceRole = roles.includes(PNP_ROLE_ID);
-
-        if (hasPoliceRole) {
-          if (!data.verifiedOfficers.includes(clean)) {
-            data.verifiedOfficers.push(clean);
-            savePnpSystem(data);
-          }
-          return res.json({
-            success: true,
-            isOfficer: true,
-            policeRoleId: PNP_ROLE_ID,
-            guildId: GUILD_PERP_ID,
-            badge: `PNP-OFICIAL-${clean.slice(-4)}`,
-            member: {
-              username: memberData.user?.username,
-              displayName: memberData.nick || memberData.user?.global_name || memberData.user?.username,
-              avatar: memberData.user?.avatar,
-            },
-            message: `¡Identidad Policial Verificada! Rol PNP (${PNP_ROLE_ID}) confirmado en el servidor oficial.`,
-          });
-        } else {
-          return res.json({
-            success: true,
-            isOfficer: false,
-            policeRoleId: PNP_ROLE_ID,
-            guildId: GUILD_PERP_ID,
-            error: `Acceso denegado: El usuario "${memberData.user?.username || clean}" está en el servidor pero NO tiene el Rol Oficial PNP (${PNP_ROLE_ID}).`,
-          });
-        }
-      } else if (guildRes.status === 404) {
-        return res.json({
-          success: true,
-          isOfficer: false,
-          error: `Acceso denegado: El ID de Discord "${clean}" no pertenece al servidor oficial Perú Streets RP (ID: ${GUILD_PERP_ID}).`,
-        });
-      }
-    } catch (apiErr: any) {
-      console.error('Error consultando API de Discord para verificación:', apiErr.message);
-    }
-  }
-
-  // Fallback if bot token is offline or rate limited
-  const isOfficer = data.verifiedOfficers.includes(clean) || clean === PNP_ROLE_ID;
-  if (isOfficer) {
+  // Already verified in local cache
+  if (data.verifiedOfficers.includes(clean)) {
     return res.json({
       success: true,
       isOfficer: true,
-      policeRoleId: PNP_ROLE_ID,
-      guildId: GUILD_PERP_ID,
       badge: `PNP-OFICIAL-${clean.slice(-4)}`,
-      message: 'Oficial PNP Autorizado por registro de servidor.',
+      message: 'Oficial PNP Autorizado por registro activo de servidor.',
     });
   }
 
+  // Candidate Guilds: Prioritize configured secrets
+  const candidateGuilds = [
+    vault.discordGuildId,
+    process.env.DISCORD_GUILD_ID,
+    '1156413773242957915',
+    '1554629558760775710',
+    '1070092818476978196',
+  ].filter((g, idx, arr) => Boolean(g) && arr.indexOf(g) === idx) as string[];
+
+  // Candidate Police Roles: Prioritize configured secrets
+  const candidatePoliceRoles = [
+    vault.pnpRoleId,
+    process.env.PNP_ROLE_ID,
+    '1444846762874372187',
+    '1555384968086032394',
+  ].filter((r, idx, arr) => Boolean(r) && arr.indexOf(r) === idx) as string[];
+
+  if (botToken && botToken !== 'tu_token_de_bot_aqui') {
+    let lastFoundMember: any = null;
+    let foundInAnyGuild = false;
+
+    for (const gid of candidateGuilds) {
+      try {
+        const guildRes = await fetch(`https://discord.com/api/v10/guilds/${gid}/members/${clean}`, {
+          headers: {
+            Authorization: `Bot ${botToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (guildRes.ok) {
+          foundInAnyGuild = true;
+          const memberData: any = await guildRes.json();
+          lastFoundMember = memberData;
+          const roles: string[] = memberData.roles || [];
+          const matchedRole = roles.find((r) => candidatePoliceRoles.includes(r));
+
+          if (matchedRole) {
+            if (!data.verifiedOfficers.includes(clean)) {
+              data.verifiedOfficers.push(clean);
+              savePnpSystem(data);
+            }
+            return res.json({
+              success: true,
+              isOfficer: true,
+              policeRoleId: matchedRole,
+              guildId: gid,
+              badge: `PNP-OFICIAL-${clean.slice(-4)}`,
+              member: {
+                username: memberData.user?.username,
+                displayName: memberData.nick || memberData.user?.global_name || memberData.user?.username,
+                avatar: memberData.user?.avatar,
+              },
+              message: `¡Identidad Policial Verificada! Rol PNP (${matchedRole}) confirmado en el servidor oficial.`,
+            });
+          }
+        }
+      } catch (err: any) {
+        console.error(`Error verificando guild ${gid}:`, err.message);
+      }
+    }
+
+    if (foundInAnyGuild && lastFoundMember) {
+      return res.json({
+        success: true,
+        isOfficer: false,
+        error: `Acceso denegado: El usuario "${lastFoundMember.user?.username || clean}" está en el servidor de Discord pero NO tiene el Rol Policial PNP autorizado.`,
+      });
+    }
+
+    return res.json({
+      success: true,
+      isOfficer: false,
+      error: `Acceso denegado: El ID de Discord "${clean}" no pertenece a los servidores configurados de PE:RP donde está el bot.`,
+    });
+  }
+
+  // Fallback
   return res.json({
     success: true,
     isOfficer: false,
-    policeRoleId: PNP_ROLE_ID,
-    guildId: GUILD_PERP_ID,
-    error: `Acceso denegado: Tu ID de Discord "${clean}" no cuenta con el Rol Policial PNP (${PNP_ROLE_ID}) en el servidor oficial de PE:RP.`,
+    error: `Acceso denegado: No se pudo verificar el rol de Discord en este momento.`,
   });
+});
+
+// 8. Check Driver's License Role (Checks Discord Guilds and License Roles)
+app.get('/api/pnp/check-license/:identifier', async (req, res) => {
+  const { identifier } = req.params;
+  const clean = identifier.trim().replace(/^@/, '');
+  const data = loadPnpSystem();
+  const vault = loadSecretsVault();
+  const botToken = vault.discordToken || process.env.DISCORD_TOKEN || '';
+
+  if (data.licensedUsers.includes(clean)) {
+    return res.json({ success: true, hasLicense: true });
+  }
+
+  const candidateGuilds = [
+    vault.discordGuildId,
+    process.env.DISCORD_GUILD_ID,
+    '1156413773242957915',
+    '1554629558760775710',
+  ].filter((g, idx, arr) => Boolean(g) && arr.indexOf(g) === idx) as string[];
+
+  const candidateLicenseRoles = [
+    vault.licenseRoleId,
+    process.env.LICENSE_ROLE_ID,
+    '1444861817863274506',
+    '1556723203114668082',
+  ].filter((r, idx, arr) => Boolean(r) && arr.indexOf(r) === idx) as string[];
+
+  if (botToken && /^\d{16,22}$/.test(clean)) {
+    for (const gid of candidateGuilds) {
+      try {
+        const guildRes = await fetch(`https://discord.com/api/v10/guilds/${gid}/members/${clean}`, {
+          headers: {
+            Authorization: `Bot ${botToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (guildRes.ok) {
+          const m: any = await guildRes.json();
+          const roles: string[] = m.roles || [];
+          const hasLic = roles.some((r) => candidateLicenseRoles.includes(r));
+          if (hasLic) {
+            if (!data.licensedUsers.includes(clean)) {
+              data.licensedUsers.push(clean);
+              savePnpSystem(data);
+            }
+            return res.json({ success: true, hasLicense: true });
+          }
+        }
+      } catch {}
+    }
+  }
+
+  return res.json({ success: true, hasLicense: false });
 });
 
 // ==========================================

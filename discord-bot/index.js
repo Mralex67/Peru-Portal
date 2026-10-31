@@ -28,8 +28,10 @@ const client = new Client({
 });
 
 // Roles y constantes operativas
-const POLICE_ROLE_ID = '1555384968086032394';
-const LICENSE_ROLE_ID = '1556723203114668082';
+const POLICE_ROLES = [process.env.PNP_ROLE_ID, '1444846762874372187', '1555384968086032394'].filter(Boolean);
+const LICENSE_ROLES = [process.env.LICENSE_ROLE_ID, '1444861817863274506', '1556723203114668082'].filter(Boolean);
+const POLICE_ROLE_ID = POLICE_ROLES[0] || '1555384968086032394';
+const LICENSE_ROLE_ID = LICENSE_ROLES[0] || '1556723203114668082';
 const TICKET_SECRET = '$ticket-master-pro11896767-proro';
 
 // ==========================================
@@ -1132,14 +1134,14 @@ client.on('interactionCreate', async (interaction) => {
       });
     }
 
-    // 10. /arrestar (Policía Nacional del Perú - Rol 1555384968086032394)
+    // 10. /arrestar (Policía Nacional del Perú)
     else if (commandName === 'arrestar') {
-      const isPolice = interaction.member?.roles?.cache?.has(POLICE_ROLE_ID) ||
+      const isPolice = interaction.member?.roles?.cache?.some(r => POLICE_ROLES.includes(r.id)) ||
         interaction.member?.permissions?.has('Administrator');
 
       if (!isPolice) {
         return interaction.reply({
-          content: '❌ **Acceso Denegado:** Este comando es exclusivo para la **Policía Nacional del Perú (PNP)**. Requiere el Rol Oficial: `<@&1555384968086032394>`.',
+          content: `❌ **Acceso Denegado:** Este comando es exclusivo para la **Policía Nacional del Perú (PNP)**. Requiere el Rol Policial autorizado.`,
           ephemeral: true,
         });
       }
@@ -1205,14 +1207,14 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply({ embeds: [embed] });
     }
 
-    // 11. /multar (Policía Nacional del Perú - Rol 1555384968086032394)
+    // 11. /multar (Policía Nacional del Perú)
     else if (commandName === 'multar') {
-      const isPolice = interaction.member?.roles?.cache?.has(POLICE_ROLE_ID) ||
+      const isPolice = interaction.member?.roles?.cache?.some(r => POLICE_ROLES.includes(r.id)) ||
         interaction.member?.permissions?.has('Administrator');
 
       if (!isPolice) {
         return interaction.reply({
-          content: '❌ **Acceso Denegado:** Este comando es exclusivo para la **Policía Nacional del Perú (PNP)**. Requiere el Rol Oficial: `<@&1555384968086032394>`.',
+          content: `❌ **Acceso Denegado:** Este comando es exclusivo para la **Policía Nacional del Perú (PNP)**. Requiere el Rol Policial autorizado.`,
           ephemeral: true,
         });
       }
@@ -1264,7 +1266,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply({ embeds: [embed] });
     }
 
-    // 12. /antecedentes (Ver antecedentes penales + licencia rol 1556723203114668082)
+    // 12. /antecedentes (Ver antecedentes penales + licencia)
     else if (commandName === 'antecedentes') {
       await interaction.deferReply();
       const usuario = interaction.options.getString('usuario', true);
@@ -1291,66 +1293,7 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) {}
       }
 
-      // Default mock records from images if target matches
-      if (arrests.length === 0 && (clean.includes('tsaonomori') || clean.includes('st-p') || clean.includes('jhair') || arrests.length === 0)) {
-        arrests = [
-          {
-            code: 'A-0017',
-            status: 'Cumplido',
-            charges: 'Intento de Homicidio',
-            duration_text: '3m',
-            bail_amount: 5000,
-            created_at: '2026-10-24',
-          },
-          {
-            code: 'A-0011',
-            status: 'Cumplido',
-            charges: 'Intento de asesinato, tener en posecion arma de fuego, darse a la fuga.',
-            duration_text: '5m',
-            bail_amount: 15000,
-            created_at: '2026-10-17',
-          },
-          {
-            code: 'A-0009',
-            status: 'Cumplido',
-            charges: 'Art.25',
-            duration_text: '5m',
-            bail_amount: 2,
-            created_at: '2026-10-16',
-          },
-        ];
-      }
-
-      if (fines.length === 0) {
-        fines = [
-          {
-            code: 'M-0004',
-            amount: 500,
-            status: 'Pagada',
-            reason: 'No portar licencia de conducir',
-            officer_name: 'gauxchio_murga',
-            created_at: '2026-10-17',
-          },
-          {
-            code: 'M-0003',
-            amount: 300,
-            status: 'Pagada',
-            reason: 'Pasar un semaforo n rojo',
-            officer_name: 'gauxchio_murga',
-            created_at: '2026-10-17',
-          },
-          {
-            code: 'M-0002',
-            amount: 100,
-            status: 'Pagada',
-            reason: 'Exceso de velocidad',
-            officer_name: 'gauxchio_murga',
-            created_at: '2026-10-17',
-          },
-        ];
-      }
-
-      // Check Driver's License role 1556723203114668082
+      // Check Driver's License role dynamically
       let hasLicense = false;
       const targetMember = interaction.guild?.members?.cache?.find(
         (m) =>
@@ -1359,7 +1302,7 @@ client.on('interactionCreate', async (interaction) => {
           m.displayName.toLowerCase().includes(clean)
       );
 
-      if (targetMember && targetMember.roles.cache.has(LICENSE_ROLE_ID)) {
+      if (targetMember && targetMember.roles.cache.some(r => LICENSE_ROLES.includes(r.id))) {
         hasLicense = true;
       } else if (clean === '61187362818282827' || clean.includes('tsaonomori')) {
         hasLicense = true;

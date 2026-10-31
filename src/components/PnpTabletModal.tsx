@@ -148,8 +148,8 @@ export const PnpTabletModal: React.FC = () => {
       return;
     }
 
-    if (!/^\d{16,21}$/.test(rawId)) {
-      setAuthError('Formato inválido. El ID de Discord debe contener entre 17 y 20 dígitos numéricos (ej. 61187362818282827). No se admiten claves genéricas ni PINs.');
+    if (!/^\d{16,22}$/.test(rawId)) {
+      setAuthError('Formato inválido. El ID de Discord debe contener entre 17 y 20 dígitos numéricos (ej. 1039283350298431581). No se admiten claves genéricas ni PINs.');
       return;
     }
 
@@ -158,18 +158,29 @@ export const PnpTabletModal: React.FC = () => {
     playClickSound();
 
     try {
-      const res = await fetch(`/api/pnp/verify-role/${encodeURIComponent(rawId)}`);
-      const data = await res.json();
+      let apiUrl = `/api/pnp/verify-role/${encodeURIComponent(rawId)}`;
+      if (typeof window !== 'undefined' && window.location.hostname.includes('github.io')) {
+        apiUrl = `https://ais-pre-iydhue5qk4b7wusoszmqp2-732238089491.us-east1.run.app/api/pnp/verify-role/${encodeURIComponent(rawId)}`;
+      }
+
+      const res = await fetch(apiUrl);
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error('Respuesta inválida del servidor de verificación.');
+      }
 
       if (data && data.isOfficer) {
         setIsPnpAuthenticated(true);
         setPnpOfficerBadge(data.badge || `PNP-${rawId.slice(-4)}`);
         playSuccessSound();
       } else {
-        setAuthError(data?.error || `Acceso denegado: El usuario no posee el Rol Policial PNP (ID: 1555384968086032394) en el servidor oficial Perú Streets RP (ID: 1554629558760775710).`);
+        setAuthError(data?.error || `Acceso denegado: El usuario no cuenta con el Rol Policial PNP autorizado en el servidor de Discord.`);
       }
-    } catch {
-      setAuthError('Error de red al consultar el servidor de verificación.');
+    } catch (err: any) {
+      setAuthError(err.message || 'Error de red al consultar el servidor de verificación.');
     } finally {
       setIsVerifyingDiscord(false);
     }
@@ -391,7 +402,7 @@ export const PnpTabletModal: React.FC = () => {
                   Verificar Identidad Policial
                 </h2>
                 <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
-                  Terminal Móvil de la <strong>Policía Nacional del Perú (PE:RP)</strong>. El sistema valida mediante el bot que estés en el <strong>Servidor Oficial (ID: 1554629558760775710)</strong> y cuentes con el <strong>Rol PNP (ID: 1555384968086032394)</strong>.
+                  Terminal Móvil de la <strong>Policía Nacional del Perú (PE:RP)</strong>. El sistema valida automáticamente mediante el bot oficial que estés en el servidor de Discord y cuentes con el <strong>Rol Policial PNP</strong> asignado.
                 </p>
               </div>
 
