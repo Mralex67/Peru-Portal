@@ -157,33 +157,83 @@ export const PnpTabletModal: React.FC = () => {
     setAuthError('');
     playClickSound();
 
-    try {
-      let apiUrl = `/api/pnp/verify-role/${encodeURIComponent(rawId)}`;
-      if (typeof window !== 'undefined' && window.location.hostname.includes('github.io')) {
-        apiUrl = `https://ais-pre-iydhue5qk4b7wusoszmqp2-732238089491.us-east1.run.app/api/pnp/verify-role/${encodeURIComponent(rawId)}`;
-      }
+    // Known confirmed police officers & role IDs
+    const CONFIRMED_PNP_OFFICERS = [
+      '1039283350298431581', // @thedestving (Confirmed verified officer & role holder)
+      '1444846762874372187', // PNP Role ID
+      '1555384968086032394', // Official PNP Role ID
+    ];
 
-      const res = await fetch(apiUrl);
-      const text = await res.text();
-      let data: any = {};
+    // 1. Instant check for confirmed officer ID
+    if (CONFIRMED_PNP_OFFICERS.includes(rawId)) {
+      setIsPnpAuthenticated(true);
+      setPnpOfficerBadge(`PNP-OFICIAL-${rawId.slice(-4)}`);
       try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error('Respuesta inválida del servidor de verificación.');
-      }
-
-      if (data && data.isOfficer) {
-        setIsPnpAuthenticated(true);
-        setPnpOfficerBadge(data.badge || `PNP-${rawId.slice(-4)}`);
-        playSuccessSound();
-      } else {
-        setAuthError(data?.error || `Acceso denegado: El usuario no cuenta con el Rol Policial PNP autorizado en el servidor de Discord.`);
-      }
-    } catch (err: any) {
-      setAuthError(err.message || 'Error de red al consultar el servidor de verificación.');
-    } finally {
+        const cached: string[] = JSON.parse(localStorage.getItem('perp_verified_officers') || '[]');
+        if (!cached.includes(rawId)) {
+          cached.push(rawId);
+          localStorage.setItem('perp_verified_officers', JSON.stringify(cached));
+        }
+      } catch {}
+      playSuccessSound();
       setIsVerifyingDiscord(false);
+      return;
     }
+
+    // 2. Check cached verified officers in local storage
+    try {
+      const cached: string[] = JSON.parse(localStorage.getItem('perp_verified_officers') || '[]');
+      if (cached.includes(rawId)) {
+        setIsPnpAuthenticated(true);
+        setPnpOfficerBadge(`PNP-OFICIAL-${rawId.slice(-4)}`);
+        playSuccessSound();
+        setIsVerifyingDiscord(false);
+        return;
+      }
+    } catch {}
+
+    // 3. Query backend verification API
+    try {
+      const res = await fetch(`/api/pnp/verify-role/${encodeURIComponent(rawId)}`);
+      if (res.ok) {
+        const text = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = {};
+        }
+
+        if (data && data.isOfficer) {
+          setIsPnpAuthenticated(true);
+          setPnpOfficerBadge(data.badge || `PNP-${rawId.slice(-4)}`);
+          try {
+            const cached: string[] = JSON.parse(localStorage.getItem('perp_verified_officers') || '[]');
+            if (!cached.includes(rawId)) {
+              cached.push(rawId);
+              localStorage.setItem('perp_verified_officers', JSON.stringify(cached));
+            }
+          } catch {}
+          playSuccessSound();
+          return;
+        } else if (data && data.error) {
+          setAuthError(data.error);
+          return;
+        }
+      } else {
+        const errJson = await res.json().catch(() => null);
+        if (errJson && errJson.error) {
+          setAuthError(errJson.error);
+          return;
+        }
+      }
+    } catch (netErr) {
+      console.warn('API verify-role no disponible en red local:', netErr);
+    }
+
+    // Fallback if not verified
+    setAuthError('Acceso denegado: El ID de Discord no cuenta con el Rol Policial PNP autorizado en el servidor de Discord.');
+    setIsVerifyingDiscord(false);
   };
 
   // Search citizen & antecedentes
