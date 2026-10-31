@@ -359,11 +359,13 @@ function mapSupabaseRow(data: any): PeruDni {
  */
 export async function getUserDni(
   identifier: string,
-  secondaryIdentifier?: string
+  secondaryIdentifier?: string,
+  thirdIdentifier?: string
 ): Promise<PeruDni | null> {
   const clean = (identifier || '').trim().replace(/^@/, '');
   const cleanSec = (secondaryIdentifier || '').trim().replace(/^@/, '');
-  if (!clean && !cleanSec) return null;
+  const cleanThird = (thirdIdentifier || '').trim().replace(/^@/, '');
+  if (!clean && !cleanSec && !cleanThird) return null;
 
   // Make sure configuration is synced from server
   await syncSupabaseConfig();
@@ -372,22 +374,18 @@ export async function getUserDni(
   if (supabase) {
     try {
       const orConditions: string[] = [];
-      if (clean) {
+      const addConditions = (term: string) => {
+        if (!term) return;
         orConditions.push(
-          `discord_id.eq.${clean}`,
-          `roblox_username.ilike.${clean}`,
-          `dni_number.eq.${clean}`,
-          `discord_username.ilike.${clean}`
+          `discord_id.eq.${term}`,
+          `roblox_username.ilike.${term}`,
+          `dni_number.eq.${term}`,
+          `discord_username.ilike.${term}`
         );
-      }
-      if (cleanSec && cleanSec !== clean) {
-        orConditions.push(
-          `discord_id.eq.${cleanSec}`,
-          `roblox_username.ilike.${cleanSec}`,
-          `dni_number.eq.${cleanSec}`,
-          `discord_username.ilike.${cleanSec}`
-        );
-      }
+      };
+      if (clean) addConditions(clean);
+      if (cleanSec && cleanSec !== clean) addConditions(cleanSec);
+      if (cleanThird && cleanThird !== clean && cleanThird !== cleanSec) addConditions(cleanThird);
 
       const { data, error } = await supabase
         .from('peru_dnis')
@@ -407,26 +405,16 @@ export async function getUserDni(
 
   // Check local cache
   const locals = getLocalDnis();
-  const foundLocal = locals.find(
-    (d) =>
-      (clean && (
-        d.discordId === clean ||
-        d.dniNumber === clean ||
-        d.robloxUsername?.toLowerCase() === clean.toLowerCase() ||
-        d.discordUsername?.toLowerCase() === clean.toLowerCase()
-      )) ||
-      (cleanSec && (
-        d.discordId === cleanSec ||
-        d.dniNumber === cleanSec ||
-        d.robloxUsername?.toLowerCase() === cleanSec.toLowerCase() ||
-        d.discordUsername?.toLowerCase() === cleanSec.toLowerCase()
-      ))
-  );
+  const searchTerms = [clean, cleanSec, cleanThird].filter(Boolean).map((t) => t.toLowerCase());
+  const foundLocal = locals.find((d) => {
+    const vals = [d.discordId, d.dniNumber, d.robloxUsername, d.discordUsername, d.fullName].filter(Boolean).map((v) => String(v).toLowerCase());
+    return searchTerms.some((term) => vals.some((v) => v === term || v.includes(term)));
+  });
   if (foundLocal) return foundLocal;
 
   // Fallback to Backend Server API (which also queries Supabase in real-time)
   if (typeof window !== 'undefined') {
-    const targets = [clean, cleanSec].filter(Boolean);
+    const targets = [clean, cleanSec, cleanThird].filter(Boolean);
     for (const t of targets) {
       try {
         const res = await fetch(`/api/bot/dni/${encodeURIComponent(t)}`);

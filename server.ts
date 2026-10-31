@@ -2157,35 +2157,90 @@ function savePnpSystem(data: PnpSystemData) {
   }
 }
 
-// 1. Get all arrests
-app.get('/api/pnp/arrests', (req, res) => {
+// 1. Get all arrests (Backend + Supabase sync)
+app.get('/api/pnp/arrests', async (req, res) => {
   const data = loadPnpSystem();
-  res.json({ success: true, arrests: data.arrests });
+  const map = new Map<string, any>();
+  for (const a of data.arrests) {
+    const key = (a.code || a.arrestCode || '').toUpperCase();
+    if (key) map.set(key, a);
+  }
+
+  const supa = getServerSupabase();
+  if (supa) {
+    try {
+      const { data: cloudArrests } = await supa.from('pnp_arrests').select('*').order('created_at', { ascending: false });
+      if (Array.isArray(cloudArrests)) {
+        for (const ca of cloudArrests) {
+          const code = ca.code || ca.arrest_code || 'A-0018';
+          const key = code.toUpperCase();
+          if (!map.has(key)) {
+            const suspect = ca.citizen_identifier || ca.suspect_roblox || 'Ciudadano';
+            map.set(key, {
+              id: ca.id || `arr-${code}`,
+              code,
+              arrestCode: code,
+              citizenIdentifier: suspect,
+              suspectRoblox: suspect,
+              citizenName: ca.citizen_name || `@ [ST-P] ${suspect}`,
+              charges: ca.charges || 'Infracción',
+              durationText: ca.duration_text || `${ca.duration_minutes || 3}m (${ca.duration_minutes || 3} minutos)`,
+              durationMinutes: ca.duration_minutes || 3,
+              timeMinutes: ca.duration_minutes || 3,
+              bailAmount: ca.bail_amount || 0,
+              officerName: ca.officer_name || '@Oficial_PNP',
+              evidenceUrl: ca.evidence_url || ca.evidence_image || '',
+              status: ca.status || 'activo',
+              createdAt: ca.created_at ? ca.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Supabase arrests read notice in server:', e);
+    }
+  }
+
+  const list = Array.from(map.values()).sort((a, b) => (b.code || '').localeCompare(a.code || ''));
+  res.json({ success: true, arrests: list });
 });
 
-// 2. Register arrest (SIPOL)
-app.post('/api/pnp/arrests', (req, res) => {
+// 2. Register arrest (SIPOL & Supabase)
+app.post('/api/pnp/arrests', async (req, res) => {
   try {
-    const { citizenIdentifier, citizenName, charges, durationText, bailAmount = 0, officerName, evidenceUrl } = req.body;
+    const body = req.body || {};
+    const citizenIdentifier = body.citizenIdentifier || body.suspectRoblox || body.user || body.citizenName;
+    const charges = body.charges || body.motivo || body.reason;
+
     if (!citizenIdentifier || !charges) {
       return res.status(400).json({ success: false, error: 'Falta usuario o cargos del arresto' });
     }
 
     const data = loadPnpSystem();
+    const cleanUser = String(citizenIdentifier).trim().replace(/^@/, '').replace(/^\[/, '').replace(/\]$/, '');
     const nextNum = data.arrests.length + 18;
-    const code = `A-00${nextNum}`;
+    const code = body.code || body.arrestCode || `A-00${nextNum}`;
+    const durationMinutes = parseInt(body.durationMinutes || body.timeMinutes || body.durationText || 3) || 3;
+    const durationText = body.durationText || body.timeDisplay || `${durationMinutes}m (${durationMinutes} minutos)`;
+    const bailAmount = Number(body.bailAmount || body.fianza || 0) || 0;
+    const officerName = body.officerName || body.oficial || '@Oficial_PNP';
+    const evidenceUrl = body.evidenceUrl || body.evidenceImageUrl || body.archivo || '';
 
     const newArrest = {
-      id: `arr-${Date.now()}`,
+      id: body.id || `arr-${Date.now()}`,
       code,
-      citizenIdentifier: citizenIdentifier.trim().replace(/^@/, ''),
-      citizenName: citizenName?.trim() || `@ ${citizenIdentifier.trim().replace(/^@/, '')}`,
-      charges: charges.trim(),
-      durationText: durationText?.trim() || '3m (3 minutos)',
-      durationMinutes: parseInt(durationText) || 3,
-      bailAmount: Number(bailAmount) || 0,
-      officerName: officerName?.trim() || '@Oficial_PNP',
-      evidenceUrl: evidenceUrl || '',
+      arrestCode: code,
+      citizenIdentifier: cleanUser,
+      suspectRoblox: cleanUser,
+      citizenName: body.citizenName || body.suspectName || `@ [ST-P] ${cleanUser}`,
+      charges: String(charges).trim(),
+      durationText,
+      durationMinutes,
+      timeMinutes: durationMinutes,
+      bailAmount,
+      officerName: String(officerName).startsWith('@') ? officerName : `@${officerName}`,
+      evidenceUrl,
+      evidenceImageUrl: evidenceUrl,
       status: 'activo',
       createdAt: new Date().toISOString(),
     };
@@ -2193,44 +2248,146 @@ app.post('/api/pnp/arrests', (req, res) => {
     data.arrests.unshift(newArrest);
     savePnpSystem(data);
 
+    // Save to Supabase Cloud
+    const supa = getServerSupabase();
+    if (supa) {
+      try {
+        await supa.from('pnp_arrests').insert([
+          {
+            code,
+            arrest_code: code,
+            citizen_identifier: cleanUser,
+            suspect_roblox: cleanUser,
+            citizen_name: newArrest.citizenName,
+            charges: newArrest.charges,
+            duration_text: durationText,
+            duration_minutes: durationMinutes,
+            time_minutes: durationMinutes,
+            bail_amount: bailAmount,
+            officer_name: newArrest.officerName,
+            evidence_url: evidenceUrl || null,
+            evidence_image: evidenceUrl || null,
+            status: 'activo',
+          },
+        ]);
+      } catch (se) {
+        console.warn('Supabase arrest insert notice in server:', se);
+      }
+    }
+
     res.json({ success: true, arrest: newArrest });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 3. Get all fines
-app.get('/api/pnp/fines', (req, res) => {
+// 3. Get all fines (Backend + Supabase sync)
+app.get('/api/pnp/fines', async (req, res) => {
   const data = loadPnpSystem();
-  res.json({ success: true, fines: data.fines });
+  const map = new Map<string, any>();
+  for (const f of data.fines) {
+    const key = (f.code || f.fineCode || '').toUpperCase();
+    if (key) map.set(key, f);
+  }
+
+  const supa = getServerSupabase();
+  if (supa) {
+    try {
+      const { data: cloudFines } = await supa.from('pnp_fines').select('*').order('created_at', { ascending: false });
+      if (Array.isArray(cloudFines)) {
+        for (const cf of cloudFines) {
+          const code = cf.code || cf.fine_code || 'M-0005';
+          const key = code.toUpperCase();
+          if (!map.has(key)) {
+            const suspect = cf.citizen_identifier || cf.suspect_roblox || 'Ciudadano';
+            map.set(key, {
+              id: cf.id || `fine-${code}`,
+              code,
+              fineCode: code,
+              citizenIdentifier: suspect,
+              suspectRoblox: suspect,
+              citizenName: cf.citizen_name || `@ [${suspect}]`,
+              reason: cf.reason || 'Conduccion temeraria',
+              amount: cf.amount || 100,
+              status: cf.status || 'pendiente',
+              officerName: cf.issued_by || cf.officer_name || 'Oficial_PNP',
+              issuedBy: cf.issued_by || cf.officer_name || 'Oficial_PNP',
+              issuedDate: cf.issued_date || (cf.created_at ? cf.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+              createdAt: cf.created_at || new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Supabase fines read notice in server:', e);
+    }
+  }
+
+  const list = Array.from(map.values()).sort((a, b) => (b.code || '').localeCompare(a.code || ''));
+  res.json({ success: true, fines: list });
 });
 
-// 4. Register fine
-app.post('/api/pnp/fines', (req, res) => {
+// 4. Register fine (SIPOL & Supabase)
+app.post('/api/pnp/fines', async (req, res) => {
   try {
-    const { citizenIdentifier, citizenName, reason, amount, officerName } = req.body;
+    const body = req.body || {};
+    const citizenIdentifier = body.citizenIdentifier || body.suspectRoblox || body.user;
+    const reason = body.reason || body.motivo;
+    const amount = body.amount !== undefined ? body.amount : body.monto;
+
     if (!citizenIdentifier || !reason || amount === undefined) {
       return res.status(400).json({ success: false, error: 'Falta usuario, motivo o monto de la multa' });
     }
 
     const data = loadPnpSystem();
+    const cleanUser = String(citizenIdentifier).trim().replace(/^@/, '').replace(/^\[/, '').replace(/\]$/, '');
     const nextNum = data.fines.length + 6;
-    const code = `M-00${nextNum < 10 ? '0' + nextNum : nextNum}`;
+    const code = body.code || body.fineCode || `M-00${nextNum < 10 ? '0' + nextNum : nextNum}`;
+    const numAmount = Number(amount) || 100;
+    const officerName = body.officerName || body.issuedBy || body.oficial || 'Oficial_PNP';
+    const todayStr = new Date().toISOString().slice(0, 10);
 
     const newFine = {
-      id: `fine-${Date.now()}`,
+      id: body.id || `fine-${Date.now()}`,
       code,
-      citizenIdentifier: citizenIdentifier.trim().replace(/^@/, ''),
-      citizenName: citizenName?.trim() || `@ [${citizenIdentifier.trim().replace(/^@/, '')}]`,
-      reason: reason.trim(),
-      amount: Number(amount) || 100,
+      fineCode: code,
+      citizenIdentifier: cleanUser,
+      suspectRoblox: cleanUser,
+      citizenName: body.citizenName || `@ [${cleanUser}]`,
+      reason: String(reason).trim(),
+      amount: numAmount,
       status: 'pendiente',
-      officerName: officerName?.trim() || 'Oficial_PNP',
+      officerName: String(officerName).trim(),
+      issuedBy: String(officerName).trim(),
+      issuedDate: body.issuedDate || todayStr,
       createdAt: new Date().toISOString(),
     };
 
     data.fines.unshift(newFine);
     savePnpSystem(data);
+
+    // Save to Supabase Cloud
+    const supa = getServerSupabase();
+    if (supa) {
+      try {
+        await supa.from('pnp_fines').insert([
+          {
+            code,
+            fine_code: code,
+            citizen_identifier: cleanUser,
+            suspect_roblox: cleanUser,
+            reason: newFine.reason,
+            amount: numAmount,
+            status: 'pendiente',
+            issued_by: newFine.officerName,
+            officer_name: newFine.officerName,
+            issued_date: newFine.issuedDate,
+          },
+        ]);
+      } catch (se) {
+        console.warn('Supabase fine insert notice in server:', se);
+      }
+    }
 
     res.json({ success: true, fine: newFine });
   } catch (err: any) {
@@ -2250,6 +2407,163 @@ app.put('/api/pnp/fines/:code/pay', (req, res) => {
   fine.paidAt = new Date().toISOString();
   savePnpSystem(data);
   res.json({ success: true, fine });
+});
+
+// 5a. Delete single arrest (DEX Admin / PNP)
+app.delete('/api/pnp/arrests/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanId = id.trim().toLowerCase();
+    const data = loadPnpSystem();
+    const prevCount = data.arrests.length;
+    data.arrests = data.arrests.filter(
+      (a: any) =>
+        (a.id || '').toLowerCase() !== cleanId &&
+        (a.code || '').toLowerCase() !== cleanId &&
+        (a.arrestCode || '').toLowerCase() !== cleanId
+    );
+    savePnpSystem(data);
+
+    // Delete from Supabase if active
+    const supa = getServerSupabase();
+    if (supa) {
+      try {
+        await supa.from('pnp_arrests').delete().or(`code.eq.${id},arrest_code.eq.${id},id.eq.${id}`);
+      } catch (e) {
+        console.warn('Notice deleting arrest from Supabase:', e);
+      }
+    }
+
+    res.json({ success: true, deleted: data.arrests.length < prevCount, message: 'Arresto eliminado correctamente' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5b. Delete single fine (DEX Admin / PNP)
+app.delete('/api/pnp/fines/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanId = id.trim().toLowerCase();
+    const data = loadPnpSystem();
+    const prevCount = data.fines.length;
+    data.fines = data.fines.filter(
+      (f: any) =>
+        (f.id || '').toLowerCase() !== cleanId &&
+        (f.code || '').toLowerCase() !== cleanId &&
+        (f.fineCode || '').toLowerCase() !== cleanId
+    );
+    savePnpSystem(data);
+
+    // Delete from Supabase if active
+    const supa = getServerSupabase();
+    if (supa) {
+      try {
+        await supa.from('pnp_fines').delete().or(`code.eq.${id},fine_code.eq.${id},id.eq.${id}`);
+      } catch (e) {
+        console.warn('Notice deleting fine from Supabase:', e);
+      }
+    }
+
+    res.json({ success: true, deleted: data.fines.length < prevCount, message: 'Multa eliminada correctamente' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5c. Delete single sanction (DEX Admin)
+app.delete('/api/pnp/sanctions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanId = id.trim().toLowerCase();
+    const data = loadPnpSystem();
+    const prevCount = (data.sanctions || []).length;
+    data.sanctions = (data.sanctions || []).filter((s: any) => (s.id || '').toLowerCase() !== cleanId);
+    savePnpSystem(data);
+
+    const supa = getServerSupabase();
+    if (supa) {
+      try {
+        await supa.from('pnp_sanctions').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Notice deleting sanction from Supabase:', e);
+      }
+    }
+
+    res.json({ success: true, deleted: (data.sanctions || []).length < prevCount, message: 'Sanción eliminada correctamente' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5d. Clear ALL criminal records / antecedentes for a citizen
+app.delete('/api/pnp/records/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+    const data = loadPnpSystem();
+
+    data.arrests = data.arrests.filter(
+      (a: any) =>
+        (a.citizenIdentifier || a.suspectRoblox || '').toLowerCase() !== clean &&
+        !(a.citizenName || '').toLowerCase().includes(clean)
+    );
+    data.fines = data.fines.filter(
+      (f: any) =>
+        (f.citizenIdentifier || f.suspectRoblox || '').toLowerCase() !== clean &&
+        !(f.citizenName || '').toLowerCase().includes(clean)
+    );
+    data.sanctions = (data.sanctions || []).filter(
+      (s: any) =>
+        (s.userRoblox || '').toLowerCase() !== clean &&
+        (s.userDiscordId || '').toLowerCase() !== clean
+    );
+    savePnpSystem(data);
+
+    // Delete from Supabase if active
+    const supa = getServerSupabase();
+    if (supa) {
+      try {
+        await supa.from('pnp_arrests').delete().or(`citizen_identifier.eq.${clean},suspect_roblox.eq.${clean}`);
+        await supa.from('pnp_fines').delete().or(`citizen_identifier.eq.${clean},suspect_roblox.eq.${clean}`);
+        await supa.from('pnp_sanctions').delete().or(`user_roblox.eq.${clean},user_discord_id.eq.${clean}`);
+      } catch (e) {
+        console.warn('Notice deleting citizen records from Supabase:', e);
+      }
+    }
+
+    res.json({
+      success: true,
+      cleared: true,
+      message: `Antecedentes penales de ${clean} limpiados por completo (0 arrestos, 0 multas).`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5e. Reset all PNP records to 0
+app.post('/api/pnp/reset-all', async (req, res) => {
+  try {
+    const data = loadPnpSystem();
+    data.arrests = [];
+    data.fines = [];
+    data.sanctions = [];
+    savePnpSystem(data);
+
+    const supa = getServerSupabase();
+    if (supa) {
+      try {
+        await supa.from('pnp_arrests').delete().neq('id', 'keep_none_placeholder');
+        await supa.from('pnp_fines').delete().neq('id', 'keep_none_placeholder');
+        await supa.from('pnp_sanctions').delete().neq('id', 'keep_none_placeholder');
+      } catch (e) {}
+    }
+
+    res.json({ success: true, message: 'Todos los registros de arrestos, multas y sanciones fueron reseteados a 0.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // 6. Get Antecedentes & Citizen Record (matching image 3)

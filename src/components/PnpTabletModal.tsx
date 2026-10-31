@@ -36,6 +36,8 @@ import { PnpArrest, PnpFine, PnpSanction, PNP_PENAL_CODE } from '../types/pnp';
 import {
   getLocalArrests,
   getLocalFines,
+  fetchSharedArrests,
+  fetchSharedFines,
   registerArrest,
   registerFine,
   getCitizenPoliceRecord,
@@ -123,15 +125,28 @@ export const PnpTabletModal: React.FC = () => {
     }
   }, [discordUser]);
 
-  // Load registry on open
+  // Load registry on open and sync from shared server/Supabase
   useEffect(() => {
     if (isPnpTabletOpen) {
       setAllArrests(getLocalArrests());
       setAllFines(getLocalFines());
+
+      // Live sync so Officer B on another PC sees records created by Officer A
+      fetchSharedArrests().then((list) => setAllArrests(list)).catch(() => {});
+      fetchSharedFines().then((list) => setAllFines(list)).catch(() => {});
+
+      // Auto-poll every 4 seconds so cross-device arrests & fines appear live
+      const syncTimer = setInterval(() => {
+        fetchSharedArrests().then((list) => setAllArrests(list)).catch(() => {});
+        fetchSharedFines().then((list) => setAllFines(list)).catch(() => {});
+      }, 4000);
+
       // Default to search pre-filled with sample or citizen
       if (!searchedCitizen && !searchQuery) {
         handleSearchCitizen('Tsaonomori');
       }
+
+      return () => clearInterval(syncTimer);
     }
   }, [isPnpTabletOpen]);
 
@@ -313,6 +328,7 @@ export const PnpTabletModal: React.FC = () => {
 
       setArrestSubmitted(newArrest);
       setAllArrests(getLocalArrests());
+      fetchSharedArrests().then((list) => setAllArrests(list)).catch(() => {});
       playSuccessSound();
     } catch (err: any) {
       alert(err?.message || 'Error registrando arresto');
@@ -345,6 +361,7 @@ export const PnpTabletModal: React.FC = () => {
 
       setFineSubmitted(newFine);
       setAllFines(getLocalFines());
+      fetchSharedFines().then((list) => setAllFines(list)).catch(() => {});
       playSuccessSound();
     } catch (err: any) {
       alert(err?.message || 'Error registrando multa');

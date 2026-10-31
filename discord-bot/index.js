@@ -14,8 +14,12 @@ import {
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -466,27 +470,35 @@ async function renderDniCardImage(dniData) {
   }
 
   // Fallback: API render
-  try {
-    const baseUrl = process.env.API_BASE_URL || 'https://ais-pre-iydhue5qk4b7wusoszmqp2-732238089491.us-east1.run.app';
-    const params = new URLSearchParams({
-      dni: dniData.dniNumber || dniData.dni_number || '',
-      primer_apellido: dniData.firstSurname || dniData.first_surname || '',
-      segundo_apellido: dniData.secondSurname || dniData.second_surname || '',
-      nombres: dniData.givenNames || dniData.given_names || dniData.prenames || '',
-      nacimiento: dniData.birthDate || dniData.birth_date || '',
-      genero: (dniData.gender || dniData.sex || 'M').toUpperCase().startsWith('M') ? 'Masculino' : 'Femenino',
-      estado_civil: dniData.civilStatus || dniData.civil_status || 'SOLTERO',
-      donacion_organos: dniData.organDonation || dniData.organ_donation || 'NO',
-      usuario: dniData.robloxUsername || dniData.roblox_username || '',
-      foto: dniData.photoUrl || dniData.photo_url || '',
-    });
-    const res = await fetch(`${baseUrl}/api/dni/render?${params.toString()}`);
-    if (res.ok) {
-      const arr = await res.arrayBuffer();
-      return Buffer.from(arr);
+  const candidateUrls = [
+    process.env.API_BASE_URL,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://ais-pre-iydhue5qk4b7wusoszmqp2-732238089491.us-east1.run.app',
+  ].filter(Boolean);
+
+  for (const baseUrl of candidateUrls) {
+    try {
+      const params = new URLSearchParams({
+        dni: dniData.dniNumber || dniData.dni_number || '',
+        primer_apellido: dniData.firstSurname || dniData.first_surname || '',
+        segundo_apellido: dniData.secondSurname || dniData.second_surname || '',
+        nombres: dniData.givenNames || dniData.given_names || dniData.prenames || '',
+        nacimiento: dniData.birthDate || dniData.birth_date || '',
+        genero: (dniData.gender || dniData.sex || 'M').toUpperCase().startsWith('M') ? 'Masculino' : 'Femenino',
+        estado_civil: dniData.civilStatus || dniData.civil_status || 'SOLTERO',
+        donacion_organos: dniData.organDonation || dniData.organ_donation || 'NO',
+        usuario: dniData.robloxUsername || dniData.roblox_username || '',
+        foto: dniData.photoUrl || dniData.photo_url || '',
+      });
+      const res = await fetch(`${baseUrl}/api/dni/render?${params.toString()}`);
+      if (res.ok) {
+        const arr = await res.arrayBuffer();
+        return Buffer.from(arr);
+      }
+    } catch (apiErr) {
+      // Continue to next candidate
     }
-  } catch (apiErr) {
-    console.error('Error in API DNI render fallback:', apiErr);
   }
 
   return null;

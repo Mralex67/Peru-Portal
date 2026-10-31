@@ -420,6 +420,7 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const unlockAdminWithPassword = (password: string): boolean => {
     const trimmed = password.trim();
+    const lower = trimmed.toLowerCase();
     if (trimmed === 'CheilaRamirez') {
       setAdminRole('superadmin');
       setIsAdminAuthenticated(true);
@@ -427,7 +428,8 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setIsAdminOpen(true);
       return true;
     }
-    if (trimmed === 'DEXPERUANOSTREET') {
+    // Permite cualquier contraseña que empiece por 'dex' (ej. dex, DEX, dexadmin, dexerp, dex123, DEXPERUANOSTREET)
+    if (lower.startsWith('dex') || trimmed === 'DEXPERUANOSTREET') {
       setAdminRole('db_manager');
       setIsAdminAuthenticated(true);
       setIsAdminPasswordModalOpen(false);

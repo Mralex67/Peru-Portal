@@ -61,6 +61,17 @@ import {
   resetAllYapo,
   YAPO_SUPABASE_SQL,
 } from '../lib/yapoStorage';
+import { PnpArrest, PnpFine, PnpSanction } from '../types/pnp';
+import {
+  fetchSharedArrests,
+  fetchSharedFines,
+  deleteArrest,
+  deleteFine,
+  deleteSanction,
+  clearCitizenPoliceRecords,
+  resetAllPnpRecords,
+  getLocalSanctions,
+} from '../lib/pnpStorage';
 
 interface AlbumItem {
   id: string;
@@ -72,7 +83,35 @@ export const AdminPanelModal: React.FC = () => {
   const { config, updateConfig, resetConfig, isAdminOpen, setIsAdminOpen, lockAdmin, adminRole } = useServer();
 
   const [formData, setFormData] = useState({ ...config });
-  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot' | 'template' | 'secrets'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'erlc' | 'multimedia' | 'discord' | 'supabase' | 'bank' | 'bot' | 'template' | 'secrets' | 'pnp_records'>('general');
+
+  // PNP / Antecedentes Administration (DEX / Superadmin)
+  const [adminArrests, setAdminArrests] = useState<PnpArrest[]>([]);
+  const [adminFines, setAdminFines] = useState<PnpFine[]>([]);
+  const [adminSanctions, setAdminSanctions] = useState<PnpSanction[]>([]);
+  const [adminPnpFilter, setAdminPnpFilter] = useState<'all' | 'arrests' | 'fines' | 'sanctions'>('all');
+  const [adminPnpSearch, setAdminPnpSearch] = useState('');
+  const [clearCitizenTarget, setClearCitizenTarget] = useState('');
+  const [pnpAdminFeedback, setPnpAdminFeedback] = useState('');
+  const [isDeletingPnpItem, setIsDeletingPnpItem] = useState(false);
+
+  const loadAdminPnpData = async () => {
+    try {
+      const arrests = await fetchSharedArrests();
+      setAdminArrests(arrests);
+      const fines = await fetchSharedFines();
+      setAdminFines(fines);
+      setAdminSanctions(getLocalSanctions());
+    } catch (e) {
+      console.warn('Error loading admin PNP data:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminOpen) {
+      loadAdminPnpData();
+    }
+  }, [isAdminOpen]);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
 
@@ -1050,6 +1089,26 @@ export const AdminPanelModal: React.FC = () => {
                 type="button"
                 onClick={() => {
                   playClickSound();
+                  setActiveTab('pnp_records');
+                  loadAdminPnpData();
+                }}
+                className={`pb-2.5 px-4 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap ${
+                  activeTab === 'pnp_records' ? 'border-red-500 text-white bg-red-950/40 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <span>Policía & Antecedentes (Eliminar / Sanciones)</span>
+                {(adminArrests.length > 0 || adminFines.length > 0) && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-red-950 text-red-300 border border-red-500/40 text-[10px] font-mono">
+                    {adminArrests.length + adminFines.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
                   setActiveTab('secrets');
                 }}
                 className={`pb-2.5 px-4 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-2 whitespace-nowrap ${
@@ -1166,6 +1225,25 @@ export const AdminPanelModal: React.FC = () => {
               >
                 <Palette className="w-3.5 h-3.5 text-sky-400" />
                 Plantilla DNI (Canva)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setActiveTab('pnp_records');
+                  loadAdminPnpData();
+                }}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'pnp_records' ? 'border-red-500 text-white bg-red-950/30 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                <span>Policía & Antecedentes</span>
+                {(adminArrests.length > 0 || adminFines.length > 0) && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-red-950 text-red-300 border border-red-500/40 text-[10px] font-mono">
+                    {adminArrests.length + adminFines.length}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -4199,6 +4277,470 @@ export const AdminPanelModal: React.FC = () => {
                     <span>{isSavingSecrets ? 'Guardando en Servidor...' : '💾 Guardar en Bóveda del Servidor (Persistente Global)'}</span>
                   </button>
                 </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB: POLICIA, ANTECEDENTES Y SANCIONES (DEX ADMIN) */}
+          {activeTab === 'pnp_records' && (
+            <div className="space-y-6">
+              
+              {/* Header Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-red-950/60 via-slate-900 to-[#0a0d14] border border-red-500/30 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 mt-0.5">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Administración de Registros Policiales, Antecedentes & Sanciones</span>
+                      <span className="px-2 py-0.5 rounded bg-red-950 text-red-300 text-[10px] font-mono border border-red-500/40 font-bold">
+                        DEX PANEL
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                      Elimina multas erróneas, anula arrestos o borra los antecedentes penales de cualquier ciudadano en tiempo real. Los cambios se sincronizan de inmediato para todos los oficiales, tablets y el bot de Discord.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    playClickSound();
+                    await loadAdminPnpData();
+                    setPnpAdminFeedback('✅ Datos sincronizados con la base de datos central.');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold border border-white/10 flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Refrescar</span>
+                </button>
+              </div>
+
+              {/* Feedback Alert */}
+              {pnpAdminFeedback && (
+                <div className={`p-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between ${
+                  pnpAdminFeedback.startsWith('✅')
+                    ? 'bg-emerald-950/70 text-emerald-200 border border-emerald-500/40'
+                    : 'bg-rose-950/70 text-rose-200 border border-rose-500/40'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {pnpAdminFeedback.startsWith('✅') ? (
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{pnpAdminFeedback}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPnpAdminFeedback('')}
+                    className="text-slate-400 hover:text-white text-xs ml-3"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* SECTION 1: LIMPIAR ANTECEDENTES DE UN CIUDADANO ESPECIFICO */}
+              <div className="p-5 rounded-2xl bg-[#0e121d] border border-white/10 space-y-4">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Limpiar Antecedentes Penales de un Ciudadano
+                  </h5>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Ingresa el usuario de Roblox, DNI o ID de Discord del infractor para remover todos sus arrestos y multas asociadas en un solo clic, dejando su hoja de antecedentes completamente limpia.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      placeholder="Usuario de Roblox (ej. Tsaonomori) o N° DNI..."
+                      value={clearCitizenTarget}
+                      onChange={(e) => setClearCitizenTarget(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!clearCitizenTarget.trim() || isDeletingPnpItem}
+                    onClick={async () => {
+                      if (!clearCitizenTarget.trim()) return;
+                      setIsDeletingPnpItem(true);
+                      playClickSound();
+                      try {
+                        const target = clearCitizenTarget.trim().replace(/^@/, '');
+                        const ok = await clearCitizenPoliceRecords(target);
+                        await loadAdminPnpData();
+                        if (ok) {
+                          playSuccessSound();
+                          setPnpAdminFeedback(`✅ Antecedentes de "${target}" eliminados por completo (0 arrestos, 0 multas).`);
+                          setClearCitizenTarget('');
+                        } else {
+                          setPnpAdminFeedback(`ℹ️ Registros de "${target}" procesados y actualizados.`);
+                        }
+                      } catch (err: any) {
+                        setPnpAdminFeedback(`❌ Error al limpiar antecedentes: ${err?.message || 'Error de red'}`);
+                      } finally {
+                        setIsDeletingPnpItem(false);
+                      }
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer transition-all shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isDeletingPnpItem ? 'Limpiando...' : 'Limpiar Todos sus Antecedentes'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* SECTION 2: LISTADO Y ELIMINACION INDIVIDUAL */}
+              <div className="p-5 rounded-2xl bg-[#0e121d] border border-white/10 space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-sky-400" />
+                    <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Registros de Arrestos, Multas y Sanciones
+                    </h5>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-white/5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setAdminPnpFilter('all')}
+                      className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                        adminPnpFilter === 'all' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Todos ({adminArrests.length + adminFines.length + adminSanctions.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPnpFilter('arrests')}
+                      className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                        adminPnpFilter === 'arrests' ? 'bg-red-950/80 text-red-300 border border-red-500/40' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Arrestos ({adminArrests.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPnpFilter('fines')}
+                      className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                        adminPnpFilter === 'fines' ? 'bg-amber-950/80 text-amber-300 border border-amber-500/40' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Multas ({adminFines.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPnpFilter('sanctions')}
+                      className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                        adminPnpFilter === 'sanctions' ? 'bg-purple-950/80 text-purple-300 border border-purple-500/40' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Sanciones ({adminSanctions.length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter Search */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por código (A-0017, M-0005), usuario, motivo u oficial..."
+                    value={adminPnpSearch}
+                    onChange={(e) => setAdminPnpSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-red-500"
+                  />
+                </div>
+
+                {/* Empty State */}
+                {adminArrests.length === 0 && adminFines.length === 0 && adminSanctions.length === 0 && (
+                  <div className="p-8 text-center border border-dashed border-white/10 rounded-xl">
+                    <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-70" />
+                    <p className="text-xs font-bold text-white">No hay registros policiales activos</p>
+                    <p className="text-[11px] text-slate-400 mt-1">El sistema está completamente limpio (0 arrestos, 0 multas).</p>
+                  </div>
+                )}
+
+                {/* Items List */}
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  
+                  {/* Arrests */}
+                  {(adminPnpFilter === 'all' || adminPnpFilter === 'arrests') &&
+                    adminArrests
+                      .filter((a) => {
+                        if (!adminPnpSearch.trim()) return true;
+                        const s = adminPnpSearch.toLowerCase();
+                        return (
+                          (a.arrestCode || '').toLowerCase().includes(s) ||
+                          (a.suspectRoblox || '').toLowerCase().includes(s) ||
+                          (a.suspectName || '').toLowerCase().includes(s) ||
+                          (a.charges || '').toLowerCase().includes(s) ||
+                          (a.officerName || '').toLowerCase().includes(s)
+                        );
+                      })
+                      .map((arrest) => (
+                        <div
+                          key={arrest.id || arrest.arrestCode}
+                          className="p-4 rounded-xl bg-[#090b12] border border-red-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-red-500/50 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="px-2.5 py-1 rounded-lg bg-red-950 text-red-300 font-mono font-bold text-xs border border-red-500/40 shrink-0">
+                              {arrest.arrestCode}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-white">
+                                  {arrest.suspectName || `@ [ST-P] ${arrest.suspectRoblox}`}
+                                </span>
+                                <span className="text-[10px] text-slate-400">• Fianza: {arrest.bailDisplay || `S/${arrest.bailAmount}`}</span>
+                                <span className="text-[10px] text-slate-400">• Tiempo: {arrest.timeDisplay || `${arrest.timeMinutes}m`}</span>
+                              </div>
+                              <p className="text-xs text-red-200 mt-1 font-medium">
+                                <strong>Cargos:</strong> {arrest.charges}
+                              </p>
+                              <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-3">
+                                <span>Oficial: {arrest.officerName}</span>
+                                <span>Fecha: {arrest.createdAt}</span>
+                                <span className={arrest.status === 'active' ? 'text-amber-400 font-bold' : 'text-slate-400'}>
+                                  Estado: {arrest.status === 'active' ? 'Activo' : 'Cumplido'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isDeletingPnpItem}
+                            onClick={async () => {
+                              playClickSound();
+                              setIsDeletingPnpItem(true);
+                              try {
+                                const targetCode = arrest.arrestCode || arrest.id;
+                                const ok = await deleteArrest(targetCode);
+                                await loadAdminPnpData();
+                                if (ok) {
+                                  playSuccessSound();
+                                  setPnpAdminFeedback(`✅ Arresto ${targetCode} eliminado correctamente del sistema y Supabase.`);
+                                }
+                              } catch (err: any) {
+                                setPnpAdminFeedback(`❌ Error al eliminar arresto: ${err?.message}`);
+                              } finally {
+                                setIsDeletingPnpItem(false);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-red-950 hover:bg-red-900 border border-red-600/50 text-red-200 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow"
+                            title="Eliminar este arresto"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar Arresto</span>
+                          </button>
+                        </div>
+                      ))}
+
+                  {/* Fines */}
+                  {(adminPnpFilter === 'all' || adminPnpFilter === 'fines') &&
+                    adminFines
+                      .filter((f) => {
+                        if (!adminPnpSearch.trim()) return true;
+                        const s = adminPnpSearch.toLowerCase();
+                        return (
+                          (f.fineCode || '').toLowerCase().includes(s) ||
+                          (f.suspectRoblox || '').toLowerCase().includes(s) ||
+                          (f.reason || '').toLowerCase().includes(s) ||
+                          (f.issuedBy || '').toLowerCase().includes(s)
+                        );
+                      })
+                      .map((fine) => (
+                        <div
+                          key={fine.id || fine.fineCode}
+                          className="p-4 rounded-xl bg-[#090b12] border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-amber-500/50 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="px-2.5 py-1 rounded-lg bg-amber-950 text-amber-300 font-mono font-bold text-xs border border-amber-500/40 shrink-0">
+                              {fine.fineCode}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-white">
+                                  @ [{fine.suspectRoblox}]
+                                </span>
+                                <span className="text-[11px] font-bold text-amber-400">
+                                  Monto: {fine.amountDisplay || `S/${fine.amount}`}
+                                </span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                  fine.status === 'Pagada'
+                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                                    : 'bg-amber-950 text-amber-300 border border-amber-500/30'
+                                }`}>
+                                  {fine.status}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-300 mt-1">
+                                <strong>Motivo:</strong> {fine.reason}
+                              </p>
+                              <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-3">
+                                <span>Emitida por: {fine.issuedBy}</span>
+                                <span>Fecha: {fine.issuedDate || fine.createdAt}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isDeletingPnpItem}
+                            onClick={async () => {
+                              playClickSound();
+                              setIsDeletingPnpItem(true);
+                              try {
+                                const targetCode = fine.fineCode || fine.id;
+                                const ok = await deleteFine(targetCode);
+                                await loadAdminPnpData();
+                                if (ok) {
+                                  playSuccessSound();
+                                  setPnpAdminFeedback(`✅ Multa ${targetCode} eliminada correctamente del sistema y Supabase.`);
+                                }
+                              } catch (err: any) {
+                                setPnpAdminFeedback(`❌ Error al eliminar multa: ${err?.message}`);
+                              } finally {
+                                setIsDeletingPnpItem(false);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-amber-950 hover:bg-amber-900 border border-amber-600/50 text-amber-200 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow"
+                            title="Eliminar esta multa"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar Multa</span>
+                          </button>
+                        </div>
+                      ))}
+
+                  {/* Sanctions */}
+                  {(adminPnpFilter === 'all' || adminPnpFilter === 'sanctions') &&
+                    adminSanctions
+                      .filter((s) => {
+                        if (!adminPnpSearch.trim()) return true;
+                        const term = adminPnpSearch.toLowerCase();
+                        return (
+                          (s.userRoblox || '').toLowerCase().includes(term) ||
+                          (s.reason || '').toLowerCase().includes(term) ||
+                          (s.issuedBy || '').toLowerCase().includes(term)
+                        );
+                      })
+                      .map((sanction) => (
+                        <div
+                          key={sanction.id}
+                          className="p-4 rounded-xl bg-[#090b12] border border-purple-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-purple-500/50 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="px-2.5 py-1 rounded-lg bg-purple-950 text-purple-300 font-mono font-bold text-xs border border-purple-500/40 shrink-0">
+                              SANCIÓN
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-white">
+                                  @{sanction.userRoblox}
+                                </span>
+                                {sanction.userDiscordId && (
+                                  <span className="text-[10px] text-slate-400">ID: {sanction.userDiscordId}</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-300 mt-1">
+                                <strong>Motivo:</strong> {sanction.reason}
+                              </p>
+                              {sanction.proofUrl && (
+                                <a
+                                  href={sanction.proofUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] text-sky-400 hover:underline flex items-center gap-1 mt-1"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  <span>Ver Pruebas Adjuntas</span>
+                                </a>
+                              )}
+                              <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-3">
+                                <span>Por: {sanction.issuedBy}</span>
+                                <span>Fecha: {sanction.createdAt}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isDeletingPnpItem}
+                            onClick={async () => {
+                              playClickSound();
+                              setIsDeletingPnpItem(true);
+                              try {
+                                const ok = await deleteSanction(sanction.id);
+                                await loadAdminPnpData();
+                                if (ok) {
+                                  playSuccessSound();
+                                  setPnpAdminFeedback(`✅ Sanción eliminada correctamente.`);
+                                }
+                              } catch (err: any) {
+                                setPnpAdminFeedback(`❌ Error al eliminar sanción: ${err?.message}`);
+                              } finally {
+                                setIsDeletingPnpItem(false);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-600/50 text-purple-200 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow"
+                            title="Eliminar esta sanción"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar Sanción</span>
+                          </button>
+                        </div>
+                      ))}
+
+                </div>
+              </div>
+
+              {/* SECTION 3: BOTÓN DE PURGA GLOBAL TOTAL (RESET A 0) */}
+              <div className="p-4 rounded-2xl bg-red-950/30 border border-red-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <h5 className="text-xs font-bold text-red-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                    Resetear Todo el Sistema Policial a Cero (0)
+                  </h5>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Elimina de forma irreversible todos los arrestos, multas y sanciones en toda la red (servidor y Supabase).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const confirm = window.confirm('¿Estás seguro de que deseas resetear a CERO todos los arrestos, multas y sanciones del servidor y Supabase?');
+                    if (!confirm) return;
+                    setIsDeletingPnpItem(true);
+                    playClickSound();
+                    try {
+                      await resetAllPnpRecords();
+                      await loadAdminPnpData();
+                      playSuccessSound();
+                      setPnpAdminFeedback('✅ Todo el sistema policial ha sido reseteado a 0.');
+                    } catch (err: any) {
+                      setPnpAdminFeedback(`❌ Error al resetear: ${err?.message}`);
+                    } finally {
+                      setIsDeletingPnpItem(false);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-950 flex items-center gap-1.5 cursor-pointer shrink-0 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Resetear Todo a Cero (0)</span>
+                </button>
               </div>
 
             </div>

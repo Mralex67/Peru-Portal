@@ -217,7 +217,7 @@ export const PeruDniSection: React.FC = () => {
     // Default roblox username matching discord username
     setRobloxUsername(discordUser.username || '');
 
-    getUserDni(discordUser.id, discordUser.username)
+    getUserDni(discordUser.id, discordUser.username, discordUser.displayName)
       .then((dni) => {
         if (dni) {
           setExistingDni(dni);
@@ -578,24 +578,39 @@ export const PeruDniSection: React.FC = () => {
                   </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    playClickSound();
-                    const downloadUrl = `/api/dni/render?cui=${encodeURIComponent(currentDni.dniNumber)}&primer_apellido=${encodeURIComponent(currentDni.firstSurname)}&segundo_apellido=${encodeURIComponent(currentDni.secondSurname)}&nombres=${encodeURIComponent(currentDni.givenNames)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' || currentDni.gender === 'Masculino' ? 'Masculino' : 'Femenino')}&estado_civil=${encodeURIComponent(formatCivilStatus(currentDni.civilStatus))}&donacion_organos=${encodeURIComponent(currentDni.organDonation || 'NO')}&serial=${encodeURIComponent(formatSerialCode(currentDni.serialCode, currentDni.dniNumber))}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = `DNI-PERP-${currentDni.dniNumber}.png`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    playSuccessSound();
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors cursor-pointer shadow-md"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Descargar DNI (PNG)</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExistingDni(null);
+                      setSearchFeedback(null);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer border border-slate-700"
+                    title="Buscar otro DNI"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span className="hidden sm:inline">Buscar otro</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playClickSound();
+                      const downloadUrl = `/api/dni/render?cui=${encodeURIComponent(currentDni.dniNumber)}&primer_apellido=${encodeURIComponent(currentDni.firstSurname)}&segundo_apellido=${encodeURIComponent(currentDni.secondSurname)}&nombres=${encodeURIComponent(currentDni.givenNames)}&nacimiento=${encodeURIComponent(currentDni.birthDate)}&genero=${encodeURIComponent(currentDni.gender === 'M' || currentDni.gender === 'Masculino' ? 'Masculino' : 'Femenino')}&estado_civil=${encodeURIComponent(formatCivilStatus(currentDni.civilStatus))}&donacion_organos=${encodeURIComponent(currentDni.organDonation || 'NO')}&serial=${encodeURIComponent(formatSerialCode(currentDni.serialCode, currentDni.dniNumber))}&usuario=${encodeURIComponent(currentDni.robloxUsername)}&foto=${encodeURIComponent(currentDni.photoUrl)}`;
+                      const a = document.createElement('a');
+                      a.href = downloadUrl;
+                      a.download = `DNI-PERP-${currentDni.dniNumber}.png`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      playSuccessSound();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors cursor-pointer shadow-md"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Descargar DNI (PNG)</span>
+                  </button>
+                </div>
               </div>
 
               {/* PERUVIAN DNI CARD CONTAINER (Official Template Aesthetic - 1119x669) */}
