@@ -31,7 +31,8 @@ import {
   Coins,
   Bot,
   Download,
-  Palette
+  Palette,
+  Plus
 } from 'lucide-react';
 import { useServer } from '../context/ServerContext';
 import { playClickSound, playSuccessSound } from '../utils/audio';
@@ -89,6 +90,9 @@ export const AdminPanelModal: React.FC = () => {
   const [adminArrests, setAdminArrests] = useState<PnpArrest[]>([]);
   const [adminFines, setAdminFines] = useState<PnpFine[]>([]);
   const [adminSanctions, setAdminSanctions] = useState<PnpSanction[]>([]);
+  const [adminOfficers, setAdminOfficers] = useState<string[]>([]);
+  const [newOfficerInput, setNewOfficerInput] = useState('');
+  const [isAddingOfficer, setIsAddingOfficer] = useState(false);
   const [adminPnpFilter, setAdminPnpFilter] = useState<'all' | 'arrests' | 'fines' | 'sanctions'>('all');
   const [adminPnpSearch, setAdminPnpSearch] = useState('');
   const [clearCitizenTarget, setClearCitizenTarget] = useState('');
@@ -102,8 +106,55 @@ export const AdminPanelModal: React.FC = () => {
       const fines = await fetchSharedFines();
       setAdminFines(fines);
       setAdminSanctions(getLocalSanctions());
+      const offRes = await fetch('/api/pnp/officers');
+      if (offRes.ok) {
+        const offData = await offRes.json();
+        if (offData && Array.isArray(offData.officers)) setAdminOfficers(offData.officers);
+      }
     } catch (e) {
       console.warn('Error loading admin PNP data:', e);
+    }
+  };
+
+  const handleAuthorizeOfficer = async (identifier: string) => {
+    if (!identifier.trim()) return;
+    setIsAddingOfficer(true);
+    playClickSound();
+    try {
+      const clean = identifier.trim().replace(/^@/, '');
+      const res = await fetch('/api/pnp/officers/authorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: clean }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.verifiedOfficers) setAdminOfficers(d.verifiedOfficers);
+        playSuccessSound();
+        setPnpAdminFeedback(`✅ Oficial "${clean}" autorizado para acceder a la Tablet PNP.`);
+        setNewOfficerInput('');
+      }
+    } catch (e: any) {
+      setPnpAdminFeedback(`❌ Error al autorizar oficial: ${e.message}`);
+    } finally {
+      setIsAddingOfficer(false);
+    }
+  };
+
+  const handleRemoveOfficer = async (identifier: string) => {
+    playClickSound();
+    try {
+      const res = await fetch(`/api/pnp/officers/${encodeURIComponent(identifier)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.verifiedOfficers) setAdminOfficers(d.verifiedOfficers);
+        playSuccessSound();
+        setPnpAdminFeedback(`✅ Oficial "${identifier}" removido de la lista.`);
+      }
+    } catch (e: any) {
+      setPnpAdminFeedback(`❌ Error al remover: ${e.message}`);
     }
   };
 
@@ -4343,6 +4394,69 @@ export const AdminPanelModal: React.FC = () => {
                   </button>
                 </div>
               )}
+
+              {/* SECTION 0: OFICIALES PNP AUTORIZADOS */}
+              <div className="p-5 rounded-2xl bg-[#0e121d] border border-emerald-500/30 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Oficiales PNP Autorizados (Acceso Directo a Tablet MDT)
+                    </h5>
+                  </div>
+                  <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                    {adminOfficers.length} oficial(es) activo(s)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Autoriza a cualquier oficial ingresando su <strong>ID de Discord</strong>, <strong>Usuario de Roblox</strong> o <strong>N° de DNI</strong> para que pueda ingresar a la Tablet PNP sin depender de la sincronización de Discord.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text"
+                    placeholder="ID de Discord (ej. 1039283350298431581), Roblox o DNI..."
+                    value={newOfficerInput}
+                    onChange={(e) => setNewOfficerInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAuthorizeOfficer(newOfficerInput)}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    disabled={!newOfficerInput.trim() || isAddingOfficer}
+                    onClick={() => handleAuthorizeOfficer(newOfficerInput)}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow transition-all shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{isAddingOfficer ? 'Autorizando...' : 'Autorizar Oficial'}</span>
+                  </button>
+                </div>
+
+                {/* List of currently authorized officers */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                    Lista de Identificadores Autorizados:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {adminOfficers.map((off) => (
+                      <div
+                        key={off}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 text-emerald-300 font-mono text-xs flex items-center gap-2"
+                      >
+                        <span>👮 {off}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveOfficer(off)}
+                          className="text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                          title="Remover oficial"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
               {/* SECTION 1: LIMPIAR ANTECEDENTES DE UN CIUDADANO ESPECIFICO */}
               <div className="p-5 rounded-2xl bg-[#0e121d] border border-white/10 space-y-4">

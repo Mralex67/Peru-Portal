@@ -2428,7 +2428,12 @@ app.delete('/api/pnp/arrests/:id', async (req, res) => {
     const supa = getServerSupabase();
     if (supa) {
       try {
-        await supa.from('pnp_arrests').delete().or(`code.eq.${id},arrest_code.eq.${id},id.eq.${id}`);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (isUuid) {
+          await supa.from('pnp_arrests').delete().eq('id', id);
+        } else {
+          await supa.from('pnp_arrests').delete().or(`code.eq.${id},arrest_code.eq.${id}`);
+        }
       } catch (e) {
         console.warn('Notice deleting arrest from Supabase:', e);
       }
@@ -2459,7 +2464,12 @@ app.delete('/api/pnp/fines/:id', async (req, res) => {
     const supa = getServerSupabase();
     if (supa) {
       try {
-        await supa.from('pnp_fines').delete().or(`code.eq.${id},fine_code.eq.${id},id.eq.${id}`);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (isUuid) {
+          await supa.from('pnp_fines').delete().eq('id', id);
+        } else {
+          await supa.from('pnp_fines').delete().or(`code.eq.${id},fine_code.eq.${id}`);
+        }
       } catch (e) {
         console.warn('Notice deleting fine from Supabase:', e);
       }
@@ -2566,90 +2576,236 @@ app.post('/api/pnp/reset-all', async (req, res) => {
   }
 });
 
-// 6. Get Antecedentes & Citizen Record (matching image 3)
-app.get('/api/pnp/records/:identifier', (req, res) => {
-  const { identifier } = req.params;
-  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
-  const data = loadPnpSystem();
-  const bankData = loadBankSystem();
+// 6. Get Antecedentes & Citizen Record (Fully Global: Local + Supabase Cloud Sync)
+app.get('/api/pnp/records/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+    const data = loadPnpSystem();
+    const bankData = loadBankSystem();
+    const supa = getServerSupabase();
 
-  // Match citizen by identifier in DNI, Roblox, or Discord
-  const dniMatch = bankData.dnis.find(
-    (d: any) =>
-      d.dniNumber?.toLowerCase() === clean ||
-      d.discordId?.toLowerCase() === clean ||
-      d.robloxUsername?.toLowerCase() === clean
-  );
+    // 1. Match citizen by identifier in local DNI or Supabase Cloud
+    let dniMatch: any = bankData.dnis.find(
+      (d: any) =>
+        d.dniNumber?.toLowerCase() === clean ||
+        d.discordId?.toLowerCase() === clean ||
+        d.robloxUsername?.toLowerCase() === clean
+    );
 
-  const matchedArrests = data.arrests.filter(
-    (a) =>
-      a.citizenIdentifier.toLowerCase() === clean ||
-      a.citizenName.toLowerCase().includes(clean) ||
-      (dniMatch && (a.citizenIdentifier.toLowerCase() === dniMatch.robloxUsername.toLowerCase() || a.citizenIdentifier === dniMatch.dniNumber))
-  );
+    if (!dniMatch && supa) {
+      try {
+        const { data: supaDni } = await supa
+          .from('peru_dnis')
+          .select('*')
+          .or(`dni_number.eq.${clean},discord_id.eq.${clean},roblox_username.ilike.${clean}`)
+          .maybeSingle();
+        if (supaDni) {
+          dniMatch = {
+            dniNumber: supaDni.dni_number,
+            discordId: supaDni.discord_id,
+            robloxUsername: supaDni.roblox_username,
+            fullName: supaDni.full_name,
+            photoUrl: supaDni.photo_url,
+          };
+        }
+      } catch (err) {
+        console.warn('Notice querying Supabase DNI for records:', err);
+      }
+    }
 
-  const matchedFines = data.fines.filter(
-    (f) =>
-      f.citizenIdentifier.toLowerCase() === clean ||
-      f.citizenName.toLowerCase().includes(clean) ||
-      (dniMatch && (f.citizenIdentifier.toLowerCase() === dniMatch.robloxUsername.toLowerCase() || f.citizenIdentifier === dniMatch.dniNumber))
-  );
+    // 2. Collect arrests from local memory + Supabase
+    const arrestsMap = new Map<string, any>();
+    for (const a of data.arrests) {
+      const isMatch =
+        (a.citizenIdentifier || '').toLowerCase() === clean ||
+        (a.suspectRoblox || '').toLowerCase() === clean ||
+        (a.citizenName || '').toLowerCase().includes(clean) ||
+        (dniMatch && (
+          (a.citizenIdentifier || '').toLowerCase() === (dniMatch.robloxUsername || '').toLowerCase() ||
+          a.citizenIdentifier === dniMatch.dniNumber ||
+          (a.suspectRoblox || '').toLowerCase() === (dniMatch.robloxUsername || '').toLowerCase()
+        ));
+      if (isMatch) {
+        const key = (a.code || a.arrestCode || a.id || '').toUpperCase();
+        arrestsMap.set(key, a);
+      }
+    }
 
-  const unpaidFines = matchedFines.filter((f) => f.status === 'pendiente');
-  const unpaidTotal = unpaidFines.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
-  const activeArrests = matchedArrests.filter((a) => a.status === 'activo');
+    if (supa) {
+      try {
+        const terms = [clean];
+        if (dniMatch) {
+          if (dniMatch.robloxUsername) terms.push(dniMatch.robloxUsername.toLowerCase());
+          if (dniMatch.dniNumber) terms.push(dniMatch.dniNumber);
+        }
+        const orConditions = terms.map((t) => `citizen_identifier.ilike.${t},suspect_roblox.ilike.${t}`).join(',');
+        const { data: cloudArr } = await supa
+          .from('pnp_arrests')
+          .select('*')
+          .or(orConditions)
+          .order('created_at', { ascending: false });
 
-  // Check Driver License (Role 1556723203114668082 or known registered)
-  const hasLicense =
-    data.licensedUsers.some((u) => u.toLowerCase() === clean || (dniMatch && u === dniMatch.discordId)) ||
-    clean === '61187362818282827' ||
-    clean === '1556723203114668082';
+        if (Array.isArray(cloudArr)) {
+          for (const ca of cloudArr) {
+            const code = ca.code || ca.arrest_code || 'A-0018';
+            const key = code.toUpperCase();
+            if (!arrestsMap.has(key)) {
+              const suspect = ca.citizen_identifier || ca.suspect_roblox || clean;
+              arrestsMap.set(key, {
+                id: ca.id || `arr-${code}`,
+                code,
+                arrestCode: code,
+                citizenIdentifier: suspect,
+                suspectRoblox: suspect,
+                citizenName: ca.citizen_name || `@ [ST-P] ${suspect}`,
+                charges: ca.charges || 'Infracción',
+                durationText: ca.duration_text || `${ca.duration_minutes || 3}m (${ca.duration_minutes || 3} minutos)`,
+                durationMinutes: ca.duration_minutes || 3,
+                timeMinutes: ca.duration_minutes || 3,
+                bailAmount: Number(ca.bail_amount || 0),
+                officerName: ca.officer_name || '@Oficial_PNP',
+                evidenceUrl: ca.evidence_url || ca.evidence_image || '',
+                status: ca.status || 'activo',
+                createdAt: ca.created_at ? ca.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Notice querying Supabase arrests for record:', err);
+      }
+    }
 
-  const hasRecords = matchedArrests.length > 0 || matchedFines.length > 0;
+    // 3. Collect fines from local memory + Supabase
+    const finesMap = new Map<string, any>();
+    for (const f of data.fines) {
+      const isMatch =
+        (f.citizenIdentifier || '').toLowerCase() === clean ||
+        (f.suspectRoblox || '').toLowerCase() === clean ||
+        (f.citizenName || '').toLowerCase().includes(clean) ||
+        (dniMatch && (
+          (f.citizenIdentifier || '').toLowerCase() === (dniMatch.robloxUsername || '').toLowerCase() ||
+          f.citizenIdentifier === dniMatch.dniNumber ||
+          (f.suspectRoblox || '').toLowerCase() === (dniMatch.robloxUsername || '').toLowerCase()
+        ));
+      if (isMatch) {
+        const key = (f.code || f.fineCode || f.id || '').toUpperCase();
+        finesMap.set(key, f);
+      }
+    }
 
-  res.json({
-    success: true,
-    identifier,
-    citizenName: dniMatch ? dniMatch.fullName : identifier,
-    robloxUsername: dniMatch ? dniMatch.robloxUsername : identifier,
-    dniNumber: dniMatch ? dniMatch.dniNumber : null,
-    hasRecords,
-    summary: {
-      statusText: hasRecords ? 'Con antecedentes' : 'Limpio',
-      multasCount: matchedFines.length,
-      multasPendientes: unpaidFines.length,
-      multasTotalPorPagar: unpaidTotal,
-      arrestosCount: matchedArrests.length,
-      arrestosActivos: activeArrests.length,
+    if (supa) {
+      try {
+        const terms = [clean];
+        if (dniMatch) {
+          if (dniMatch.robloxUsername) terms.push(dniMatch.robloxUsername.toLowerCase());
+          if (dniMatch.dniNumber) terms.push(dniMatch.dniNumber);
+        }
+        const orConditions = terms.map((t) => `citizen_identifier.ilike.${t},suspect_roblox.ilike.${t}`).join(',');
+        const { data: cloudFines } = await supa
+          .from('pnp_fines')
+          .select('*')
+          .or(orConditions)
+          .order('created_at', { ascending: false });
+
+        if (Array.isArray(cloudFines)) {
+          for (const cf of cloudFines) {
+            const code = cf.code || cf.fine_code || 'M-0005';
+            const key = code.toUpperCase();
+            if (!finesMap.has(key)) {
+              const suspect = cf.citizen_identifier || cf.suspect_roblox || clean;
+              finesMap.set(key, {
+                id: cf.id || `fine-${code}`,
+                code,
+                fineCode: code,
+                citizenIdentifier: suspect,
+                suspectRoblox: suspect,
+                citizenName: cf.citizen_name || `@ [${suspect}]`,
+                reason: cf.reason || 'Conduccion temeraria',
+                amount: Number(cf.amount || 100),
+                status: cf.status || 'pendiente',
+                officerName: cf.issued_by || cf.officer_name || 'Oficial_PNP',
+                issuedBy: cf.issued_by || cf.officer_name || 'Oficial_PNP',
+                issuedDate: cf.issued_date || (cf.created_at ? cf.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+                createdAt: cf.created_at || new Date().toISOString(),
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Notice querying Supabase fines for record:', err);
+      }
+    }
+
+    const matchedArrests = Array.from(arrestsMap.values());
+    const matchedFines = Array.from(finesMap.values());
+
+    const unpaidFines = matchedFines.filter((f) => (f.status || '').toLowerCase().includes('pend'));
+    const unpaidTotal = unpaidFines.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+    const activeArrests = matchedArrests.filter((a) => (a.status || '').toLowerCase() === 'activo' || (a.status || '').toLowerCase() === 'active');
+
+    // Check Driver License
+    const hasLicense =
+      data.licensedUsers.some((u) => u.toLowerCase() === clean || (dniMatch && u === dniMatch.discordId)) ||
+      clean === '61187362818282827' ||
+      clean === '1556723203114668082';
+
+    const hasRecords = matchedArrests.length > 0 || matchedFines.length > 0;
+
+    const recordPayload = {
+      suspectIdentifier: clean,
+      identifier,
+      citizenName: dniMatch ? (dniMatch.fullName || dniMatch.full_name) : (clean.startsWith('@') ? clean : `@ [ST-P] ${clean}`),
+      robloxUsername: dniMatch ? (dniMatch.robloxUsername || dniMatch.roblox_username) : clean,
+      dniNumber: dniMatch ? (dniMatch.dniNumber || dniMatch.dni_number) : null,
+      hasRecords,
+      hasRecord: hasRecords,
+      statusText: hasRecords ? 'Con antecedentes' : 'Sin antecedentes penales (Limpio)',
+      arrestsCount: matchedArrests.length,
+      activeArrestsCount: activeArrests.length,
+      finesCount: matchedFines.length,
+      pendingFinesCount: unpaidFines.length,
+      pendingFinesTotal: unpaidTotal,
       hasLicense,
       licenseRole: '1556723203114668082',
-    },
-    arrests: matchedArrests,
-    fines: matchedFines,
-  });
+      arrests: matchedArrests,
+      fines: matchedFines,
+      summary: {
+        statusText: hasRecords ? 'Con antecedentes' : 'Limpio',
+        multasCount: matchedFines.length,
+        multasPendientes: unpaidFines.length,
+        multasTotalPorPagar: unpaidTotal,
+        arrestosCount: matchedArrests.length,
+        arrestosActivos: activeArrests.length,
+        hasLicense,
+        licenseRole: '1556723203114668082',
+      },
+    };
+
+    res.json({
+      success: true,
+      ...recordPayload,
+      record: recordPayload,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-// 7. Verify Police Officer Role & Badge (Checks Discord Guilds and Police Roles dynamically)
+// 7. Verify Police Officer Role & Badge (Checks Discord Guilds, Roles, and Registered DNIs)
 app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
   const { identifier } = req.params;
   const clean = identifier.trim().replace(/^@/, '');
   const data = loadPnpSystem();
+  const bankData = loadBankSystem();
   const vault = loadSecretsVault();
   const botToken = vault.discordToken || process.env.DISCORD_TOKEN || '';
+  const botClientId = vault.discordClientId || process.env.DISCORD_CLIENT_ID || '1560384206612336793';
+  const botInviteUrl = `https://discord.com/oauth2/authorize?client_id=${botClientId}&permissions=8&scope=bot%20applications.commands`;
 
-  // Valid Discord snowflake ID check (16-22 digits)
-  const isSnowflake = /^\d{16,22}$/.test(clean);
-
-  if (!isSnowflake) {
-    return res.status(400).json({
-      success: false,
-      isOfficer: false,
-      error: 'Debes ingresar tu ID de Usuario de Discord (17-20 dígitos numéricos). No se admiten claves genéricas ni PINs.',
-    });
-  }
-
-  // Already verified in local cache
-  if (data.verifiedOfficers.includes(clean)) {
+  // 1. Already verified in local cache/system
+  if (data.verifiedOfficers.some((o) => o.toLowerCase() === clean.toLowerCase())) {
     return res.json({
       success: true,
       isOfficer: true,
@@ -2658,35 +2814,89 @@ app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
     });
   }
 
-  // Candidate Guilds: Prioritize configured secrets
+  // 2. Check if citizen has a DNI registered in Supabase or local bank system
+  let matchedDni: any = null;
+  const supa = getServerSupabase();
+  if (supa) {
+    try {
+      const { data: cloudDni } = await supa
+        .from('peru_dnis')
+        .select('*')
+        .or(`discord_id.eq.${clean},roblox_username.ilike.${clean},dni_number.eq.${clean},discord_username.ilike.${clean}`)
+        .maybeSingle();
+      if (cloudDni) matchedDni = cloudDni;
+    } catch (e) {
+      console.warn('Notice checking DNI in Supabase for officer verify:', e);
+    }
+  }
+
+  if (!matchedDni && bankData && Array.isArray(bankData.dnis)) {
+    matchedDni = bankData.dnis.find(
+      (d: any) =>
+        (d.discordId && d.discordId.toLowerCase() === clean.toLowerCase()) ||
+        (d.robloxUsername && d.robloxUsername.toLowerCase() === clean.toLowerCase()) ||
+        (d.dniNumber && d.dniNumber === clean) ||
+        (d.discordUsername && d.discordUsername.toLowerCase() === clean.toLowerCase())
+    );
+  }
+
+  // Known confirmed police officers & role IDs
+  const KNOWN_CONFIRMED = [
+    '1039283350298431581', // @thedestving
+    '1555384968086032394', // PNP Role
+    '1444846762874372187', // Secondary PNP Role
+    '1556723203114668082', // Secondary License Role
+  ];
+  if (KNOWN_CONFIRMED.includes(clean)) {
+    if (!data.verifiedOfficers.includes(clean)) {
+      data.verifiedOfficers.push(clean);
+      savePnpSystem(data);
+    }
+    return res.json({
+      success: true,
+      isOfficer: true,
+      badge: `PNP-OFICIAL-${clean.slice(-4)}`,
+      message: 'Oficial PNP Confirmado por credenciales del servidor.',
+    });
+  }
+
+  // Candidate Guilds: Prioritize configured secrets and official PE:RP guilds
   const candidateGuilds = [
     vault.discordGuildId,
     process.env.DISCORD_GUILD_ID,
-    '1156413773242957915',
     '1554629558760775710',
+    '1156413773242957915',
     '1070092818476978196',
   ].filter((g, idx, arr) => Boolean(g) && arr.indexOf(g) === idx) as string[];
 
-  // Candidate Police Roles: Prioritize configured secrets
+  // Candidate Police Roles:
   const candidatePoliceRoles = [
     vault.pnpRoleId,
     process.env.PNP_ROLE_ID,
-    '1444846762874372187',
     '1555384968086032394',
+    '1444846762874372187',
   ].filter((r, idx, arr) => Boolean(r) && arr.indexOf(r) === idx) as string[];
 
-  if (botToken && botToken !== 'tu_token_de_bot_aqui') {
+  // 3. If bot token is active and identifier is a Discord Snowflake or we have their Discord ID from DNI
+  const targetDiscordId = /^\d{16,22}$/.test(clean) ? clean : (matchedDni?.discord_id || matchedDni?.discordId || '');
+
+  if (botToken && botToken !== 'tu_token_de_bot_aqui' && targetDiscordId) {
     let lastFoundMember: any = null;
     let foundInAnyGuild = false;
+    let botNotInGuild155 = false;
 
     for (const gid of candidateGuilds) {
       try {
-        const guildRes = await fetch(`https://discord.com/api/v10/guilds/${gid}/members/${clean}`, {
+        const guildRes = await fetch(`https://discord.com/api/v10/guilds/${gid}/members/${targetDiscordId}`, {
           headers: {
             Authorization: `Bot ${botToken}`,
             'Content-Type': 'application/json',
           },
         });
+
+        if (guildRes.status === 404 && gid === '1554629558760775710') {
+          botNotInGuild155 = true;
+        }
 
         if (guildRes.ok) {
           foundInAnyGuild = true;
@@ -2698,6 +2908,7 @@ app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
           if (matchedRole) {
             if (!data.verifiedOfficers.includes(clean)) {
               data.verifiedOfficers.push(clean);
+              if (targetDiscordId !== clean) data.verifiedOfficers.push(targetDiscordId);
               savePnpSystem(data);
             }
             return res.json({
@@ -2705,13 +2916,13 @@ app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
               isOfficer: true,
               policeRoleId: matchedRole,
               guildId: gid,
-              badge: `PNP-OFICIAL-${clean.slice(-4)}`,
+              badge: `PNP-OFICIAL-${targetDiscordId.slice(-4)}`,
               member: {
                 username: memberData.user?.username,
                 displayName: memberData.nick || memberData.user?.global_name || memberData.user?.username,
                 avatar: memberData.user?.avatar,
               },
-              message: `¡Identidad Policial Verificada! Rol PNP (${matchedRole}) confirmado en el servidor oficial.`,
+              message: `¡Identidad Policial Verificada! Rol PNP (${matchedRole}) confirmado en Discord.`,
             });
           }
         }
@@ -2720,27 +2931,109 @@ app.get('/api/pnp/verify-role/:identifier', async (req, res) => {
       }
     }
 
+    // If user has a registered DNI and bot is still being invited to Guild 1554629558760775710:
+    // Do NOT block them! Authorize them based on their valid registered DNI!
+    if (matchedDni) {
+      if (!data.verifiedOfficers.includes(clean)) {
+        data.verifiedOfficers.push(clean);
+        if (targetDiscordId && !data.verifiedOfficers.includes(targetDiscordId)) {
+          data.verifiedOfficers.push(targetDiscordId);
+        }
+        savePnpSystem(data);
+      }
+      return res.json({
+        success: true,
+        isOfficer: true,
+        badge: `PNP-${(matchedDni.dni_number || matchedDni.dniNumber || clean).slice(-4)}`,
+        citizenName: matchedDni.full_name || matchedDni.fullName || clean,
+        botInviteUrl,
+        message: `¡Oficial PNP Autorizado por DNI Oficial Registrado (${matchedDni.dni_number || matchedDni.dniNumber})!`,
+      });
+    }
+
     if (foundInAnyGuild && lastFoundMember) {
       return res.json({
         success: true,
         isOfficer: false,
-        error: `Acceso denegado: El usuario "${lastFoundMember.user?.username || clean}" está en el servidor de Discord pero NO tiene el Rol Policial PNP autorizado.`,
+        error: `Acceso denegado: El usuario "${lastFoundMember.user?.username || clean}" está en el servidor de Discord pero no cuenta con el Rol Policial PNP asignado (Rol ID: 1555384968086032394).`,
       });
     }
 
+    if (botNotInGuild155) {
+      // Bot is not yet added to guild 1554629558760775710
+      return res.json({
+        success: false,
+        isOfficer: false,
+        botInviteNeeded: true,
+        botInviteUrl,
+        error: `El Bot de Discord aún no ha sido invitado al servidor 1554629558760775710. Puedes invitarlo con 1 clic en el enlace de abajo o ingresar con tu DNI ya registrado.`,
+      });
+    }
+  }
+
+  // 4. If citizen has a registered DNI, allow direct officer authorization
+  if (matchedDni) {
+    if (!data.verifiedOfficers.includes(clean)) {
+      data.verifiedOfficers.push(clean);
+      if (targetDiscordId && !data.verifiedOfficers.includes(targetDiscordId)) {
+        data.verifiedOfficers.push(targetDiscordId);
+      }
+      savePnpSystem(data);
+    }
     return res.json({
       success: true,
-      isOfficer: false,
-      error: `Acceso denegado: El ID de Discord "${clean}" no pertenece a los servidores configurados de PE:RP donde está el bot.`,
+      isOfficer: true,
+      badge: `PNP-${(matchedDni.dni_number || matchedDni.dniNumber || clean).slice(-4)}`,
+      citizenName: matchedDni.full_name || matchedDni.fullName || clean,
+      botInviteUrl,
+      message: `¡Oficial PNP Autorizado por DNI Oficial Registrado!`,
     });
   }
 
   // Fallback
   return res.json({
-    success: true,
+    success: false,
     isOfficer: false,
-    error: `Acceso denegado: No se pudo verificar el rol de Discord en este momento.`,
+    botInviteUrl,
+    error: `Acceso denegado: No se encontró un DNI registrado ni el Rol Policial PNP para "${clean}". Asegúrate de tramitar tu DNI o tener el rol en Discord.`,
   });
+});
+
+// 7b. Manage Verified Officers (List / Add / Delete)
+app.get('/api/pnp/officers', (req, res) => {
+  const data = loadPnpSystem();
+  res.json({ success: true, officers: data.verifiedOfficers || [] });
+});
+
+app.post('/api/pnp/officers/authorize', (req, res) => {
+  try {
+    const { identifier } = req.body;
+    if (!identifier || typeof identifier !== 'string') {
+      return res.status(400).json({ success: false, error: 'Identificador requerido' });
+    }
+    const clean = identifier.trim().replace(/^@/, '');
+    const data = loadPnpSystem();
+    if (!data.verifiedOfficers.includes(clean)) {
+      data.verifiedOfficers.push(clean);
+      savePnpSystem(data);
+    }
+    res.json({ success: true, verifiedOfficers: data.verifiedOfficers, message: `Oficial "${clean}" autorizado correctamente.` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/pnp/officers/:identifier', (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const clean = identifier.trim().replace(/^@/, '');
+    const data = loadPnpSystem();
+    data.verifiedOfficers = data.verifiedOfficers.filter((o) => o.toLowerCase() !== clean.toLowerCase());
+    savePnpSystem(data);
+    res.json({ success: true, verifiedOfficers: data.verifiedOfficers });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // 8. Check Driver's License Role (Checks Discord Guilds and License Roles)

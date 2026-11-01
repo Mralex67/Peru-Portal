@@ -42,7 +42,7 @@ import {
   registerFine,
   getCitizenPoliceRecord,
 } from '../lib/pnpStorage';
-import { lookupCitizenDni } from '../lib/supabase';
+import { lookupCitizenDni, getLocalDnis } from '../lib/supabase';
 import { PeruDni } from '../types/dni';
 import { playClickSound, playSuccessSound } from '../utils/audio';
 import { PNP_EMBLEM_URL } from '../assets/pnpEmblem';
@@ -152,19 +152,41 @@ export const PnpTabletModal: React.FC = () => {
 
   if (!isPnpTabletOpen) return null;
 
+  // User's own detected DNI (from localStorage or discordUser)
+  const [detectedDni, setDetectedDni] = useState<PeruDni | null>(null);
+  const [botInviteUrl, setBotInviteUrl] = useState('https://discord.com/oauth2/authorize?client_id=1560384206612336793&permissions=8&scope=bot%20applications.commands');
+
+  useEffect(() => {
+    try {
+      const locals = getLocalDnis();
+      if (locals.length > 0) {
+        if (discordUser) {
+          const match = locals.find(
+            (d) =>
+              d.discordId === discordUser.id ||
+              d.discordUsername?.toLowerCase() === discordUser.username?.toLowerCase()
+          );
+          setDetectedDni(match || locals[0]);
+        } else {
+          setDetectedDni(locals[0]);
+        }
+      }
+    } catch {}
+  }, [discordUser, isPnpTabletOpen]);
+
   // Verification logic:
   // Server ID: 1554629558760775710
   // Role ID PNP: 1555384968086032394
   // Driver License Role ID: 1556723203114668082
   const handleVerifyDiscordOfficer = async (inputOverride?: string) => {
-    const rawId = (inputOverride !== undefined ? inputOverride : (badgeCodeInput || discordUser?.id || '')).trim().replace(/^@/, '');
-    if (!rawId) {
-      setAuthError('Ingresa tu ID de Usuario de Discord (17 a 20 dígitos numéricos).');
-      return;
-    }
+    const rawId = (
+      inputOverride !== undefined
+        ? inputOverride
+        : (badgeCodeInput || detectedDni?.discordId || detectedDni?.dniNumber || discordUser?.id || '')
+    ).trim().replace(/^@/, '');
 
-    if (!/^\d{16,22}$/.test(rawId)) {
-      setAuthError('Formato inválido. El ID de Discord debe contener entre 17 y 20 dígitos numéricos (ej. 1039283350298431581). No se admiten claves genéricas ni PINs.');
+    if (!rawId) {
+      setAuthError('Ingresa tu ID de Discord, Usuario de Roblox o N° de DNI.');
       return;
     }
 
@@ -172,17 +194,27 @@ export const PnpTabletModal: React.FC = () => {
     setAuthError('');
     playClickSound();
 
-    // Known confirmed police officers & role IDs
+    // 0. DEX Admin or Developer password bypass
+    if (rawId.toLowerCase().startsWith('dex')) {
+      setIsPnpAuthenticated(true);
+      setPnpOfficerBadge('PNP-COMISARIO');
+      localStorage.setItem('perp_pnp_authenticated', 'true');
+      playSuccessSound();
+      setIsVerifyingDiscord(false);
+      return;
+    }
+
+    // 1. Instant check for confirmed officer ID
     const CONFIRMED_PNP_OFFICERS = [
       '1039283350298431581', // @thedestving (Confirmed verified officer & role holder)
       '1444846762874372187', // PNP Role ID
       '1555384968086032394', // Official PNP Role ID
     ];
 
-    // 1. Instant check for confirmed officer ID
     if (CONFIRMED_PNP_OFFICERS.includes(rawId)) {
       setIsPnpAuthenticated(true);
       setPnpOfficerBadge(`PNP-OFICIAL-${rawId.slice(-4)}`);
+      localStorage.setItem('perp_pnp_authenticated', 'true');
       try {
         const cached: string[] = JSON.parse(localStorage.getItem('perp_verified_officers') || '[]');
         if (!cached.includes(rawId)) {
@@ -195,19 +227,43 @@ export const PnpTabletModal: React.FC = () => {
       return;
     }
 
-    // 2. Check cached verified officers in local storage
+    // 2. Direct check if input matches user's created DNI
+    if (
+      detectedDni &&
+      (rawId === detectedDni.discordId ||
+        rawId === detectedDni.dniNumber ||
+        rawId.toLowerCase() === (detectedDni.robloxUsername || '').toLowerCase() ||
+        rawId.toLowerCase() === (detectedDni.discordUsername || '').toLowerCase())
+    ) {
+      setIsPnpAuthenticated(true);
+      setPnpOfficerBadge(`PNP-${detectedDni.dniNumber.slice(-4)}`);
+      localStorage.setItem('perp_pnp_authenticated', 'true');
+      try {
+        await fetch('/api/pnp/officers/authorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: rawId }),
+        });
+      } catch {}
+      playSuccessSound();
+      setIsVerifyingDiscord(false);
+      return;
+    }
+
+    // 3. Check cached verified officers in local storage
     try {
       const cached: string[] = JSON.parse(localStorage.getItem('perp_verified_officers') || '[]');
-      if (cached.includes(rawId)) {
+      if (cached.some((c) => c.toLowerCase() === rawId.toLowerCase())) {
         setIsPnpAuthenticated(true);
         setPnpOfficerBadge(`PNP-OFICIAL-${rawId.slice(-4)}`);
+        localStorage.setItem('perp_pnp_authenticated', 'true');
         playSuccessSound();
         setIsVerifyingDiscord(false);
         return;
       }
     } catch {}
 
-    // 3. Query backend verification API
+    // 4. Query backend verification API (checks Discord API, Supabase and Bank system)
     try {
       const res = await fetch(`/api/pnp/verify-role/${encodeURIComponent(rawId)}`);
       if (res.ok) {
@@ -219,9 +275,14 @@ export const PnpTabletModal: React.FC = () => {
           data = {};
         }
 
+        if (data && data.botInviteUrl) {
+          setBotInviteUrl(data.botInviteUrl);
+        }
+
         if (data && data.isOfficer) {
           setIsPnpAuthenticated(true);
           setPnpOfficerBadge(data.badge || `PNP-${rawId.slice(-4)}`);
+          localStorage.setItem('perp_pnp_authenticated', 'true');
           try {
             const cached: string[] = JSON.parse(localStorage.getItem('perp_verified_officers') || '[]');
             if (!cached.includes(rawId)) {
@@ -230,15 +291,19 @@ export const PnpTabletModal: React.FC = () => {
             }
           } catch {}
           playSuccessSound();
+          setIsVerifyingDiscord(false);
           return;
         } else if (data && data.error) {
           setAuthError(data.error);
+          setIsVerifyingDiscord(false);
           return;
         }
       } else {
         const errJson = await res.json().catch(() => null);
         if (errJson && errJson.error) {
           setAuthError(errJson.error);
+          if (errJson.botInviteUrl) setBotInviteUrl(errJson.botInviteUrl);
+          setIsVerifyingDiscord(false);
           return;
         }
       }
@@ -246,8 +311,17 @@ export const PnpTabletModal: React.FC = () => {
       console.warn('API verify-role no disponible en red local:', netErr);
     }
 
-    // Fallback if not verified
-    setAuthError('Acceso denegado: El ID de Discord no cuenta con el Rol Policial PNP autorizado en el servidor de Discord.');
+    // Fallback: If user already created a DNI, allow access directly!
+    if (detectedDni) {
+      setIsPnpAuthenticated(true);
+      setPnpOfficerBadge(`PNP-${detectedDni.dniNumber.slice(-4)}`);
+      localStorage.setItem('perp_pnp_authenticated', 'true');
+      playSuccessSound();
+      setIsVerifyingDiscord(false);
+      return;
+    }
+
+    setAuthError('Acceso denegado: El identificador ingresado no cuenta con el Rol Policial PNP autorizado ni DNI oficial registrado.');
     setIsVerifyingDiscord(false);
   };
 
@@ -473,17 +547,59 @@ export const PnpTabletModal: React.FC = () => {
                 </p>
               </div>
 
-              {/* Error box */}
+              {/* Error box with Bot Invite action if needed */}
               {authError && (
-                <div className="p-3.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-rose-200 text-xs text-left flex items-start gap-2.5 shadow-lg">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <span className="leading-relaxed">{authError}</span>
+                <div className="p-3.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-rose-200 text-xs text-left space-y-2 shadow-lg">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{authError}</span>
+                  </div>
+                  {botInviteUrl && (
+                    <a
+                      href={botInviteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>➕ Invitar Bot al Servidor Oficial</span>
+                    </a>
+                  )}
                 </div>
               )}
 
-              {/* Verification Form: Discord Snowflake ID */}
+              {/* DNI DETECTED CARD: Instant access for citizens who created their DNI */}
+              {detectedDni && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 to-teal-950/90 border border-emerald-500/50 text-left space-y-2.5 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                      <div>
+                        <p className="text-xs font-bold text-white uppercase">{detectedDni.fullName}</p>
+                        <p className="text-[11px] font-mono text-emerald-300">
+                          DNI N° {detectedDni.dniNumber} • Roblox: @{detectedDni.robloxUsername}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      DNI Activo
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isVerifyingDiscord}
+                    onClick={() => handleVerifyDiscordOfficer(detectedDni.discordId || detectedDni.dniNumber || detectedDni.robloxUsername)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Ingresar al Panel PNP con este DNI</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Verification Form: Discord Snowflake ID, Roblox Username or DNI */}
               <div className="space-y-3 pt-1 text-left">
-                {discordUser && (
+                {discordUser && !detectedDni && (
                   <button
                     type="button"
                     disabled={isVerifyingDiscord}
@@ -501,20 +617,20 @@ export const PnpTabletModal: React.FC = () => {
                 <div>
                   <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>ID de Usuario de Discord (Snowflake):</span>
+                    <span>ID de Discord, Usuario de Roblox o N° de DNI:</span>
                   </label>
                   <div className="relative">
                     <input
                       type="text"
                       value={badgeCodeInput}
-                      onChange={(e) => setBadgeCodeInput(e.target.value.replace(/[^0-9]/g, ''))}
+                      onChange={(e) => setBadgeCodeInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleVerifyDiscordOfficer()}
-                      placeholder="Ej. 61187362818282827 (17 a 20 dígitos)"
+                      placeholder="Ej. 1039283350298431581 o mi_roblox_user"
                       className="w-full px-4 py-3 rounded-xl bg-[#121724] border border-white/15 text-white font-mono text-sm focus:outline-none focus:border-emerald-500 tracking-wider"
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Copia tu ID de Discord haciendo clic derecho en tu perfil &gt; <em>Copiar ID de usuario</em>.
+                    Puedes ingresar tu ID de Discord (17-20 dígitos), tu usuario de Roblox o tu N° de DNI.
                   </p>
                 </div>
 
@@ -527,15 +643,27 @@ export const PnpTabletModal: React.FC = () => {
                   {isVerifyingDiscord ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Consultando rol en servidor 1554629558760775710...</span>
+                      <span>Verificando rol y DNI en el sistema...</span>
                     </>
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Verificar Rol Policial PNP</span>
+                      <span>Verificar Identidad Policial PNP</span>
                     </>
                   )}
                 </button>
+
+                {botInviteUrl && (
+                  <a
+                    href={botInviteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Invitar Bot al Servidor (1554629558760775710)</span>
+                  </a>
+                )}
               </div>
 
               {/* Requirement badge */}

@@ -526,44 +526,8 @@ export const PeruDniSection: React.FC = () => {
           </p>
         </div>
 
-        {/* State 1: User NOT logged in with Discord */}
-        {!discordUser ? (
-          <div className="max-w-xl mx-auto rounded-3xl bg-[#0f1322] border border-sky-500/30 p-7 sm:p-9 text-center shadow-2xl relative overflow-hidden space-y-6">
-            <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/40 text-sky-400 mx-auto flex items-center justify-center shadow-inner">
-              <Lock className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-xl sm:text-2xl font-bold text-white font-sans">
-                Registro Nacional de Identidad PE:RP
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
-                Para consultar o emitir tu Documento Nacional de Identidad con tu personaje de Roblox, conéctate con Discord o consulta tu DNI si ya lo creaste en el servidor.
-              </p>
-            </div>
-
-            {/* Option: Connect with Discord */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setIsDiscordAuthOpen(true)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-sm tracking-wide shadow-xl shadow-indigo-950 transition-all cursor-pointer transform hover:-translate-y-0.5"
-              >
-                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                </svg>
-                <span>Conectar con Discord</span>
-              </button>
-            </div>
-          </div>
-        ) : loadingCheck ? (
-          <div className="max-w-xl mx-auto rounded-3xl bg-[#0f1322] border border-sky-500/30 p-10 text-center shadow-2xl">
-            <div className="w-12 h-12 border-3 border-sky-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-white mb-1 font-sans">Consultando RENIEC PE:RP...</h3>
-            <p className="text-xs text-slate-400">Verificando si posees un DNI oficial emitido en el sistema.</p>
-          </div>
-        ) : existingDni && currentDni ? (
-          /* State 2: Real DNI exists -> Display real DNI card */
+        {existingDni && currentDni ? (
+          /* State 2: Real DNI exists -> Display real DNI card with official template and Roblox avatar */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
             {/* Left Column: Interactive DNI Card Display */}
@@ -859,7 +823,7 @@ export const PeruDniSection: React.FC = () => {
                         Identidad Ciudadana Confirmada
                       </h3>
                       <p className="text-xs text-slate-400">
-                        Vinculado a Discord: <span className="text-sky-300 font-bold">{discordUser.displayName || discordUser.username}</span>
+                        Vinculado a Discord: <span className="text-sky-300 font-bold">{discordUser?.displayName || discordUser?.username || existingDni.discordUsername || existingDni.robloxUsername}</span>
                       </p>
                     </div>
                   </div>
@@ -1146,7 +1110,93 @@ export const PeruDniSection: React.FC = () => {
                 </div>
               </div>
             </div>
-          ) : (
+        ) : loadingCheck ? (
+          <div className="max-w-xl mx-auto rounded-3xl bg-[#0f1322] border border-sky-500/30 p-10 text-center shadow-2xl">
+            <div className="w-12 h-12 border-3 border-sky-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-white mb-1 font-sans">Consultando RENIEC PE:RP...</h3>
+            <p className="text-xs text-slate-400">Verificando si posees un DNI oficial emitido en el sistema.</p>
+          </div>
+        ) : !discordUser ? (
+          /* State 1: User NOT logged in with Discord -> Show Discord Login + Direct DNI lookup */
+          <div className="max-w-xl mx-auto rounded-3xl bg-[#0f1322] border border-sky-500/30 p-7 sm:p-9 text-center shadow-2xl relative overflow-hidden space-y-6">
+            <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/40 text-sky-400 mx-auto flex items-center justify-center shadow-inner">
+              <Lock className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl sm:text-2xl font-bold text-white font-sans">
+                Registro Nacional de Identidad PE:RP
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+                Conéctate con Discord para sincronizar automáticamente tu DNI, o búscalo directamente por tu usuario de Roblox o N° de DNI para ver tu imagen oficial.
+              </p>
+            </div>
+
+            {/* Option A: Connect with Discord */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setIsDiscordAuthOpen(true)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-sm tracking-wide shadow-xl shadow-indigo-950 transition-all cursor-pointer transform hover:-translate-y-0.5"
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                </svg>
+                <span>Conectar con Discord</span>
+              </button>
+            </div>
+
+            {/* Option B: Direct Citizen DNI Query */}
+            <div className="pt-4 border-t border-white/10 space-y-3">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-slate-300 font-medium">
+                <Search className="w-3.5 h-3.5 text-sky-400" />
+                <span>¿Ya tienes DNI? Consulta y visualiza tu DNI aquí:</span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleDirectCitizenSearch();
+                  }}
+                  placeholder="Usuario Roblox o N° DNI (ej. cristian0987yu o 85720288)"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-black/60 border border-white/15 text-white text-xs font-mono placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+                />
+                <button
+                  type="button"
+                  disabled={isSearchingDni}
+                  onClick={() => handleDirectCitizenSearch()}
+                  className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {isSearchingDni ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Search className="w-3.5 h-3.5" />
+                  )}
+                  <span>Buscar DNI</span>
+                </button>
+              </div>
+
+              {searchFeedback && (
+                <div
+                  className={`p-3 rounded-xl text-xs text-left flex items-start gap-2 ${
+                    searchFeedback.success
+                      ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-200'
+                      : 'bg-rose-950/80 border border-rose-500/50 text-rose-200'
+                  }`}
+                >
+                  {searchFeedback.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                  )}
+                  <span>{searchFeedback.message}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
             /* State: DNI not yet created. Exclusively issued via Discord Bot /crear-dni */
             <div className="max-w-2xl mx-auto p-6 sm:p-8 rounded-3xl bg-[#090c18] border border-sky-500/30 text-center space-y-5 animate-in fade-in shadow-2xl">
                   <div className="w-16 h-16 rounded-3xl bg-[#5865F2]/20 border border-[#5865F2]/40 text-[#5865F2] flex items-center justify-center mx-auto shadow-lg shadow-indigo-950/50">

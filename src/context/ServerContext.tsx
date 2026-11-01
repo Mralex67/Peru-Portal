@@ -150,8 +150,18 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // PNP Police MDT Tablet State
   const [isPnpTabletOpen, setIsPnpTabletOpen] = useState(false);
-  const [isPnpAuthenticated, setIsPnpAuthenticated] = useState(false);
-  const [pnpOfficerBadge, setPnpOfficerBadge] = useState('PNP-0105');
+  const [isPnpAuthenticated, setIsPnpAuthenticated] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('perp_pnp_authenticated') === 'true';
+    }
+    return false;
+  });
+  const [pnpOfficerBadge, setPnpOfficerBadge] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('perp_pnp_officer_badge') || 'PNP-0105';
+    }
+    return 'PNP-0105';
+  });
 
   const openPnpTablet = () => {
     setIsPnpTabletOpen(true);

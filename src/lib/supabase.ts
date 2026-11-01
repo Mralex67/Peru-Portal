@@ -58,11 +58,12 @@ CREATE POLICY "Permitir eliminar DNIs"
 `;
 
 export const COMBINED_SUPABASE_SQL = `-- =========================================================================
--- SCRIPT SQL OFICIAL COMPLETO: PE:RP STREETS - RENIEC DNI & BANCO YA P
--- Ejecuta este script en Supabase > SQL Editor para crear todas las tablas
+-- SCRIPT SQL OFICIAL COMPLETO: PE:RP STREETS
+-- RENIEC DNI • BANCO YA P • POLICÍA NACIONAL DEL PERÚ (PNP) • SANCIONES
+-- Ejecuta este script en Supabase > SQL Editor para crear o actualizar todas las tablas
 -- =========================================================================
 
--- 1. TABLA OFICIAL DE DNIS (RENIEC)
+-- 1. TABLA OFICIAL DE DNIs PERUANOS (RENIEC PE:RP)
 CREATE TABLE IF NOT EXISTS peru_dnis (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   discord_id TEXT UNIQUE NOT NULL,
@@ -71,7 +72,7 @@ CREATE TABLE IF NOT EXISTS peru_dnis (
   roblox_username TEXT NOT NULL,
   roblox_user_id TEXT,
   dni_number TEXT UNIQUE NOT NULL,
-  verify_digit TEXT NOT NULL,
+  verify_digit TEXT NOT NULL DEFAULT '7',
   full_name TEXT NOT NULL,
   first_surname TEXT NOT NULL,
   second_surname TEXT NOT NULL,
@@ -101,7 +102,7 @@ CREATE TABLE IF NOT EXISTS yapo_accounts (
   roblox_username TEXT NOT NULL,
   roblox_user_id TEXT,
   dni_number TEXT UNIQUE NOT NULL,
-  verify_digit TEXT NOT NULL,
+  verify_digit TEXT NOT NULL DEFAULT '7',
   full_name TEXT NOT NULL,
   avatar_url TEXT,
   bank_balance NUMERIC DEFAULT 1000.00,
@@ -112,7 +113,7 @@ CREATE TABLE IF NOT EXISTS yapo_accounts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. TABLA DE HISTORIAL Y COMPROBANTES DE TRANSACCIONES
+-- 3. TABLA DE HISTORIAL Y COMPROBANTES DE TRANSACCIONES (BANCO YA P)
 CREATE TABLE IF NOT EXISTS yapo_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   operation_number TEXT NOT NULL,
@@ -133,31 +134,39 @@ CREATE TABLE IF NOT EXISTS yapo_transactions (
 -- 4. TABLA DE ARRESTOS POLICIALES (PNP SIPOL)
 CREATE TABLE IF NOT EXISTS pnp_arrests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT UNIQUE NOT NULL,
-  citizen_identifier TEXT NOT NULL,
-  citizen_name TEXT NOT NULL,
-  charges TEXT NOT NULL,
-  duration_text TEXT NOT NULL,
-  duration_minutes INTEGER DEFAULT 5,
+  code TEXT,
+  arrest_code TEXT,
+  citizen_identifier TEXT,
+  suspect_roblox TEXT,
+  citizen_name TEXT,
+  charges TEXT,
+  duration_text TEXT,
+  duration_minutes INTEGER DEFAULT 3,
+  time_minutes INTEGER DEFAULT 3,
   bail_amount NUMERIC DEFAULT 0,
-  officer_name TEXT NOT NULL,
+  officer_name TEXT,
   officer_discord_id TEXT,
   evidence_url TEXT,
-  status TEXT DEFAULT 'cumplido',
+  evidence_image TEXT,
+  status TEXT DEFAULT 'activo',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   expires_at TIMESTAMPTZ
 );
 
--- 5. TABLA DE MULTAS DE TRÁNSITO (PNP)
+-- 5. TABLA DE MULTAS POLICIALES (PNP TRANSITO)
 CREATE TABLE IF NOT EXISTS pnp_fines (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT UNIQUE NOT NULL,
-  citizen_identifier TEXT NOT NULL,
-  citizen_name TEXT NOT NULL,
-  reason TEXT NOT NULL,
-  amount NUMERIC NOT NULL,
+  code TEXT,
+  fine_code TEXT,
+  citizen_identifier TEXT,
+  suspect_roblox TEXT,
+  citizen_name TEXT,
+  reason TEXT,
+  amount NUMERIC DEFAULT 100,
   status TEXT DEFAULT 'pendiente',
-  officer_name TEXT NOT NULL,
+  officer_name TEXT,
+  issued_by TEXT,
+  issued_date TEXT,
   officer_discord_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   paid_at TIMESTAMPTZ
@@ -166,13 +175,33 @@ CREATE TABLE IF NOT EXISTS pnp_fines (
 -- 6. TABLA DE SANCIONES ADMINISTRATIVAS
 CREATE TABLE IF NOT EXISTS pnp_sanctions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  target_user_id TEXT NOT NULL,
-  target_username TEXT NOT NULL,
-  moderator_name TEXT NOT NULL,
-  reason TEXT NOT NULL,
+  target_user_id TEXT,
+  target_username TEXT,
+  user_roblox TEXT,
+  user_discord_id TEXT,
+  moderator_name TEXT,
+  issued_by TEXT,
+  reason TEXT,
   evidence_url TEXT,
+  proof_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ACTUALIZACIONES DE COLUMNAS PARA COMPATIBILIDAD
+ALTER TABLE pnp_arrests ADD COLUMN IF NOT EXISTS arrest_code TEXT;
+ALTER TABLE pnp_arrests ADD COLUMN IF NOT EXISTS suspect_roblox TEXT;
+ALTER TABLE pnp_arrests ADD COLUMN IF NOT EXISTS time_minutes INTEGER DEFAULT 3;
+ALTER TABLE pnp_arrests ADD COLUMN IF NOT EXISTS evidence_image TEXT;
+
+ALTER TABLE pnp_fines ADD COLUMN IF NOT EXISTS fine_code TEXT;
+ALTER TABLE pnp_fines ADD COLUMN IF NOT EXISTS suspect_roblox TEXT;
+ALTER TABLE pnp_fines ADD COLUMN IF NOT EXISTS issued_by TEXT;
+ALTER TABLE pnp_fines ADD COLUMN IF NOT EXISTS issued_date TEXT;
+
+ALTER TABLE pnp_sanctions ADD COLUMN IF NOT EXISTS user_roblox TEXT;
+ALTER TABLE pnp_sanctions ADD COLUMN IF NOT EXISTS user_discord_id TEXT;
+ALTER TABLE pnp_sanctions ADD COLUMN IF NOT EXISTS issued_by TEXT;
+ALTER TABLE pnp_sanctions ADD COLUMN IF NOT EXISTS proof_url TEXT;
 
 -- HABILITAR ROW LEVEL SECURITY (RLS)
 ALTER TABLE peru_dnis ENABLE ROW LEVEL SECURITY;
@@ -182,41 +211,24 @@ ALTER TABLE pnp_arrests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pnp_fines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pnp_sanctions ENABLE ROW LEVEL SECURITY;
 
--- POLÍTICAS PARA peru_dnis
-DROP POLICY IF EXISTS "Permitir lectura de DNIs" ON peru_dnis;
-CREATE POLICY "Permitir lectura de DNIs" ON peru_dnis FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Permitir crear DNI único por Discord" ON peru_dnis;
-CREATE POLICY "Permitir crear DNI único por Discord" ON peru_dnis FOR ALL USING (true);
+-- POLÍTICAS TOTALES PARA PERMITIR LECTURA Y ESCRITURA EN VIVO (WEB + BOT)
+DROP POLICY IF EXISTS "Acceso total peru_dnis" ON peru_dnis;
+CREATE POLICY "Acceso total peru_dnis" ON peru_dnis FOR ALL USING (true) WITH CHECK (true);
 
--- POLÍTICAS PARA yapo_accounts
-DROP POLICY IF EXISTS "Lectura pública de Yapo" ON yapo_accounts;
-CREATE POLICY "Lectura pública de Yapo" ON yapo_accounts FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Gestión pública de Yapo" ON yapo_accounts;
-CREATE POLICY "Gestión pública de Yapo" ON yapo_accounts FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total yapo_accounts" ON yapo_accounts;
+CREATE POLICY "Acceso total yapo_accounts" ON yapo_accounts FOR ALL USING (true) WITH CHECK (true);
 
--- POLÍTICAS PARA yapo_transactions
-DROP POLICY IF EXISTS "Lectura transacciones Yapo" ON yapo_transactions;
-CREATE POLICY "Lectura transacciones Yapo" ON yapo_transactions FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Registro transacciones Yapo" ON yapo_transactions;
-CREATE POLICY "Registro transacciones Yapo" ON yapo_transactions FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total yapo_transactions" ON yapo_transactions;
+CREATE POLICY "Acceso total yapo_transactions" ON yapo_transactions FOR ALL USING (true) WITH CHECK (true);
 
--- POLÍTICAS PARA pnp_arrests
-DROP POLICY IF EXISTS "Lectura pnp_arrests" ON pnp_arrests;
-CREATE POLICY "Lectura pnp_arrests" ON pnp_arrests FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Gestion pnp_arrests" ON pnp_arrests;
-CREATE POLICY "Gestion pnp_arrests" ON pnp_arrests FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total pnp_arrests" ON pnp_arrests;
+CREATE POLICY "Acceso total pnp_arrests" ON pnp_arrests FOR ALL USING (true) WITH CHECK (true);
 
--- POLÍTICAS PARA pnp_fines
-DROP POLICY IF EXISTS "Lectura pnp_fines" ON pnp_fines;
-CREATE POLICY "Lectura pnp_fines" ON pnp_fines FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Gestion pnp_fines" ON pnp_fines;
-CREATE POLICY "Gestion pnp_fines" ON pnp_fines FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total pnp_fines" ON pnp_fines;
+CREATE POLICY "Acceso total pnp_fines" ON pnp_fines FOR ALL USING (true) WITH CHECK (true);
 
--- POLÍTICAS PARA pnp_sanctions
-DROP POLICY IF EXISTS "Lectura pnp_sanctions" ON pnp_sanctions;
-CREATE POLICY "Lectura pnp_sanctions" ON pnp_sanctions FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Gestion pnp_sanctions" ON pnp_sanctions;
-CREATE POLICY "Gestion pnp_sanctions" ON pnp_sanctions FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total pnp_sanctions" ON pnp_sanctions;
+CREATE POLICY "Acceso total pnp_sanctions" ON pnp_sanctions FOR ALL USING (true) WITH CHECK (true);
 `;
 
 export function getSupabaseConfig(): SupabaseConfig {

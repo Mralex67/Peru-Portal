@@ -1,5 +1,5 @@
 import { PnpArrest, PnpFine, PnpSanction } from '../types/pnp';
-import { getSupabaseClient } from './supabase';
+import { getSupabaseClient, syncSupabaseConfig } from './supabase';
 
 const PNP_ARRESTS_KEY = 'perp_pnp_arrests_v2';
 const PNP_FINES_KEY = 'perp_pnp_fines_v2';
@@ -162,7 +162,7 @@ export async function fetchSharedArrests(): Promise<PnpArrest[]> {
     if (a.arrestCode) map.set(a.arrestCode.toUpperCase(), a);
   }
 
-  // 2. Fetch from Backend server API
+  // 2. Fetch from Backend server API (always synchronized across all PCs)
   try {
     const res = await fetch('/api/pnp/arrests');
     if (res.ok) {
@@ -178,10 +178,11 @@ export async function fetchSharedArrests(): Promise<PnpArrest[]> {
     console.warn('Backend arrests fetch error:', err);
   }
 
-  // 3. Fetch from Supabase Cloud table if available
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
+  // 3. Sync Supabase config and fetch from Supabase Cloud table if available
+  try {
+    await syncSupabaseConfig().catch(() => {});
+    const supabase = getSupabaseClient();
+    if (supabase) {
       const { data: supaArrests } = await supabase.from('pnp_arrests').select('*').order('created_at', { ascending: false });
       if (Array.isArray(supaArrests)) {
         for (const item of supaArrests) {
@@ -189,9 +190,9 @@ export async function fetchSharedArrests(): Promise<PnpArrest[]> {
           map.set(norm.arrestCode.toUpperCase(), norm);
         }
       }
-    } catch (err) {
-      console.warn('Supabase arrests fetch notice:', err);
     }
+  } catch (err) {
+    console.warn('Supabase arrests fetch notice:', err);
   }
 
   const merged = Array.from(map.values()).sort((a, b) => {
@@ -214,7 +215,7 @@ export async function fetchSharedFines(): Promise<PnpFine[]> {
     if (f.fineCode) map.set(f.fineCode.toUpperCase(), f);
   }
 
-  // 2. Fetch from Backend server API
+  // 2. Fetch from Backend server API (always synchronized across all PCs)
   try {
     const res = await fetch('/api/pnp/fines');
     if (res.ok) {
@@ -230,10 +231,11 @@ export async function fetchSharedFines(): Promise<PnpFine[]> {
     console.warn('Backend fines fetch error:', err);
   }
 
-  // 3. Fetch from Supabase Cloud table if available
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
+  // 3. Sync Supabase config and fetch from Supabase Cloud table if available
+  try {
+    await syncSupabaseConfig().catch(() => {});
+    const supabase = getSupabaseClient();
+    if (supabase) {
       const { data: supaFines } = await supabase.from('pnp_fines').select('*').order('created_at', { ascending: false });
       if (Array.isArray(supaFines)) {
         for (const item of supaFines) {
@@ -241,9 +243,9 @@ export async function fetchSharedFines(): Promise<PnpFine[]> {
           map.set(norm.fineCode.toUpperCase(), norm);
         }
       }
-    } catch (err) {
-      console.warn('Supabase fines fetch notice:', err);
     }
+  } catch (err) {
+    console.warn('Supabase fines fetch notice:', err);
   }
 
   const merged = Array.from(map.values()).sort((a, b) => {
@@ -278,9 +280,9 @@ export async function registerArrest(payload: Omit<PnpArrest, 'id' | 'arrestCode
   current.unshift(newArrest);
   saveLocalArrests(current);
 
-  // Sync to server backend with compatible keys
+  // Sync to server backend with compatible keys (always synchronized across all PCs)
   try {
-    fetch('/api/pnp/arrests', {
+    await fetch('/api/pnp/arrests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -299,13 +301,16 @@ export async function registerArrest(payload: Omit<PnpArrest, 'id' | 'arrestCode
         evidenceImageUrl: newArrest.evidenceImageUrl || '',
         status: newArrest.status,
       }),
-    }).catch(() => {});
-  } catch {}
+    });
+  } catch (err) {
+    console.warn('Backend arrest sync warning:', err);
+  }
 
   // Sync to Supabase if connected
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
+  try {
+    await syncSupabaseConfig().catch(() => {});
+    const supabase = getSupabaseClient();
+    if (supabase) {
       await supabase.from('pnp_arrests').insert([
         {
           code: newArrest.arrestCode,
@@ -325,9 +330,9 @@ export async function registerArrest(payload: Omit<PnpArrest, 'id' | 'arrestCode
           status: 'activo',
         },
       ]);
-    } catch (e) {
-      console.warn('Notice saving arrest to Supabase:', e);
     }
+  } catch (e) {
+    console.warn('Notice saving arrest to Supabase:', e);
   }
 
   return newArrest;
@@ -354,9 +359,9 @@ export async function registerFine(payload: Omit<PnpFine, 'id' | 'fineCode'>): P
   current.unshift(newFine);
   saveLocalFines(current);
 
-  // Sync to server backend with compatible keys
+  // Sync to server backend with compatible keys (always synchronized across all PCs)
   try {
-    fetch('/api/pnp/fines', {
+    await fetch('/api/pnp/fines', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -371,13 +376,16 @@ export async function registerFine(payload: Omit<PnpFine, 'id' | 'fineCode'>): P
         issuedBy: newFine.issuedBy,
         status: newFine.status,
       }),
-    }).catch(() => {});
-  } catch {}
+    });
+  } catch (err) {
+    console.warn('Backend fine sync warning:', err);
+  }
 
   // Sync to Supabase if connected
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
+  try {
+    await syncSupabaseConfig().catch(() => {});
+    const supabase = getSupabaseClient();
+    if (supabase) {
       await supabase.from('pnp_fines').insert([
         {
           code: newFine.fineCode,
@@ -392,9 +400,9 @@ export async function registerFine(payload: Omit<PnpFine, 'id' | 'fineCode'>): P
           issued_date: newFine.issuedDate,
         },
       ]);
-    } catch (e) {
-      console.warn('Notice saving fine to Supabase:', e);
     }
+  } catch (e) {
+    console.warn('Notice saving fine to Supabase:', e);
   }
 
   return newFine;
@@ -404,20 +412,46 @@ export async function registerFine(payload: Omit<PnpFine, 'id' | 'fineCode'>): P
 export async function getCitizenPoliceRecord(identifier: string) {
   const clean = identifier.trim().toLowerCase().replace(/^@/, '');
 
-  // 1. Fetch fresh arrests and fines from backend/cloud
-  let arrests = await fetchSharedArrests().catch(() => getLocalArrests());
-  let fines = await fetchSharedFines().catch(() => getLocalFines());
-
-  // 2. Also try backend record endpoint
+  // 1. First query backend endpoint which queries both local server memory AND Supabase Cloud tables
   try {
     const res = await fetch(`/api/pnp/records/${encodeURIComponent(clean)}`);
     if (res.ok) {
       const data = await res.json();
-      if (data && data.success && data.record) {
-        return data.record;
+      if (data && data.success) {
+        const rec = data.record || data;
+        const rawArrests = Array.isArray(rec.arrests) ? rec.arrests : [];
+        const rawFines = Array.isArray(rec.fines) ? rec.fines : [];
+        const normalizedArrests = rawArrests.map(normalizeArrest);
+        const normalizedFines = rawFines.map(normalizeFine);
+        const hasRec = Boolean(rec.hasRecord || rec.hasRecords || normalizedArrests.length > 0 || normalizedFines.length > 0);
+
+        return {
+          suspectIdentifier: rec.suspectIdentifier || clean,
+          identifier: rec.identifier || clean,
+          citizenName: rec.citizenName || `@ [ST-P] ${clean}`,
+          robloxUsername: rec.robloxUsername || clean,
+          dniNumber: rec.dniNumber || null,
+          hasRecord: hasRec,
+          statusText: rec.statusText || (hasRec ? 'Con antecedentes' : 'Sin antecedentes penales (Limpio)'),
+          arrestsCount: normalizedArrests.length,
+          activeArrestsCount: rec.activeArrestsCount ?? normalizedArrests.filter((a: PnpArrest) => a.status === 'active').length,
+          finesCount: normalizedFines.length,
+          pendingFinesCount: rec.pendingFinesCount ?? normalizedFines.filter((f: PnpFine) => f.status === 'Pendiente').length,
+          pendingFinesTotal: rec.pendingFinesTotal ?? normalizedFines.reduce((sum: number, f: PnpFine) => f.status === 'Pendiente' ? sum + f.amount : sum, 0),
+          hasLicense: Boolean(rec.hasLicense),
+          licenseRole: rec.licenseRole || '1556723203114668082',
+          arrests: normalizedArrests,
+          fines: normalizedFines,
+        };
       }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('Notice querying backend citizen record:', err);
+  }
+
+  // 2. Fallback: Fetch shared arrests and fines directly
+  const arrests = await fetchSharedArrests().catch(() => getLocalArrests());
+  const fines = await fetchSharedFines().catch(() => getLocalFines());
 
   const userArrests = arrests.filter(
     (a) =>
@@ -443,6 +477,10 @@ export async function getCitizenPoliceRecord(identifier: string) {
 
   return {
     suspectIdentifier: clean,
+    identifier: clean,
+    citizenName: `@ [ST-P] ${clean}`,
+    robloxUsername: clean,
+    dniNumber: null,
     hasRecord,
     statusText: hasRecord ? 'Con antecedentes' : 'Sin antecedentes penales (Limpio)',
     arrestsCount: userArrests.length,
@@ -450,6 +488,8 @@ export async function getCitizenPoliceRecord(identifier: string) {
     finesCount: userFines.length,
     pendingFinesCount: pendingFines.length,
     pendingFinesTotal: totalFineDebt,
+    hasLicense: false,
+    licenseRole: '1556723203114668082',
     arrests: userArrests,
     fines: userFines,
   };

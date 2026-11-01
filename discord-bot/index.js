@@ -479,8 +479,11 @@ async function renderDniCardImage(dniData) {
 
   for (const baseUrl of candidateUrls) {
     try {
+      const dniNum = (dniData.dniNumber || dniData.dni_number || '00000000').toString();
       const params = new URLSearchParams({
-        dni: dniData.dniNumber || dniData.dni_number || '',
+        cui: dniNum,
+        dni: dniNum,
+        serial: `0000${dniNum.slice(-3)}`,
         primer_apellido: dniData.firstSurname || dniData.first_surname || '',
         segundo_apellido: dniData.secondSurname || dniData.second_surname || '',
         nombres: dniData.givenNames || dniData.given_names || dniData.prenames || '',
