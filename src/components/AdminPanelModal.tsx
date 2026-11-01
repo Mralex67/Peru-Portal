@@ -1398,10 +1398,11 @@ export const AdminPanelModal: React.FC = () => {
                     </label>
                     <select
                       value={formData.serverStatus}
-                      onChange={(e) => setFormData({ ...formData, serverStatus: e.target.value as 'online' | 'maintenance' | 'event' })}
+                      onChange={(e) => setFormData({ ...formData, serverStatus: e.target.value as any })}
                       className="w-full px-3 py-2 rounded-xl bg-[#141726] border border-white/10 text-white text-xs font-bold focus:outline-none focus:border-red-500 cursor-pointer"
                     >
-                      <option value="online">● Servidor En Vivo (Online)</option>
+                      <option value="online">🟢 Estado: Abierto (En Vivo)</option>
+                      <option value="closed">🔴 Estado: Cerrado</option>
                       <option value="event">⚡ Evento Especial Activo</option>
                       <option value="maintenance">🛠 En Mantenimiento</option>
                     </select>

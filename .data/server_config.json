@@ -1,13 +1,14 @@
 {
-  "serverName": "PERU REAL LIFE V3 - ROLEPLAY OFICIAL",
-  "currentPlayers": 0,
+  "serverName": "Peru Streets RP I Lima",
+  "currentPlayers": 1,
   "maxPlayers": 50,
   "customLogoUrl": "/assets/logo-peru.png",
   "heroCardImage": "/assets/hero-card.png",
   "customPatrolTruckUrl": "",
   "yapoLogoUrl": "/assets/yapo-logo.png",
   "discordMembers": "115",
-  "serverStatus": "maintenance",
-  "announcementText": "🔧 Servidor en mantenimiento oficial. Próximamente apertura.",
-  "updatedAt": "2026-10-27T17:15:00.000Z"
+  "serverStatus": "online",
+  "announcementText": "🇵🇪 ¡Servidor Abierto y Oficial en Roblox ER:LC! Únete a las calles de Lima.",
+  "erlcJoinKey": "perurp",
+  "updatedAt": "2026-11-01T18:47:00.000Z"
 }

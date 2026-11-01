@@ -6,7 +6,7 @@ export interface ServerConfig {
   discordMembers: string;
   currentPlayers: number;
   maxPlayers: number;
-  serverStatus: 'online' | 'maintenance' | 'event';
+  serverStatus: 'online' | 'maintenance' | 'event' | 'closed';
   announcementText: string;
   discordInviteUrl: string;
   patrolAlert: string;

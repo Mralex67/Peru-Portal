@@ -9,20 +9,20 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   heroDescription:
     'Simulación urbana oficial en Roblox Emergency Response: Liberty County. Patrulla las calles con la Policía Nacional del Perú (PNP), Serenazgo y SAMU con economía en Soles y rol serio.',
   discordMembers: '115',
-  currentPlayers: 0,
+  currentPlayers: 1,
   maxPlayers: 50,
-  serverStatus: 'maintenance',
-  announcementText: '🔧 Servidor en mantenimiento oficial. Próximamente apertura.',
+  serverStatus: 'online',
+  announcementText: '🇵🇪 ¡Servidor Abierto y Oficial en Roblox ER:LC! Únete a las calles de Lima.',
   discordInviteUrl: 'https://discord.gg/NBwwDmrFwf',
-  patrolAlert: 'Mantenimiento Oficial PE:RP',
+  patrolAlert: 'Patrullaje Activo en Calles de Lima',
   customLogoUrl: '/assets/logo-peru.png',
   yapoLogoUrl: '/assets/yapo-logo.png',
   customPatrolTruckUrl: '',
   heroCardImage: '/assets/hero-card.png',
   albumUploadsLocked: true,
   erlcServerKey: '',
-  erlcAutoSync: false,
-  erlcJoinKey: '',
+  erlcAutoSync: true,
+  erlcJoinKey: 'perurp',
 };
 
 interface ServerContextType {
@@ -202,10 +202,8 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               merged.yapoLogoUrl = '/assets/yapo-logo.png';
             }
             merged.discordMembers = '115';
-            merged.serverStatus = 'maintenance';
-            if (prev.currentPlayers > 0) {
-              merged.currentPlayers = prev.currentPlayers;
-            }
+            const initialPlayers = typeof merged.currentPlayers === 'number' ? merged.currentPlayers : (prev.currentPlayers || 0);
+            merged.serverStatus = initialPlayers >= 1 ? 'online' : 'closed';
             try {
               localStorage.setItem('perp_server_config', JSON.stringify(merged));
             } catch {}
@@ -254,18 +252,21 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.configured && typeof data.currentPlayers === 'number' && isMounted) {
+          const isOnline = data.currentPlayers >= 1;
+          const status = isOnline ? 'online' : 'closed';
           setConfig((prev) => {
-            if (
-              prev.currentPlayers === data.currentPlayers &&
-              prev.maxPlayers === (data.maxPlayers || prev.maxPlayers) &&
-              (!data.joinKey || prev.erlcJoinKey === data.joinKey)
-            ) {
-              return prev;
-            }
             return {
               ...prev,
+              serverStatus: status,
               currentPlayers: data.currentPlayers,
-              maxPlayers: data.maxPlayers || prev.maxPlayers,
+              maxPlayers: data.maxPlayers || prev.maxPlayers || 50,
+              serverName: data.name || prev.serverName,
+              announcementText: isOnline
+                ? '🇵🇪 ¡Servidor Abierto y Oficial en Roblox ER:LC! Únete a las calles de Lima.'
+                : '🔒 Servidor Cerrado temporalmente (0 jugadores). Se abrirá automáticamente al ingresar.',
+              patrolAlert: isOnline
+                ? 'Patrullaje Activo en Calles de Lima'
+                : 'Servidor Cerrado (0 Jugadores)',
               ...(data.joinKey ? { erlcJoinKey: data.joinKey } : {}),
             };
           });

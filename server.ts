@@ -67,7 +67,7 @@ app.get('/api/server-config', (req, res) => {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
-      return res.json({ success: true, config: data });
+      return res.json({ success: true, ...data, config: data });
     }
     return res.json({ success: true, config: null });
   } catch (err: any) {
